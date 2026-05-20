@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+    --card: 224 71% 4%;
+    --card-foreground: 213 31% 91%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 1.2%;
+    --secondary: 222.2 47.4% 11.2%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 223 47% 11%;
+    --muted-foreground: 215.4 16.3% 56.9%;
+    --accent: 216 34% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 216 34% 17%;
+    --input: 216 34% 17%;
+    --ring: 216 34% 17%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Markdown content styling */
+.markdown-content h1 { @apply text-2xl font-bold mb-4 mt-6; }
+.markdown-content h2 { @apply text-xl font-semibold mb-3 mt-5; }
+.markdown-content h3 { @apply text-lg font-semibold mb-2 mt-4; }
+.markdown-content h4 { @apply text-base font-semibold mb-2 mt-3; }
+.markdown-content h5 { @apply text-sm font-semibold mb-1 mt-2; }
+.markdown-content p { @apply mb-3 leading-relaxed; }
+.markdown-content ul { @apply list-disc pl-6 mb-3; }
+.markdown-content ol { @apply list-decimal pl-6 mb-3; }
+.markdown-content li { @apply mb-1; }
+.markdown-content code { @apply bg-muted px-1.5 py-0.5 rounded text-sm; }
+.markdown-content pre { @apply bg-muted p-4 rounded-lg mb-4 overflow-x-auto; }
+.markdown-content pre code { @apply bg-transparent p-0; }
+.markdown-content table { @apply w-full border-collapse mb-4; }
+.markdown-content th { @apply border border-border px-3 py-2 text-left font-semibold bg-muted; }
+.markdown-content td { @apply border border-border px-3 py-2; }
+.markdown-content a { @apply text-blue-400 hover:underline; }
+.markdown-content blockquote { @apply border-l-4 border-border pl-4 italic text-muted-foreground; }
+.markdown-content hr { @apply my-6 border-border; }
+
+/* [HUMAN DECISION NEEDED] badge */
+.human-decision-badge {
+  @apply inline-flex items-center gap-1 rounded-md bg-red-500/20 border border-red-500/30 px-2 py-0.5 text-xs font-bold text-red-400 uppercase tracking-wide;
+}
+.human-decision-badge::before {
+  content: '⚠';
+}
