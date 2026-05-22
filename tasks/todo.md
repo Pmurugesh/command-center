@@ -1,7 +1,3 @@
-> **⚠ Read `tasks/next-session.md` FIRST.** A pickup instruction from Pavan is waiting there and takes precedence over anything in this file.
-
----
-
 # Phase 3 — DONE ✅
 
 Committed `13a9de4`. Full UI overhaul: design tokens, layout container, 8-stage status badges, mono font on numerics, per-route skeletons, per-page polish (Overview, Bids, Bid detail, Intel, System, Cron, Library). See commit message for line-by-line breakdown, or run `git show 13a9de4 --stat`.
