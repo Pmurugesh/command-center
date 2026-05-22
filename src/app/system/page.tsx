@@ -5,9 +5,15 @@ import { Badge } from '@/components/ui/badge'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { TimeAgo } from '@/components/shared/time-ago'
 import { Database, Terminal, CreditCard, Mail } from 'lucide-react'
-import Link from 'next/link'
+import os from 'os'
 
 export const dynamic = 'force-dynamic'
+
+// Collapse /Users/<user> → ~ for readable paths; full path stays in title attr
+function collapseHome(p: string): string {
+  const home = os.homedir()
+  return p.startsWith(home) ? '~' + p.slice(home.length) : p
+}
 
 export default async function SystemPage() {
   const [dataSources, scripts] = await Promise.all([
@@ -15,19 +21,21 @@ export default async function SystemPage() {
     listScripts(),
   ])
 
+  const okCount = dataSources.filter(s => s.exists).length
+  const missingCount = dataSources.length - okCount
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="System Settings"
         description="Data sources, scripts, and configuration"
+        actions={
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="font-mono tabular-nums text-foreground">{okCount}/{dataSources.length}</span>
+            <span>sources connected</span>
+          </div>
+        }
       />
-
-      {/* Quick Links */}
-      <div className="flex gap-3">
-        <Link href="/system/cron" className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm hover:bg-accent/50 transition-colors">
-          Manage Cron Jobs
-        </Link>
-      </div>
 
       {/* Data Sources */}
       <Card>
@@ -36,20 +44,26 @@ export default async function SystemPage() {
             <Database className="h-5 w-5" />
             Data Sources
           </CardTitle>
-          <CardDescription>All directories the dashboard reads from</CardDescription>
+          <CardDescription>
+            {missingCount === 0 ? 'All directories the dashboard reads from' : `${missingCount} of ${dataSources.length} directories missing`}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {dataSources.map((source) => (
-              <div key={source.name} className="flex items-center justify-between rounded-md border border-border p-3">
-                <div className="min-w-0">
+              <div key={source.name} className="flex items-center justify-between rounded-md border border-border p-3 gap-3">
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{source.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono truncate">{source.path}</p>
+                  <p className="text-xs text-muted-foreground font-mono truncate" title={source.path}>
+                    {collapseHome(source.path)}
+                  </p>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   {source.exists ? (
                     <>
-                      <Badge variant="secondary">{source.fileCount} items</Badge>
+                      <span className="text-xs text-muted-foreground font-mono tabular-nums">
+                        {source.fileCount} {source.fileCount === 1 ? 'item' : 'items'}
+                      </span>
                       {source.lastModified && (
                         <span className="text-xs text-muted-foreground">
                           <TimeAgo date={source.lastModified} />

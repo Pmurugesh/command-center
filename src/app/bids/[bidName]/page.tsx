@@ -23,7 +23,11 @@ export default async function BidDetailPage({ params }: { params: { bidName: str
     <div className="space-y-6">
       <PageHeader
         title={detail.displayName}
-        description={`${detail.files.length} documents${detail.documents && detail.documents.length > 0 ? ` · ${detail.documents.length} source files` : ''}`}
+        description={
+          detail.documents && detail.documents.length > 0
+            ? `${detail.files.length} analysis report${detail.files.length === 1 ? '' : 's'} · ${detail.documents.length} attached file${detail.documents.length === 1 ? '' : 's'}`
+            : `${detail.files.length} analysis report${detail.files.length === 1 ? '' : 's'}`
+        }
         breadcrumbs={[
           { label: 'Bids', href: '/bids' },
           { label: detail.displayName },
@@ -35,9 +39,9 @@ export default async function BidDetailPage({ params }: { params: { bidName: str
 
       {/* Action Items Banner */}
       {detail.totalFlags > 0 && (
-        <Card className="border-red-400/20 bg-red-400/5">
+        <Card className="border-status-danger/30 bg-status-danger/5">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2 text-red-400">
+            <CardTitle className="text-base flex items-center gap-2 text-status-danger">
               <AlertTriangle className="h-4 w-4" />
               {detail.totalFlags} Decision{detail.totalFlags > 1 ? 's' : ''} Needed
             </CardTitle>
@@ -45,8 +49,8 @@ export default async function BidDetailPage({ params }: { params: { bidName: str
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {flagLocations.map(loc => (
-                <Badge key={loc.file} variant="destructive" className="text-xs">
-                  {loc.file}: {loc.count} flag{loc.count > 1 ? 's' : ''}
+                <Badge key={loc.file} variant="destructive" className="text-xs font-mono tabular-nums">
+                  {loc.file} · {loc.count}
                 </Badge>
               ))}
             </div>

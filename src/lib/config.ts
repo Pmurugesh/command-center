@@ -32,6 +32,16 @@ export const BID_STATUSES = [
 
 export type BidStatus = typeof BID_STATUSES[number]
 
+// Coerce arbitrary case/whitespace into a canonical BidStatus (or undefined if no match)
+export function normalizeBidStatus(input: unknown): BidStatus | undefined {
+  if (typeof input !== 'string') return undefined
+  const target = input.trim().toLowerCase()
+  for (const s of BID_STATUSES) {
+    if (s.toLowerCase() === target) return s
+  }
+  return undefined
+}
+
 // Entity options
 export const ENTITIES = ['Infinite Solutions', 'NovaEra', 'InfiniteAI'] as const
 export type Entity = typeof ENTITIES[number]

@@ -39,7 +39,7 @@ export function TimeAgo({ date, className }: TimeAgoProps) {
   return (
     <time
       dateTime={typeof date === 'string' ? date : date.toISOString()}
-      className={className}
+      className={`font-mono tabular-nums ${className ?? ''}`}
       title={typeof date === 'string' ? new Date(date).toLocaleString() : date.toLocaleString()}
     >
       {text}

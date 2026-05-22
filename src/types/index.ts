@@ -8,6 +8,7 @@ export interface Bid {
   status?: BidStatus
   entity?: Entity
   hasDocuments?: boolean
+  updatedAt?: string // ISO; from .status.json updatedAt OR bid dir mtime
 }
 
 export interface BidFile {
