@@ -1,7 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { PATHS } from './paths'
-import { BID_TAB_ORDER } from './config'
+import { BID_TAB_ORDER, normalizeBidStatus } from './config'
 import { countFlags } from './markdown'
 import type { Bid, BidDetail, BidFile, BidStatusData, ScanReport, IntelAlert, LibraryFile, DocumentFile, DataSourceInfo, ScriptInfo } from '@/types'
 
@@ -45,14 +45,34 @@ export async function listBids(): Promise<Bid[]> {
       } catch { /* ignore corrupt status */ }
     }
 
+    // Updated-at: prefer status JSON, fall back to most-recent .md mtime in the bid dir
+    let updatedAt: string | undefined = status?.updatedAt || undefined
+    if (!updatedAt) {
+      let latest = 0
+      for (const f of mdFiles) {
+        try {
+          const st = await fs.stat(path.join(bidPath, f))
+          if (st.mtimeMs > latest) latest = st.mtimeMs
+        } catch { /* skip */ }
+      }
+      if (latest === 0) {
+        try {
+          const dirStat = await fs.stat(bidPath)
+          latest = dirStat.mtimeMs
+        } catch { /* skip */ }
+      }
+      if (latest > 0) updatedAt = new Date(latest).toISOString()
+    }
+
     bids.push({
       name: entry.name,
       displayName: formatName(entry.name),
       files: mdFiles.map(f => f.replace('.md', '')),
       fileCount: mdFiles.length,
-      status: status?.status,
+      status: normalizeBidStatus(status?.status),
       entity: status?.entity,
       hasDocuments,
+      updatedAt,
     })
   }
 
@@ -117,7 +137,7 @@ export async function getBidDetail(bidName: string): Promise<BidDetail | null> {
     name: bidName,
     displayName: formatName(bidName),
     files,
-    status: statusData?.status,
+    status: normalizeBidStatus(statusData?.status),
     entity: statusData?.entity,
     documents,
     totalFlags,

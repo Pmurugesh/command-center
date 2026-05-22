@@ -14,7 +14,7 @@ export function DataCard({ label, value, subtitle, valueColor, className }: Data
     <Card className={className}>
       <CardHeader className="pb-2">
         <CardDescription>{label}</CardDescription>
-        <CardTitle className={cn('text-4xl', valueColor)}>{value}</CardTitle>
+        <CardTitle className={cn('text-4xl font-mono tabular-nums tracking-tight', valueColor)}>{value}</CardTitle>
       </CardHeader>
       {subtitle && (
         <CardContent>
