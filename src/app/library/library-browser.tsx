@@ -87,7 +87,7 @@ export function LibraryBrowser({ files }: { files: LibraryFile[] }) {
             )}
           </div>
           {filteredTree.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-2 px-1">No files match "{query}"</p>
+            <p className="text-xs text-muted-foreground py-2 px-1">No files match &ldquo;{query}&rdquo;</p>
           ) : (
             <FileTree
               items={filteredTree}
