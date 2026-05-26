@@ -85,18 +85,23 @@ export default async function PartnershipsPage() {
               {actionQueue.map(p => {
                 const meta = STATUS_META[p.status]
                 return (
-                  <li key={p.name} className="flex items-start gap-3 text-sm">
-                    <span className={cn("mt-1.5 h-1.5 w-1.5 rounded-full flex-shrink-0", meta.dotClass)} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium">{p.name}</span>
-                        <span className="text-xs text-muted-foreground uppercase tracking-wide">{meta.label}</span>
+                  <li key={p.name}>
+                    <a
+                      href={`#partnership-${slugify(p.name)}`}
+                      className="flex items-start gap-3 text-sm rounded-md -mx-2 px-2 py-1 hover:bg-status-accent/10 transition-colors"
+                    >
+                      <span className={cn("mt-1.5 h-1.5 w-1.5 rounded-full flex-shrink-0", meta.dotClass)} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{p.name}</span>
+                          <span className="text-xs text-muted-foreground uppercase tracking-wide">{meta.label}</span>
+                        </div>
+                        <div className="text-muted-foreground text-xs mt-0.5">
+                          <ArrowRight className="h-3 w-3 inline mr-1 -mt-0.5" />
+                          {p.nextAction}
+                        </div>
                       </div>
-                      <div className="text-muted-foreground text-xs mt-0.5">
-                        <ArrowRight className="h-3 w-3 inline mr-1 -mt-0.5" />
-                        {p.nextAction}
-                      </div>
-                    </div>
+                    </a>
                   </li>
                 )
               })}
@@ -144,13 +149,12 @@ function KanbanColumn({ status, items }: { status: PartnershipStatus; items: Par
 function PartnershipCard({ partnership: p }: { partnership: Partnership }) {
   const primaryContact = p.contacts[0]
   const additionalContacts = p.contacts.length - 1
-  const meta = STATUS_META[p.status]
 
   // Strip status/next-action/contact lines from the rendered body to avoid duplication.
-  const body = stripParsedLines(p.content)
+  const body = stripParsedLines(p.content).trim()
 
   return (
-    <Card className="overflow-hidden">
+    <Card id={`partnership-${slugify(p.name)}`} className="overflow-hidden scroll-mt-20">
       <CardContent className="p-3 space-y-2">
         <div className="flex items-start gap-2">
           <h4 className="font-medium text-sm leading-tight flex-1">{p.name}</h4>
@@ -196,19 +200,42 @@ function PartnershipCard({ partnership: p }: { partnership: Partnership }) {
   )
 }
 
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
 // Drop lines that the card surfaces in dedicated UI (status, contact emails, next action)
 // so the collapsible "Details" body shows only the remaining narrative.
 function stripParsedLines(content: string): string {
+  const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/
   return content
     .split('\n')
     .filter(line => {
       const t = line.trim()
       if (!t) return true
+
+      // Status: ...
       if (/^\s*(?:[-*+]\s+)?\**\s*status\s*\**\s*[:\-]/i.test(line)) return false
+
+      // Next:/Action:/Follow-up: ...
       if (/^\s*(?:[-*+]\s+)?\**\s*(?:next(?:\s+steps?)?|action(?:\s+item)?|follow[\s-]?up)\s*\**\s*[:\-]/i.test(line)) return false
-      // Drop lines that are *just* an email or "Name — email"
-      const emailOnly = /^[\s\-*+•]*[A-Za-z0-9 .,'&()]*[<(]?[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+[>)]?\s*$/
-      if (emailOnly.test(line)) return false
+
+      // Any line whose body — once labels, bullets, parens, brackets, dashes, names and roles are
+      // stripped — collapses to an email. Catches "Lead contact: liz@x", "Mike Johnson — m@x", etc.
+      if (EMAIL.test(line)) {
+        const skeleton = line
+          .replace(EMAIL, '')
+          .replace(/\[|\]|\(|\)|<|>|\*|`|_/g, '')
+          .replace(/mailto:/gi, '')
+          .replace(/^\s*[-*+•>]+\s*/, '')
+          .replace(/^\s*(?:contact|lead\s+contact|primary\s+contact|main\s+contact|email|inbox|reach\s+out|sales\s+contact|phone\s+tree)\s*[:\-–—]\s*/i, '')
+          .replace(/[\s,;:\-–—|]+/g, ' ')
+          .trim()
+        // If what remains is short and looks like a name/role/empty, drop the line.
+        if (skeleton.length === 0) return false
+        const words = skeleton.split(/\s+/).filter(Boolean)
+        if (words.length <= 5) return false
+      }
       return true
     })
     .join('\n')
