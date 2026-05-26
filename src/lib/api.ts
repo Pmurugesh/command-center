@@ -10,6 +10,8 @@ import type {
   DataSourceInfo,
   ScriptInfo,
   CronJob,
+  Agency,
+  Partnership,
 } from '@/types'
 
 const BASE = ''
@@ -58,6 +60,15 @@ export const api = {
 
   library: {
     list: () => fetchApi<LibraryFile[]>('/api/library'),
+  },
+
+  agencies: {
+    list: () => fetchApi<Agency[]>('/api/agencies'),
+    detail: (slug: string) => fetchApi<Agency>(`/api/agencies/${encodeURIComponent(slug)}`),
+  },
+
+  partnerships: {
+    list: () => fetchApi<Partnership[]>('/api/partnerships'),
   },
 
   systemInfo: {

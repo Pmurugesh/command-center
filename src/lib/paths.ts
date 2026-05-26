@@ -13,4 +13,6 @@ export const PATHS = {
   businessContext: path.join(HOME, '.openclaw/workspace/business'),
   scheduledTasks: path.join(HOME, '.claude/scheduled-tasks'),
   scripts: path.join(HOME, '.openclaw/workspace/scripts'),
+  agencies: path.join(HOME, 'repos/operations/intelligence/agencies'),
+  partnerships: path.join(HOME, 'repos/operations/intelligence/partnerships'),
 } as const

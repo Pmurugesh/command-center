@@ -6,6 +6,8 @@ import {
   Library,
   Settings,
   Clock,
+  Building2,
+  Handshake,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -95,6 +97,13 @@ export const NAV_SECTIONS: NavSection[] = [
     label: 'Intelligence',
     items: [
       { href: '/intel', label: 'Intelligence', icon: Radio, section: 'Intelligence' },
+    ],
+  },
+  {
+    label: 'Relationships',
+    items: [
+      { href: '/agencies', label: 'Agencies', icon: Building2, section: 'Relationships' },
+      { href: '/partnerships', label: 'Partnerships', icon: Handshake, section: 'Relationships' },
     ],
   },
   {

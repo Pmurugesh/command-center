@@ -1,9 +1,13 @@
 import fs from 'fs/promises'
 import path from 'path'
+import matter from 'gray-matter'
 import { PATHS } from './paths'
 import { BID_TAB_ORDER, normalizeBidStatus } from './config'
-import { countFlags } from './markdown'
-import type { Bid, BidDetail, BidFile, BidStatusData, ScanReport, IntelAlert, LibraryFile, DocumentFile, DataSourceInfo, ScriptInfo } from '@/types'
+import { countFlags, extractPriority, extractEmails, parsePartnerships } from './markdown'
+import type {
+  Bid, BidDetail, BidFile, BidStatusData, ScanReport, IntelAlert, LibraryFile,
+  DocumentFile, DataSourceInfo, ScriptInfo, Agency, AgencyPriority, Partnership,
+} from '@/types'
 
 async function exists(p: string): Promise<boolean> {
   try {
@@ -304,6 +308,55 @@ export async function getDataSources(): Promise<DataSourceInfo[]> {
       return { name: src.name, path: src.path, exists: pathExists, fileCount, lastModified }
     })
   )
+}
+
+// ── Agencies ──
+
+const PRIORITY_RANK: Record<AgencyPriority, number> = { high: 0, medium: 1, low: 2 }
+
+async function readAgencyFile(filename: string): Promise<Agency> {
+  const filePath = path.join(PATHS.agencies, filename)
+  const raw = await fs.readFile(filePath, 'utf-8')
+  const parsed = matter(raw)
+  const body = parsed.content
+  return {
+    slug: filename.replace(/\.md$/, ''),
+    displayName: formatName(filename),
+    filename,
+    priority: extractPriority(body, parsed.data as Record<string, unknown>),
+    contactCount: extractEmails(body).length,
+    content: body,
+  }
+}
+
+export async function listAgencies(): Promise<Agency[]> {
+  if (!(await exists(PATHS.agencies))) return []
+  const entries = await fs.readdir(PATHS.agencies)
+  const mdFiles = entries.filter(f => f.endsWith('.md') && !f.startsWith('.'))
+  const agencies = await Promise.all(mdFiles.map(readAgencyFile))
+  return agencies.sort((a, b) => {
+    const rankDiff = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
+    if (rankDiff !== 0) return rankDiff
+    return a.displayName.localeCompare(b.displayName)
+  })
+}
+
+export async function getAgency(slug: string): Promise<Agency | null> {
+  // Reject traversal / non-slug input
+  if (!slug || slug.includes('/') || slug.includes('..') || slug.startsWith('.')) return null
+  const filename = `${slug}.md`
+  const filePath = path.join(PATHS.agencies, filename)
+  if (!(await exists(filePath))) return null
+  return readAgencyFile(filename)
+}
+
+// ── Partnerships ──
+
+export async function getPartnerships(): Promise<Partnership[]> {
+  const trackerPath = path.join(PATHS.partnerships, 'tracker.md')
+  if (!(await exists(trackerPath))) return []
+  const content = await fs.readFile(trackerPath, 'utf-8')
+  return parsePartnerships(content)
 }
 
 export async function listScripts(): Promise<ScriptInfo[]> {

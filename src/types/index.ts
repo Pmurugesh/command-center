@@ -128,3 +128,29 @@ export interface ApiResponse<T> {
   data: T
   error?: string
 }
+
+// Relationships
+export type AgencyPriority = 'high' | 'medium' | 'low'
+
+export interface Agency {
+  slug: string
+  displayName: string
+  filename: string
+  priority: AgencyPriority
+  contactCount: number
+  content: string
+}
+
+export type PartnershipStatus = 'active' | 'in-contact' | 'potential' | 'unknown'
+
+export interface PartnershipContact {
+  name?: string
+  email: string
+}
+
+export interface Partnership {
+  name: string
+  status: PartnershipStatus
+  contacts: PartnershipContact[]
+  content: string
+}
