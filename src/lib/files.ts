@@ -3,7 +3,7 @@ import path from 'path'
 import matter from 'gray-matter'
 import { PATHS } from './paths'
 import { BID_TAB_ORDER, normalizeBidStatus } from './config'
-import { countFlags, extractPriority, extractEmails, parsePartnerships } from './markdown'
+import { countFlags, extractPriority, extractEmails, extractContacts, parsePartnerships } from './markdown'
 import type {
   Bid, BidDetail, BidFile, BidStatusData, ScanReport, IntelAlert, LibraryFile,
   DocumentFile, DataSourceInfo, ScriptInfo, Agency, AgencyPriority, Partnership,
@@ -316,16 +316,19 @@ const PRIORITY_RANK: Record<AgencyPriority, number> = { high: 0, medium: 1, low:
 
 async function readAgencyFile(filename: string): Promise<Agency> {
   const filePath = path.join(PATHS.agencies, filename)
-  const raw = await fs.readFile(filePath, 'utf-8')
+  const [raw, stat] = await Promise.all([fs.readFile(filePath, 'utf-8'), fs.stat(filePath)])
   const parsed = matter(raw)
   const body = parsed.content
+  const contacts = extractContacts(body)
   return {
     slug: filename.replace(/\.md$/, ''),
     displayName: formatName(filename),
     filename,
     priority: extractPriority(body, parsed.data as Record<string, unknown>),
-    contactCount: extractEmails(body).length,
+    contactCount: contacts.length,
+    contacts,
     content: body,
+    lastModified: stat.mtime.toISOString(),
   }
 }
 

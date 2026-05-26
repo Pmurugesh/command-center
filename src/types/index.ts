@@ -132,25 +132,31 @@ export interface ApiResponse<T> {
 // Relationships
 export type AgencyPriority = 'high' | 'medium' | 'low'
 
+export interface Contact {
+  name?: string
+  email: string
+}
+
 export interface Agency {
   slug: string
   displayName: string
   filename: string
   priority: AgencyPriority
   contactCount: number
+  contacts: Contact[]
   content: string
+  lastModified: string  // ISO timestamp from file mtime
 }
 
 export type PartnershipStatus = 'active' | 'in-contact' | 'potential' | 'unknown'
 
-export interface PartnershipContact {
-  name?: string
-  email: string
-}
+// Kept as an alias for backwards compatibility within Partnership shape.
+export type PartnershipContact = Contact
 
 export interface Partnership {
   name: string
   status: PartnershipStatus
   contacts: PartnershipContact[]
+  nextAction?: string
   content: string
 }
