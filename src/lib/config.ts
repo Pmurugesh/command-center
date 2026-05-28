@@ -1,9 +1,8 @@
 import {
-  LayoutDashboard,
+  Calendar,
   FileText,
   Shield,
   Radio,
-  Library,
   Settings,
   Clock,
   Building2,
@@ -11,7 +10,6 @@ import {
   TrendingUp,
   DollarSign,
   PenTool,
-  Target,
   Bot,
   type LucideIcon,
 } from 'lucide-react'
@@ -83,61 +81,52 @@ export interface NavSection {
   items: NavItem[]
 }
 
+// Sidebar IA — organized by *urgency*, not function.
+// "Now" is the daily home. "Workforce" elevates Agents to peer of Bids — agents are leverage,
+// not a system detail. "Intel" groups reading views that are outputs of agents (alerts + reports).
+// "System" stays at the bottom as a click-when-broken section.
+//
+// Library is intentionally NOT in the sidebar: it's only useful from within a bid response,
+// where it'll live as a contextual tab. Reachable via /library directly until then.
 export const NAV_SECTIONS: NavSection[] = [
   {
-    label: 'Overview',
+    label: 'Now',
     items: [
-      { href: '/', label: 'Overview', icon: LayoutDashboard, section: 'Overview' },
+      { href: '/', label: 'Today', icon: Calendar, section: 'Now' },
     ],
   },
   {
-    label: 'Growth',
+    label: 'Work',
     items: [
-      { href: '/agencies', label: 'Agencies', icon: Building2, section: 'Growth' },
-      { href: '/partnerships', label: 'Partnerships', icon: Handshake, section: 'Growth' },
+      { href: '/bids', label: 'Bids', icon: FileText, section: 'Work' },
+      { href: '/agencies', label: 'Agencies', icon: Building2, section: 'Work' },
+      { href: '/partnerships', label: 'Partnerships', icon: Handshake, section: 'Work' },
+      { href: '/content', label: 'Content', icon: PenTool, section: 'Work' },
     ],
   },
   {
-    label: 'Deals',
+    label: 'Workforce',
     items: [
-      { href: '/bids', label: 'Bid Pipeline', icon: FileText, section: 'Deals' },
-      { href: '/library', label: 'Response Library', icon: Library, section: 'Deals' },
+      { href: '/system/agents', label: 'Agents', icon: Bot, section: 'Workforce' },
     ],
   },
   {
-    label: 'Content',
+    label: 'Intel',
     items: [
-      { href: '/content', label: 'Content', icon: PenTool, section: 'Content' },
+      { href: '/intel', label: 'Intelligence', icon: Radio, section: 'Intel' },
+      { href: '/health', label: 'Codebase Health', icon: Shield, section: 'Intel' },
     ],
   },
   {
-    label: 'Finance',
+    label: 'Money',
     items: [
-      { href: '/finance', label: 'Finance Alerts', icon: DollarSign, section: 'Finance' },
-    ],
-  },
-  {
-    label: 'Product',
-    items: [
-      { href: '/health', label: 'Codebase Health', icon: Shield, section: 'Product' },
-    ],
-  },
-  {
-    label: 'Intelligence',
-    items: [
-      { href: '/intel', label: 'Intel Feed', icon: Radio, section: 'Intelligence' },
-    ],
-  },
-  {
-    label: 'Fundraising',
-    items: [
-      { href: '/fundraise', label: 'Fundraise', icon: TrendingUp, section: 'Fundraising' },
+      { href: '/finance', label: 'Finance', icon: DollarSign, section: 'Money' },
+      { href: '/fundraise', label: 'Fundraise', icon: TrendingUp, section: 'Money' },
     ],
   },
   {
     label: 'System',
     items: [
-      { href: '/system/agents', label: 'Agents', icon: Bot, section: 'System' },
       { href: '/system/cron', label: 'Cron Jobs', icon: Clock, section: 'System' },
       { href: '/system', label: 'Settings', icon: Settings, section: 'System' },
     ],
