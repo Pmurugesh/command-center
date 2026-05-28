@@ -25,7 +25,7 @@ export default async function AgentsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Agents"
-        subtitle={`${agents.length} agents configured`}
+        description={`${agents.length} agents configured`}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
