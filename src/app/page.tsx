@@ -12,7 +12,7 @@
  * still land here.
  */
 
-import { listBids, listScanReports, listIntelAlerts, getActionQueue } from '@/lib/files'
+import { listBids, listScanReports, listIntelAlerts, getActionQueue, getOutreachItems } from '@/lib/files'
 import { getCronJobs } from '@/lib/shell'
 import { getDecisionQueue } from '@/lib/decisions'
 import { getAgent24hSummary } from '@/lib/agents'
@@ -24,6 +24,8 @@ import { DecisionsCard } from '@/components/today/decisions-card'
 import { AgentsSummaryCard } from '@/components/today/agents-summary'
 import { ActiveBidsKanban } from '@/components/today/active-bids-kanban'
 import { ActionQueueCard } from '@/components/today/action-queue-card'
+import { PriorityOutreachCard } from "@/components/today/priority-outreach-card"
+
 import type { CronJob } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -43,7 +45,7 @@ function todayLabel(now = new Date()): string {
 
 export default async function TodayPage() {
   // Fetch everything in parallel — each data source is independent.
-  const [bids, reports, alerts, cronJobs, decisions, agentSummaries, actionQueue] = await Promise.all([
+  const [bids, reports, alerts, cronJobs, decisions, agentSummaries, actionQueue, outreachItems] = await Promise.all([
     listBids(),
     listScanReports(),
     listIntelAlerts(),
@@ -51,6 +53,7 @@ export default async function TodayPage() {
     getDecisionQueue().catch(() => []),
     getAgent24hSummary().catch(() => []),
     getActionQueue().catch(() => []),
+    getOutreachItems().catch(() => []),
   ])
 
   // Aggregate critical findings across scan reports (signal for header health).
@@ -128,6 +131,9 @@ export default async function TodayPage() {
 
       {/* Action queue from partnership next-actions */}
       <ActionQueueCard items={actionQueue} />
+
+      {/* Priority outreach */}
+      <PriorityOutreachCard items={outreachItems} />
     </div>
   )
 }

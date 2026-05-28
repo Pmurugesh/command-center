@@ -16,3 +16,4 @@ export const PATHS = {
   agencies: path.join(HOME, 'repos/operations/intelligence/agencies'),
   partnerships: path.join(HOME, 'repos/operations/intelligence/partnerships'),
 } as const
+export const OUTREACH_PATH = path.join(HOME, 'repos/operations/intelligence/priority-outreach.md')

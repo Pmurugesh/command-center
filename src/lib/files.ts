@@ -404,3 +404,26 @@ export async function listScripts(): Promise<ScriptInfo[]> {
 
   return scripts
 }
+
+export async function getOutreachItems() {
+  const { OUTREACH_PATH } = await import('./paths')
+  try {
+    const content = await fs.readFile(OUTREACH_PATH, 'utf-8')
+    const lines = content.split('\n').filter(l => l.startsWith('|') && !l.includes('---') && !l.includes('Priority'))
+    return lines.map(line => {
+      const cols = line.split('|').map(c => c.trim()).filter(Boolean)
+      return {
+        priority: parseInt(cols[0]) || 0,
+        contact: cols[1] || '',
+        title: cols[2] || '',
+        agency: cols[3] || '',
+        product: cols[4] || '',
+        owner: cols[5] || '',
+        action: cols[6] || '',
+        status: cols[7] || 'pending',
+      }
+    }).filter(i => i.contact)
+  } catch {
+    return []
+  }
+}
