@@ -17,10 +17,10 @@
 
 import fs from 'fs/promises'
 import path from 'path'
-import { runCommand } from './shell'
+import { runCommand, getCronJobs } from './shell'
 import { listBids, listScanReports, listIntelAlerts, listAgencies } from './files'
 import { PATHS } from './paths'
-import type { Agent, AgentOutput, AgentStatus } from '@/types'
+import type { Agent, AgentOutput, AgentStatus, CronJob } from '@/types'
 
 const HOME = process.env.HOME || '/Users/paladin'
 
@@ -176,6 +176,163 @@ function deriveStatus(lastActivityMs: number | undefined, agentId: string): Agen
   if (hoursAgo < 24) return 'ok'
   if (hoursAgo < 24 * 7) return 'idle'
   return 'warning'
+}
+
+// Cron job name → agent id. Matched by substring (cron names are stable enough).
+// Anything that doesn't match falls under 'other' on the Today page.
+const CRON_NAME_TO_AGENT: { pattern: RegExp; agentId: string }[] = [
+  // product (engineering / codebase)
+  { pattern: /vulnerability-scan|test-coverage|tech-debt|migration-safety|compliance-(backend|ui)|rbac-consistency|doc-freshness|prompt-quality|dependency-config|audit-log/i, agentId: 'product' },
+  // intel (research / alerts)
+  { pattern: /intel|briefing|procurement|competitor|policy-scan|update-memory/i, agentId: 'intel' },
+  // sales (bids / agencies / partnerships)
+  { pattern: /bid|agency|agencies|partnership|outreach|response-/i, agentId: 'sales' },
+]
+
+function cronJobToAgentId(jobName: string): string {
+  for (const { pattern, agentId } of CRON_NAME_TO_AGENT) {
+    if (pattern.test(jobName)) return agentId
+  }
+  return 'other'
+}
+
+export interface AgentSummary {
+  agentId: string                // 'main' | 'product' | 'intel' | 'sales' | 'other'
+  agentName: string
+  emoji: string
+  runs: number                   // jobs that ran in the last 24h
+  failed: number                 // of those, how many failed
+  outputsTouched: number         // owned outputs whose mtime is within 24h
+  lastActivityAt?: string
+}
+
+/**
+ * 24-hour activity summary per agent. Used by the Today page to surface
+ * "what your AI workforce did overnight" without requiring per-run logs.
+ *
+ * Data sources:
+ *   - getCronJobs() → cron run state (lastRunStatus, lastRunAt)
+ *   - getLastActivityMs(agent) → max mtime across owned outputs
+ *
+ * Each agent's `runs` and `failed` come from cron jobs that map to that agent
+ * via CRON_NAME_TO_AGENT. `outputsTouched` is the count of owned outputs whose
+ * mtime is within the last 24h. If openclaw/cron isn't reachable, the cron-
+ * based fields are 0 and the function still returns a valid array.
+ */
+export async function getAgent24hSummary(): Promise<AgentSummary[]> {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000
+
+  const [agents, cronJobs] = await Promise.all([
+    getAgents().catch(() => [] as Agent[]),
+    getCronJobs().catch(() => []),
+  ])
+
+  // Index cron jobs by agent id for quick aggregation.
+  const cronByAgent: Record<string, { runs: number; failed: number; latest?: number }> = {}
+  for (const raw of cronJobs as CronJob[]) {
+    const lastRunAt = raw.state?.lastRunAt || raw.last_run?.completed_at || raw.last_run?.started_at
+    if (!lastRunAt) continue
+    const ts = new Date(lastRunAt).getTime()
+    if (Number.isNaN(ts) || ts < cutoff) continue
+
+    const agentId = cronJobToAgentId(raw.name)
+    if (!cronByAgent[agentId]) cronByAgent[agentId] = { runs: 0, failed: 0 }
+    cronByAgent[agentId].runs += 1
+    const status = raw.state?.lastRunStatus || raw.last_run?.status
+    if (status === 'failed' || status === 'error') cronByAgent[agentId].failed += 1
+    if (!cronByAgent[agentId].latest || ts > cronByAgent[agentId].latest!) {
+      cronByAgent[agentId].latest = ts
+    }
+  }
+
+  // Outputs touched within 24h, per agent.
+  // Reuses the same per-agent mtime gathering as getLastActivityMs but counts
+  // entries above the cutoff instead of taking the max.
+  const outputsTouched = await Promise.all(
+    agents.map(async (a) => ({
+      agentId: a.id,
+      count: await countOutputsSince(a.id, cutoff),
+    }))
+  )
+  const touchedById = Object.fromEntries(outputsTouched.map(x => [x.agentId, x.count]))
+
+  const summaries: AgentSummary[] = agents.map(a => {
+    const cron = cronByAgent[a.id] || { runs: 0, failed: 0 }
+    const lastMs = Math.max(cron.latest || 0, a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0)
+    return {
+      agentId: a.id,
+      agentName: a.name,
+      emoji: a.emoji,
+      runs: cron.runs,
+      failed: cron.failed,
+      outputsTouched: touchedById[a.id] || 0,
+      lastActivityAt: lastMs > 0 ? new Date(lastMs).toISOString() : undefined,
+    }
+  })
+
+  // If openclaw isn't installed at all (agents is empty) but cron has entries,
+  // surface them under their inferred agent id so we don't lose the signal.
+  if (agents.length === 0) {
+    for (const [agentId, cron] of Object.entries(cronByAgent)) {
+      summaries.push({
+        agentId,
+        agentName: agentId,
+        emoji: '🤖',
+        runs: cron.runs,
+        failed: cron.failed,
+        outputsTouched: 0,
+        lastActivityAt: cron.latest ? new Date(cron.latest).toISOString() : undefined,
+      })
+    }
+  }
+
+  // Stable order: main first, then by name
+  summaries.sort((a, b) => {
+    if (a.agentId === 'main') return -1
+    if (b.agentId === 'main') return 1
+    return a.agentName.localeCompare(b.agentName)
+  })
+
+  return summaries
+}
+
+// Count an agent's owned outputs whose mtime is at or after `sinceMs`.
+async function countOutputsSince(agentId: string, sinceMs: number): Promise<number> {
+  let count = 0
+
+  if (agentId === 'product') {
+    const reports = await listScanReports()
+    for (const r of reports) {
+      if (new Date(r.lastModified).getTime() >= sinceMs) count += 1
+    }
+  }
+  if (agentId === 'intel') {
+    try {
+      const files = await fs.readdir(PATHS.intelligence)
+      for (const f of files) {
+        if (!f.endsWith('.md')) continue
+        try {
+          const stat = await fs.stat(path.join(PATHS.intelligence, f))
+          if (stat.mtimeMs >= sinceMs) count += 1
+        } catch { /* skip */ }
+      }
+    } catch { /* dir may not exist */ }
+  }
+  if (agentId === 'sales') {
+    const bids = await listBids()
+    for (const b of bids) {
+      if (b.updatedAt && new Date(b.updatedAt).getTime() >= sinceMs) count += 1
+    }
+    const agencies = await listAgencies()
+    for (const a of agencies) {
+      if (new Date(a.lastModified).getTime() >= sinceMs) count += 1
+    }
+    try {
+      const trackerStat = await fs.stat(path.join(PATHS.partnerships, 'tracker.md'))
+      if (trackerStat.mtimeMs >= sinceMs) count += 1
+    } catch { /* tracker may not exist */ }
+  }
+  return count
 }
 
 /**

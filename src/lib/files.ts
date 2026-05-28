@@ -362,6 +362,16 @@ export async function getPartnerships(): Promise<Partnership[]> {
   return parsePartnerships(content)
 }
 
+/**
+ * Partnerships filtered to those with an unresolved nextAction. Used by
+ * both /partnerships (the inline action queue) and the Today page so they
+ * stay in sync.
+ */
+export async function getActionQueue(): Promise<Partnership[]> {
+  const partnerships = await getPartnerships()
+  return partnerships.filter(p => Boolean(p.nextAction))
+}
+
 export async function listScripts(): Promise<ScriptInfo[]> {
   const scriptsPath = path.join(process.env.HOME || '/Users/paladin', '.openclaw/workspace/scripts')
   if (!(await exists(scriptsPath))) return []

@@ -38,6 +38,45 @@ export function countFlags(content: string): number {
   return (content.match(/\[HUMAN DECISION NEEDED\]/g) || []).length
 }
 
+export interface FlagLocation {
+  index: number      // 1-based: 1st flag in file, 2nd, etc.
+  lineNumber: number // 1-based line number
+  snippet: string    // the flag line + 2 lines of trailing context, joined with \n
+}
+
+/**
+ * Walk the markdown content yielding every [HUMAN DECISION NEEDED] flag's location,
+ * with a short context snippet (the flag line + up to 2 following lines, trimmed).
+ * Used by the Today page's Decisions Waiting card.
+ */
+export function iterateFlags(content: string): FlagLocation[] {
+  const lines = content.split('\n')
+  const flags: FlagLocation[] = []
+  let count = 0
+
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].includes('[HUMAN DECISION NEEDED]')) continue
+    count += 1
+    // Pull a small context window — current line + up to 2 following lines.
+    // Skip blank lines in the trailing window so the snippet stays informative.
+    const window: string[] = [lines[i]]
+    let added = 0
+    for (let j = i + 1; j < lines.length && added < 2; j++) {
+      const t = lines[j].trim()
+      if (!t) continue
+      window.push(lines[j])
+      added += 1
+    }
+    flags.push({
+      index: count,
+      lineNumber: i + 1,
+      snippet: window.join('\n').trim(),
+    })
+  }
+
+  return flags
+}
+
 export function extractDeltaIndicators(content: string): { new: number; resolved: number; unchanged: number } {
   const newCount = (content.match(/\*\*NEW\*\*|\[NEW\]|🆕/g) || []).length
   const resolvedCount = (content.match(/\*\*RESOLVED\*\*|\[RESOLVED\]/g) || []).length
