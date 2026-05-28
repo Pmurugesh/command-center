@@ -160,3 +160,27 @@ export interface Partnership {
   nextAction?: string
   content: string
 }
+
+// Agents (the AI workforce)
+export type AgentStatus = 'running' | 'ok' | 'warning' | 'idle'
+
+// An output an agent produces — a dashboard route. iconKey is a string so the
+// shape stays JSON-serializable; the rendering side maps key → LucideIcon.
+export interface AgentOutput {
+  href: string
+  label: string
+  iconKey: string
+}
+
+export interface Agent {
+  id: string
+  name: string
+  emoji: string
+  model: string
+  workspace: string       // home-relative path with ~ prefix
+  role: string
+  owns: string[]          // raw SOUL.md "What You Own" bullets
+  outputs: AgentOutput[]  // mapped dashboard routes for this agent
+  status: AgentStatus
+  lastActivityAt?: string // ISO; max mtime across owned outputs
+}
