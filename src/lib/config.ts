@@ -8,6 +8,11 @@ import {
   Clock,
   Building2,
   Handshake,
+  TrendingUp,
+  DollarSign,
+  PenTool,
+  Target,
+  Bot,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -80,35 +85,59 @@ export interface NavSection {
 
 export const NAV_SECTIONS: NavSection[] = [
   {
-    label: 'Operations',
+    label: 'Overview',
     items: [
-      { href: '/', label: 'Overview', icon: LayoutDashboard, section: 'Operations' },
-      { href: '/bids', label: 'Bid Pipeline', icon: FileText, section: 'Operations' },
-      { href: '/library', label: 'Response Library', icon: Library, section: 'Operations' },
+      { href: '/', label: 'Overview', icon: LayoutDashboard, section: 'Overview' },
     ],
   },
   {
-    label: 'Engineering',
+    label: 'Growth',
     items: [
-      { href: '/health', label: 'Codebase Health', icon: Shield, section: 'Engineering' },
+      { href: '/agencies', label: 'Agencies', icon: Building2, section: 'Growth' },
+      { href: '/partnerships', label: 'Partnerships', icon: Handshake, section: 'Growth' },
+    ],
+  },
+  {
+    label: 'Deals',
+    items: [
+      { href: '/bids', label: 'Bid Pipeline', icon: FileText, section: 'Deals' },
+      { href: '/library', label: 'Response Library', icon: Library, section: 'Deals' },
+    ],
+  },
+  {
+    label: 'Content',
+    items: [
+      { href: '/content', label: 'Content', icon: PenTool, section: 'Content' },
+    ],
+  },
+  {
+    label: 'Finance',
+    items: [
+      { href: '/finance', label: 'Finance Alerts', icon: DollarSign, section: 'Finance' },
+    ],
+  },
+  {
+    label: 'Product',
+    items: [
+      { href: '/health', label: 'Codebase Health', icon: Shield, section: 'Product' },
     ],
   },
   {
     label: 'Intelligence',
     items: [
-      { href: '/intel', label: 'Intelligence', icon: Radio, section: 'Intelligence' },
+      { href: '/intel', label: 'Intel Feed', icon: Radio, section: 'Intelligence' },
     ],
   },
   {
-    label: 'Relationships',
+    label: 'Fundraising',
     items: [
-      { href: '/agencies', label: 'Agencies', icon: Building2, section: 'Relationships' },
-      { href: '/partnerships', label: 'Partnerships', icon: Handshake, section: 'Relationships' },
+      { href: '/fundraise', label: 'Fundraise', icon: TrendingUp, section: 'Fundraising' },
     ],
   },
   {
     label: 'System',
     items: [
+      { href: '/system/agents', label: 'Agents', icon: Bot, section: 'System' },
       { href: '/system/cron', label: 'Cron Jobs', icon: Clock, section: 'System' },
       { href: '/system', label: 'Settings', icon: Settings, section: 'System' },
     ],
