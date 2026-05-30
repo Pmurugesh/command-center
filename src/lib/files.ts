@@ -427,3 +427,15 @@ export async function getOutreachItems() {
     return []
   }
 }
+
+export async function getMorningActions(): Promise<string> {
+  try {
+    const content = await fs.readFile(
+      path.join(process.env.HOME || '/Users/paladin', 'repos/operations/codebase-reports/morning-actions.md'),
+      'utf-8'
+    )
+    return content
+  } catch {
+    return ''
+  }
+}
