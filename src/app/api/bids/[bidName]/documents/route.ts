@@ -30,12 +30,14 @@ export async function POST(request: Request, { params }: { params: { bidName: st
     await writeBidStatus(bidName, {})
 
     const note = form.get('note')
+    const agent = form.get('agent')
     triggerAgent(
       buildAgentMessage(
         `New documents added to existing bid "${bidName}" — review them against the current analysis.`,
         saved,
         typeof note === 'string' ? note : undefined
-      )
+      ),
+      typeof agent === 'string' ? agent : undefined
     )
 
     return NextResponse.json({ saved: saved.map(p => path.basename(p)), dest })

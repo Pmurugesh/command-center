@@ -43,12 +43,14 @@ export async function POST(request: Request) {
     await writeBidStatus(slug, { status: 'Analyzing' })
 
     const note = form.get('note')
+    const agent = form.get('agent')
     triggerAgent(
       buildAgentMessage(
         `New bid "${slug}" created from uploaded RFP documents — run the full bid analysis.`,
         saved,
         typeof note === 'string' ? note : undefined
-      )
+      ),
+      typeof agent === 'string' ? agent : undefined
     )
 
     return NextResponse.json({ bidName: slug, saved: saved.map(p => path.basename(p)), dest })

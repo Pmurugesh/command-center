@@ -28,12 +28,14 @@ export async function POST(request: Request) {
     const saved = await saveFiles(dest.dir, files)
 
     const note = form.get('note')
+    const agent = form.get('agent')
     triggerAgent(
       buildAgentMessage(
         `General documents dropped into the ${dest.label} folder — file and process them appropriately.`,
         saved,
         typeof note === 'string' ? note : undefined
-      )
+      ),
+      typeof agent === 'string' ? agent : undefined
     )
 
     return NextResponse.json({ saved: saved.map(p => path.basename(p)), dest: dest.dir })
