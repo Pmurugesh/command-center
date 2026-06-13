@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Plus, Upload, X } from 'lucide-react'
+import { AgentSelect } from '@/components/shared/agent-select'
 
 export function NewBidForm() {
   const router = useRouter()
@@ -88,6 +89,7 @@ export function NewBidForm() {
             required
             className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-background file:px-3 file:py-1.5 file:text-sm file:text-foreground hover:file:bg-accent/50 file:cursor-pointer"
           />
+          <AgentSelect />
           <div className="flex items-center gap-3">
             <button
               type="submit"

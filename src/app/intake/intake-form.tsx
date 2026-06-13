@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Send } from 'lucide-react'
+import { AgentSelect } from '@/components/shared/agent-select'
 
 const DESTINATIONS = [
   { value: 'inbox', label: 'Inbox — agent files it (default)' },
@@ -70,6 +71,7 @@ export function IntakeForm() {
             placeholder="Note for the agent (optional — what is this, what should happen)"
             className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           />
+          <AgentSelect />
           <div className="flex items-center gap-3">
             <button
               type="submit"
