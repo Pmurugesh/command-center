@@ -69,10 +69,12 @@ export function buildAgentMessage(context: string, savedPaths: string[], note?: 
 
 // Intentionally not awaited: an agent turn can take minutes and the HTTP response
 // shouldn't wait for it. runCommandArgs never rejects, so this can't crash the route.
+// --agent main targets the default agent (Paladin) — the same session Telegram intake
+// routes to; without a session target openclaw rejects the call.
 export function triggerAgent(message: string): void {
   void runCommandArgs(
     'openclaw',
-    ['agent', '--message', message, '--deliver', '--channel', 'telegram'],
+    ['agent', '--agent', 'main', '--message', message, '--deliver', '--channel', 'telegram'],
     300_000
   )
 }
