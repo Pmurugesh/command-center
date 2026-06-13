@@ -1,6 +1,7 @@
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { FileText, File } from 'lucide-react'
 import type { DocumentFile } from '@/types'
+import { BidUpload } from './bid-upload'
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -18,7 +19,7 @@ const typeIcons: Record<string, string> = {
   txt: 'TXT',
 }
 
-export function BidDocuments({ documents }: { documents: DocumentFile[] }) {
+export function BidDocuments({ documents, bidName }: { documents: DocumentFile[]; bidName: string }) {
   return (
     <Card>
       <CardHeader>
@@ -28,6 +29,9 @@ export function BidDocuments({ documents }: { documents: DocumentFile[] }) {
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {documents.length === 0 && (
+          <p className="text-sm text-muted-foreground">No source documents yet.</p>
+        )}
         <div className="space-y-2">
           {documents.map((doc) => (
             <div
@@ -46,6 +50,9 @@ export function BidDocuments({ documents }: { documents: DocumentFile[] }) {
               </span>
             </div>
           ))}
+        </div>
+        <div className="mt-4 border-t border-border pt-4">
+          <BidUpload bidName={bidName} />
         </div>
       </CardContent>
     </Card>

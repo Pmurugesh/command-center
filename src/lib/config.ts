@@ -11,6 +11,7 @@ import {
   DollarSign,
   PenTool,
   Bot,
+  Inbox,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -93,6 +94,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: 'Now',
     items: [
       { href: '/', label: 'Today', icon: Calendar, section: 'Now' },
+      { href: '/intake', label: 'Intake', icon: Inbox, section: 'Now' },
     ],
   },
   {

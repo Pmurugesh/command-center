@@ -62,9 +62,7 @@ export default async function BidDetailPage({ params }: { params: { bidName: str
       <BidDetailTabs files={detail.files} />
 
       {/* Source documents */}
-      {detail.documents && detail.documents.length > 0 && (
-        <BidDocuments documents={detail.documents} />
-      )}
+      <BidDocuments documents={detail.documents ?? []} bidName={detail.name} />
     </div>
   )
 }

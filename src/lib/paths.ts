@@ -15,5 +15,6 @@ export const PATHS = {
   scripts: path.join(HOME, '.openclaw/workspace/scripts'),
   agencies: path.join(HOME, 'repos/operations/intelligence/agencies'),
   partnerships: path.join(HOME, 'repos/operations/intelligence/partnerships'),
+  inbox: path.join(HOME, 'repos/operations/inbox'),
 } as const
 export const OUTREACH_PATH = path.join(HOME, 'repos/operations/intelligence/priority-outreach.md')
