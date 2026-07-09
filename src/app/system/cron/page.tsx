@@ -1,18 +1,15 @@
-import { getCronJobs } from '@/lib/shell'
+import { getNormalizedCronJobs } from '@/lib/shell'
+import { isFailing } from '@/lib/cron'
 import { PageHeader } from '@/components/shared/page-header'
 import { CronJobList } from './cron-job-list'
 import { Card, CardContent } from '@/components/ui/card'
 import { Clock, Terminal } from 'lucide-react'
-import type { CronJob } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
 export default async function CronPage() {
-  const cronJobs = await getCronJobs() as CronJob[]
-  const failedCount = cronJobs.filter((j) => {
-    const status = (j as any).state?.lastRunStatus
-    return status === 'error' || status === 'failed'
-  }).length
+  const cronJobs = await getNormalizedCronJobs()
+  const failedCount = cronJobs.filter(isFailing).length
 
   return (
     <div className="space-y-6">

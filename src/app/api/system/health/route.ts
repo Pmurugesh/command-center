@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
-import { getCronJobs } from '@/lib/shell'
-import { listBids, listScanReports, listIntelAlerts } from '@/lib/files'
-import { extractDeltaIndicators, extractCriticalCount } from '@/lib/markdown'
+import { getNormalizedCronJobs } from '@/lib/shell'
+import { isFailing } from '@/lib/cron'
+import { listBids, listScanReports, listIntelAlerts, currentScanReports } from '@/lib/files'
+import { extractCriticalCount } from '@/lib/markdown'
 import type { SystemHealth } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -9,24 +10,30 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   try {
     const [cronJobs, bids, reports, alerts] = await Promise.all([
-      getCronJobs(),
+      getNormalizedCronJobs(),
       listBids(),
       listScanReports(),
       listIntelAlerts(),
     ])
 
-    const jobs = cronJobs as Array<{ enabled?: boolean; state?: { lastRunStatus?: string } }>
-    const cronFailed = jobs.filter(j => j.state?.lastRunStatus === 'error' || j.state?.lastRunStatus === 'failed').length
+    const failing = cronJobs.filter(isFailing)
+    const cronFailed = failing.length
     const cronOk = cronFailed === 0
+    const persistentFailure = failing.some(j => j.consecutiveErrors >= 2)
 
+    // Critical findings from the latest run of each scan only — informational,
+    // shown on /health. They do NOT drive the global health dot: a codebase
+    // finding is work to schedule, not an operational outage.
     let criticalFindings = 0
-    for (const report of reports) {
+    for (const report of currentScanReports(reports)) {
       criticalFindings += extractCriticalCount(report.content)
     }
 
+    // The dot means "is the automation running?": red for persistent or
+    // widespread cron failure, yellow for a single fresh failure, else green.
     let overall: SystemHealth['overall'] = 'green'
-    if (cronFailed > 0 || criticalFindings > 0) overall = 'yellow'
-    if (cronFailed > 2 || criticalFindings > 5) overall = 'red'
+    if (cronFailed > 0) overall = 'yellow'
+    if (persistentFailure || cronFailed >= 2) overall = 'red'
 
     const health: SystemHealth = {
       overall,

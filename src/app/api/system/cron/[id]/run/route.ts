@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { runCommand } from '@/lib/shell'
+import { runCommandArgs } from '@/lib/shell'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +13,7 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid job name' }, { status: 400 })
     }
 
-    const output = await runCommand(`openclaw cron run ${jobName}`, 30000)
+    const output = await runCommandArgs('openclaw', ['cron', 'run', jobName], 30000)
     return NextResponse.json({ success: true, output })
   } catch (error) {
     console.error(`POST /api/system/cron/${params.id}/run error:`, error)

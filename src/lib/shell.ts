@@ -1,5 +1,6 @@
 import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
+import { normalizeCronJob, type NormalizedCronJob } from './cron'
 
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
@@ -47,6 +48,11 @@ export async function getCronJobs(): Promise<unknown[]> {
   } catch {
     return []
   }
+}
+
+export async function getNormalizedCronJobs(): Promise<NormalizedCronJob[]> {
+  const raw = await getCronJobs()
+  return raw.map(normalizeCronJob).filter(j => j.name)
 }
 
 export async function getActiveClaudeProcesses(): Promise<number> {

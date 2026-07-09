@@ -1,20 +1,20 @@
 import Link from 'next/link'
-import { Phone, Mail, ArrowRight } from 'lucide-react'
+import { Phone, ArrowRight } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { TimeAgo } from '@/components/shared/time-ago'
+import type { OutreachItem } from '@/lib/files'
 
-interface OutreachItem {
-  priority: number
-  contact: string
-  title: string
-  agency: string
-  product: string
-  owner: string
-  action: string
-  status: string
+const STALE_AFTER_DAYS = 7
+
+interface PriorityOutreachCardProps {
+  items: OutreachItem[]
+  updatedAt: string | null  // outreach file mtime; null when the file doesn't exist
 }
 
-export function PriorityOutreachCard({ items }: { items: OutreachItem[] }) {
+export function PriorityOutreachCard({ items, updatedAt }: PriorityOutreachCardProps) {
   const pending = items.filter(i => i.status === 'pending')
+  const isStale = updatedAt !== null &&
+    Date.now() - new Date(updatedAt).getTime() > STALE_AFTER_DAYS * 24 * 60 * 60 * 1000
 
   return (
     <Card className={pending.length > 0 ? 'border-amber-500/30 bg-amber-500/5' : ''}>
@@ -23,6 +23,11 @@ export function PriorityOutreachCard({ items }: { items: OutreachItem[] }) {
           <CardTitle className="text-base flex items-center gap-2">
             <Phone className="h-5 w-5" />
             Priority Outreach
+            {isStale && updatedAt && (
+              <span className="text-xs font-normal text-status-warning">
+                list updated <TimeAgo date={updatedAt} />
+              </span>
+            )}
           </CardTitle>
           <Link href="/agencies" className="text-sm text-blue-400 hover:underline flex items-center gap-1">
             All agencies <ArrowRight className="h-3 w-3" />
@@ -41,7 +46,7 @@ export function PriorityOutreachCard({ items }: { items: OutreachItem[] }) {
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 ml-3">
               <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                item.product === 'AIHire' 
+                item.product === 'AIHire'
                   ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
                   : item.product === 'PRRAI'
                   ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
@@ -59,7 +64,13 @@ export function PriorityOutreachCard({ items }: { items: OutreachItem[] }) {
           </Link>
         )}
         {pending.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-4">All outreach completed ✅</p>
+          <p className="text-sm text-muted-foreground text-center py-4">
+            {updatedAt === null
+              ? 'No outreach list found — expected at intelligence/priority-outreach.md'
+              : items.length === 0
+                ? 'Outreach list is empty'
+                : 'All outreach completed ✅'}
+          </p>
         )}
       </CardContent>
     </Card>

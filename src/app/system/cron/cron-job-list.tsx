@@ -5,20 +5,38 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { TimeAgo } from '@/components/shared/time-ago'
-import { getCronCategory } from '@/lib/config'
-import { Play, Clock } from 'lucide-react'
-import type { CronJob } from '@/types'
+import { Play, Bot } from 'lucide-react'
+import { isFailing, type NormalizedCronJob } from '@/lib/cron'
 
-export function CronJobList({ jobs }: { jobs: CronJob[] }) {
+// Display order: orchestrator first, then the specialists, then anything new.
+const AGENT_ORDER = ['main', 'intel', 'sales', 'product', 'voice']
+
+function agentLabel(agentId: string): string {
+  if (!agentId) return 'Unassigned'
+  return agentId.charAt(0).toUpperCase() + agentId.slice(1)
+}
+
+export function CronJobList({ jobs }: { jobs: NormalizedCronJob[] }) {
   const [runningJobs, setRunningJobs] = useState<Set<string>>(new Set())
   const [runResults, setRunResults] = useState<Record<string, { success: boolean; message: string }>>({})
 
-  // Group by category
-  const grouped: Record<string, CronJob[]> = {}
+  // Group by owning agent — that's how the jobs are actually organized.
+  const grouped: Record<string, NormalizedCronJob[]> = {}
   for (const job of jobs) {
-    const category = getCronCategory(job.name)
-    if (!grouped[category]) grouped[category] = []
-    grouped[category].push(job)
+    const key = job.agentId || 'other'
+    if (!grouped[key]) grouped[key] = []
+    grouped[key].push(job)
+  }
+  const groupKeys = Object.keys(grouped).sort((a, b) => {
+    const ai = AGENT_ORDER.indexOf(a), bi = AGENT_ORDER.indexOf(b)
+    if (ai === -1 && bi === -1) return a.localeCompare(b)
+    if (ai === -1) return 1
+    if (bi === -1) return -1
+    return ai - bi
+  })
+  // Failing jobs float to the top of each group.
+  for (const key of groupKeys) {
+    grouped[key].sort((a, b) => Number(isFailing(b)) - Number(isFailing(a)) || a.name.localeCompare(b.name))
   }
 
   const handleRunJob = async (jobName: string) => {
@@ -45,44 +63,49 @@ export function CronJobList({ jobs }: { jobs: CronJob[] }) {
 
   return (
     <div className="space-y-6">
-      {Object.entries(grouped).map(([category, categoryJobs]) => (
-        <Card key={category}>
+      {groupKeys.map(key => (
+        <Card key={key}>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              {category}
-              <Badge variant="secondary" className="text-xs">{categoryJobs.length}</Badge>
+              <Bot className="h-5 w-5" />
+              {agentLabel(key)}
+              <Badge variant="secondary" className="text-xs">{grouped[key].length}</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {categoryJobs.map((job) => {
-                const status = (job as any).state?.lastRunStatus || 'pending'
-                const schedule = typeof job.schedule === 'object' ? job.schedule.expr : job.schedule
-                const lastRunAt = (job as any).state?.lastRunAt || job.last_run?.started_at
+              {grouped[key].map((job) => {
                 const isRunning = runningJobs.has(job.name)
                 const result = runResults[job.name]
 
                 return (
-                  <div key={job.name} className="flex items-center justify-between rounded-md border border-border p-4">
+                  <div key={job.id} className="flex items-center justify-between rounded-md border border-border p-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium">{job.name}</p>
-                        <StatusBadge status={isRunning ? 'running' : status} />
-                        {job.enabled === false && <StatusBadge status="disabled" />}
-                      </div>
-                      <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                        <span>Schedule: {schedule}</span>
-                        {lastRunAt && (
-                          <span>Last run: <TimeAgo date={lastRunAt} /></span>
-                        )}
-                        {job.last_run?.duration_seconds != null && (
-                          <span>Duration: {job.last_run.duration_seconds}s</span>
-                        )}
-                        {job.next_run && (
-                          <span>Next: <TimeAgo date={job.next_run} /></span>
+                        <StatusBadge status={isRunning ? 'running' : (job.lastRunStatus || 'pending')} />
+                        {!job.enabled && <StatusBadge status="disabled" />}
+                        {job.consecutiveErrors > 1 && (
+                          <Badge variant="destructive" className="text-[10px] font-mono tabular-nums">
+                            failing ×{job.consecutiveErrors}
+                          </Badge>
                         )}
                       </div>
+                      <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
+                        <span className="font-mono">{job.scheduleExpr}{job.timezone ? ` (${job.timezone})` : ''}</span>
+                        {job.lastRunAt && (
+                          <span>Last run: <TimeAgo date={job.lastRunAt} /></span>
+                        )}
+                        {job.lastDurationMs != null && (
+                          <span>Duration: {Math.round(job.lastDurationMs / 1000)}s</span>
+                        )}
+                        {job.nextRunAt && (
+                          <span>Next: <TimeAgo date={job.nextRunAt} /></span>
+                        )}
+                      </div>
+                      {isFailing(job) && job.lastError && (
+                        <p className="text-xs text-status-danger mt-1 truncate">{job.lastError}</p>
+                      )}
                       {result && !isRunning && (
                         <p className={`text-xs mt-1 ${result.success ? 'text-emerald-400' : 'text-red-400'}`}>
                           {result.message}

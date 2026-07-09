@@ -1,22 +1,18 @@
 /**
  * Today — the morning home.
  *
- * Pulls together:
- *  - Decisions waiting on you (parsed across every bid)
- *  - Agents last 24h (cron run summary + outputs-touched count)
- *  - Active bids mini-kanban
- *  - Action queue (partnership next-actions)
- *  - System health and bid counters in the header strip
- *
- * Replaces the previous Overview. Same route (/), so existing bookmarks
- * still land here.
+ * Answers, in order: what needs me right now (decisions, opportunity
+ * deadlines), what my agents did overnight (runs + failures), where the work
+ * stands (bids kanban, outreach), and whether the automation feeding all of
+ * this is still alive (pipeline freshness).
  */
 
-import { listBids, listScanReports, listIntelAlerts, getActionQueue, getOutreachItems, getMorningActions } from '@/lib/files'
-import { getCronJobs } from '@/lib/shell'
+import { listBids, listIntelAlerts, getActionQueue, getOutreachData, getMorningActions, getPipelineFreshness } from '@/lib/files'
+import { getNormalizedCronJobs } from '@/lib/shell'
+import { isFailing } from '@/lib/cron'
+import { getOpenOpportunities } from '@/lib/procurements'
 import { getDecisionQueue } from '@/lib/decisions'
 import { getAgent24hSummary } from '@/lib/agents'
-import { extractCriticalCount } from '@/lib/markdown'
 import { PageHeader } from '@/components/shared/page-header'
 import { HealthDot } from '@/components/shared/status-badge'
 import { DataCard } from '@/components/shared/data-card'
@@ -24,11 +20,10 @@ import { DecisionsCard } from '@/components/today/decisions-card'
 import { AgentsSummaryCard } from '@/components/today/agents-summary'
 import { ActiveBidsKanban } from '@/components/today/active-bids-kanban'
 import { ActionQueueCard } from '@/components/today/action-queue-card'
-import { PriorityOutreachCard } from "@/components/today/priority-outreach-card"
-import { MorningActionsCard } from "@/components/today/morning-actions-card"
-
-
-import type { CronJob } from '@/types'
+import { PriorityOutreachCard } from '@/components/today/priority-outreach-card'
+import { MorningActionsCard } from '@/components/today/morning-actions-card'
+import { OpportunitiesCard } from '@/components/today/opportunities-card'
+import { FreshnessCard } from '@/components/today/freshness-card'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,39 +42,46 @@ function todayLabel(now = new Date()): string {
 
 export default async function TodayPage() {
   // Fetch everything in parallel — each data source is independent.
-  const [bids, reports, alerts, cronJobs, decisions, agentSummaries, actionQueue, outreachItems, morningActions] = await Promise.all([
+  const [bids, alerts, cronJobs, decisions, agentSummaries, actionQueue, outreach, morningActions, opportunities, freshness] = await Promise.all([
     listBids(),
-    listScanReports(),
     listIntelAlerts(),
-    getCronJobs(),
+    getNormalizedCronJobs().catch(() => []),
     getDecisionQueue().catch(() => []),
     getAgent24hSummary().catch(() => []),
     getActionQueue().catch(() => []),
-    getOutreachItems().catch(() => []),
-    getMorningActions().catch(() => ""),
-
+    getOutreachData().catch(() => ({ items: [], updatedAt: null })),
+    getMorningActions().catch(() => ''),
+    getOpenOpportunities().catch(() => []),
+    getPipelineFreshness().catch(() => []),
   ])
 
-  // Aggregate critical findings across scan reports (signal for header health).
-  let criticalFindings = 0
-  for (const r of reports) criticalFindings += extractCriticalCount(r.content)
+  // Intel produced this week (alerts + procurements + briefings), not lifetime.
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+  const intelThisWeek = alerts.filter(a => a.date && new Date(a.date).getTime() >= weekAgo).length
 
-  const jobs = cronJobs as CronJob[]
-  const cronFailed = jobs.filter(j => {
-    const s = j.state?.lastRunStatus || j.last_run?.status
-    return s === 'failed' || s === 'error'
-  }).length
+  const failingJobs = cronJobs.filter(isFailing)
+  const persistentFailure = failingJobs.some(j => j.consecutiveErrors >= 2)
 
+  // The health dot answers "is the automation running?" — codebase findings and
+  // open decisions have their own cards and shouldn't keep the dot red forever.
   const overallHealth: 'green' | 'yellow' | 'red' =
-    cronFailed > 2 || criticalFindings > 5 || decisions.length > 10 ? 'red' :
-    cronFailed > 0 || criticalFindings > 0 || decisions.length > 0     ? 'yellow' :
+    persistentFailure || failingJobs.length >= 2 ? 'red' :
+    failingJobs.length > 0 ? 'yellow' :
     'green'
+
+  const healthLabel =
+    overallHealth === 'green' ? 'Automation healthy' :
+    failingJobs.length === 1 ? `1 job failing: ${failingJobs[0].name}` :
+    `${failingJobs.length} jobs failing`
 
   // Active bids = anything not in a closed state.
   const CLOSED = new Set(['won', 'lost', 'no-bid', 'submitted'])
   const activeBids = bids.filter(b => !CLOSED.has((b.status || '').toLowerCase()))
 
-  // Today's date for the header.
+  const urgentDeadlines = opportunities.filter(o =>
+    o.deadlineAt && new Date(o.deadlineAt).getTime() - Date.now() <= 7 * 24 * 60 * 60 * 1000
+  ).length
+
   const now = new Date()
 
   return (
@@ -90,10 +92,7 @@ export default async function TodayPage() {
         actions={
           <div className="flex items-center gap-2 text-sm">
             <HealthDot status={overallHealth} />
-            <span className="text-muted-foreground">
-              {overallHealth === 'green' ? 'All systems healthy' :
-               overallHealth === 'yellow' ? 'Attention needed' : 'Critical issues'}
-            </span>
+            <span className="text-muted-foreground">{healthLabel}</span>
           </div>
         }
       />
@@ -107,40 +106,46 @@ export default async function TodayPage() {
           valueColor={decisions.length > 0 ? 'text-status-warning' : undefined}
         />
         <DataCard
+          label="Opportunities"
+          value={opportunities.length}
+          subtitle={urgentDeadlines > 0 ? `${urgentDeadlines} due this week` : 'Open, from scans'}
+          valueColor={urgentDeadlines > 0 ? 'text-status-danger' : undefined}
+        />
+        <DataCard
           label="Active bids"
           value={activeBids.length}
           subtitle="In flight"
         />
         <DataCard
-          label="Critical findings"
-          value={criticalFindings}
-          subtitle={criticalFindings === 0 ? 'None' : 'In codebase'}
-          valueColor={criticalFindings > 0 ? 'text-status-danger' : undefined}
-        />
-        <DataCard
-          label="Intel alerts"
-          value={alerts.length}
-          subtitle="Total tracked"
+          label="Intel this week"
+          value={intelThisWeek}
+          subtitle="New scans & alerts"
         />
       </div>
 
       {/* Decisions — top of the page, the highest-leverage action */}
       <DecisionsCard decisions={decisions} />
 
-      {/* Agents — what your workforce did last 24h */}
+      {/* Opportunity deadlines from procurement scans */}
+      <OpportunitiesCard items={opportunities} />
+
+      {/* Agents — what your workforce did last 24h, including failures */}
       <AgentsSummaryCard summaries={agentSummaries} />
 
-      {/* Active bids kanban */}
+      {/* Active bids kanban with inline triage */}
       <ActiveBidsKanban bids={activeBids} />
 
       {/* Action queue from partnership next-actions */}
       <ActionQueueCard items={actionQueue} />
 
       {/* Priority outreach */}
-      <PriorityOutreachCard items={outreachItems} />
+      <PriorityOutreachCard items={outreach.items} updatedAt={outreach.updatedAt} />
 
-      {/* Morning actions from overnight scans */}
+      {/* Morning actions from overnight scans (hidden until something generates them) */}
       <MorningActionsCard content={morningActions} />
+
+      {/* Is the automation feeding this page still alive? */}
+      <FreshnessCard sources={freshness} />
     </div>
   )
 }

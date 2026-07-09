@@ -80,6 +80,7 @@ export interface NavItem {
 export interface NavSection {
   label: string
   items: NavItem[]
+  collapsedByDefault?: boolean
 }
 
 // Sidebar IA — organized by *urgency*, not function.
@@ -103,7 +104,6 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: '/bids', label: 'Bids', icon: FileText, section: 'Work' },
       { href: '/agencies', label: 'Agencies', icon: Building2, section: 'Work' },
       { href: '/partnerships', label: 'Partnerships', icon: Handshake, section: 'Work' },
-      { href: '/content', label: 'Content', icon: PenTool, section: 'Work' },
     ],
   },
   {
@@ -120,17 +120,21 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: 'Money',
-    items: [
-      { href: '/finance', label: 'Finance', icon: DollarSign, section: 'Money' },
-      { href: '/fundraise', label: 'Fundraise', icon: TrendingUp, section: 'Money' },
-    ],
-  },
-  {
     label: 'System',
     items: [
       { href: '/system/cron', label: 'Cron Jobs', icon: Clock, section: 'System' },
       { href: '/system', label: 'Settings', icon: Settings, section: 'System' },
+    ],
+  },
+  // "Not built yet" pages live behind a collapsed section — visible ambition,
+  // but they shouldn't dilute the working nav.
+  {
+    label: 'Planned',
+    collapsedByDefault: true,
+    items: [
+      { href: '/content', label: 'Content', icon: PenTool, section: 'Planned' },
+      { href: '/finance', label: 'Finance', icon: DollarSign, section: 'Planned' },
+      { href: '/fundraise', label: 'Fundraise', icon: TrendingUp, section: 'Planned' },
     ],
   },
 ]

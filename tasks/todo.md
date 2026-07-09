@@ -1,3 +1,72 @@
+# Phase 5 — Make it trustworthy (the "why don't I use it" fix) — IN PROGRESS
+
+## Diagnosis (2026-07-09, audited live mini + local copy)
+
+The dashboard's plumbing works (launchd service up, openclaw reachable, data flowing),
+but the numbers it shows are wrong or meaningless, so there's no reason to open it:
+
+1. **Agents card always shows 0 runs / 0 failed** — openclaw cron JSON puts run state
+   in `state.lastRunAtMs` (epoch ms) + `agentId` on the job; the dashboard read
+   `state.lastRunAt` (ISO string that doesn't exist) and pattern-matched job names.
+   A cron job failed TODAY (caleprocure-scan, 600s timeout) and the dashboard
+   shows "idle, 0 failed".
+2. **"System Critical" is on permanently** — critical findings counted across every
+   scan report ever written (incl. 3 dated runs of the same product-health scan).
+   Permanent red = alarm fatigue = ignored.
+3. **Every intel alert gets a red "Critical" badge** — detection is
+   `content.includes('critical')`, which matches the section header present in
+   every scan.
+4. **All 4 bids stuck in "Analyzing"** — bid `.status.json` files only exist on the
+   MacBook copy, not on the mini where the real dashboard runs. FTB was submitted,
+   ITN was no-bid — months ago.
+5. **Lifetime counters** ("71 intel alerts total tracked") instead of "what's new".
+6. **The most actionable data is buried** — procurement scans contain scored
+   opportunities WITH DEADLINES (e.g. EDD RFP due 07/21, score 9/10) rendered as
+   collapsed markdown in /intel.
+7. **Dishonest empty states** — "All outreach completed ✅" when the file is missing;
+   outreach list 6 weeks stale with no age shown; Morning Actions card promises a
+   file nothing generates.
+8. **Nav is 40% shells** — Finance/Fundraise/Content are "Not built yet" pages at
+   full nav prominence.
+
+## Plan
+
+- [x] `lib/cron.ts` — normalize real openclaw cron JSON (lastRunAtMs, agentId,
+      consecutiveErrors, lastError, nextRunAtMs); all consumers switch to it
+- [x] Agents 24h summary uses agentId + real run state; surfaces failing jobs
+      with their error text
+- [x] Health = operational health (cron failures), not lifetime finding counts;
+      critical findings counted from latest report per scan family only
+- [x] `lib/procurements.ts` — parse scored opportunities + deadlines out of
+      procurement scans; dedupe across daily files
+- [x] Today: Opportunities card (deadline countdowns), "Intel this week" counter,
+      pipeline freshness strip, honest outreach empty state + age, Morning Actions
+      hidden when empty
+- [x] Kanban: "Needs triage" column for status-less bids + inline status set
+- [x] Intel feed: Critical badge only when a critical section has actual entries
+- [x] Cron page: group by agent, show last error, consecutive failures, duration,
+      next run
+- [x] Sidebar: Planned section (Content/Finance/Fundraise), collapsed by default
+- [x] Decision queue skips closed bids (submitted/won/lost/no-bid)
+- [ ] Data fix on mini: write `.status.json` for FTB (Submitted) + ITN (No-Bid) —
+      BLOCKED: remote-write permission denied in this session; Pavan can do it
+      via the new kanban status dropdowns, or grant the write
+- [x] Verify: pnpm build passes; typecheck clean; all 16 routes 200; browser
+      walkthrough of Today/intel/health; kanban status-set tested end-to-end
+      (wrote + moved card + cleaned up); cron normalizer validated against the
+      mini's real `openclaw cron list --json` (2 runs/24h, caleprocure-scan
+      failing with timeout error — matches reality)
+
+## Out of scope (flagged to Pavan)
+
+- caleprocure-scan cron is timing out (600s) as of 2026-07-09 — needs a bigger
+  timeout or a leaner prompt; fix lives in openclaw cron config, not dashboard
+- daily-intel-scan only runs Wednesdays (`0 6 * * 3`) despite its name
+- research-scan.sh failing with Claude CLI 401 (per 07-08 alert) — API credits
+- Phase 4 (command palette / search) still queued behind this
+
+---
+
 # Phase 3 — DONE ✅
 
 Committed `13a9de4`. Full UI overhaul: design tokens, layout container, 8-stage status badges, mono font on numerics, per-route skeletons, per-page polish (Overview, Bids, Bid detail, Intel, System, Cron, Library). See commit message for line-by-line breakdown, or run `git show 13a9de4 --stat`.

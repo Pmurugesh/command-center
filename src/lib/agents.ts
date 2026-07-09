@@ -17,10 +17,11 @@
 
 import fs from 'fs/promises'
 import path from 'path'
-import { runCommand, getCronJobs } from './shell'
+import { runCommand, getNormalizedCronJobs } from './shell'
+import { isFailing } from './cron'
 import { listBids, listScanReports, listIntelAlerts, listAgencies } from './files'
 import { PATHS } from './paths'
-import type { Agent, AgentOutput, AgentStatus, CronJob } from '@/types'
+import type { Agent, AgentOutput, AgentStatus } from '@/types'
 
 const HOME = process.env.HOME || '/Users/paladin'
 
@@ -178,8 +179,8 @@ function deriveStatus(lastActivityMs: number | undefined, agentId: string): Agen
   return 'warning'
 }
 
-// Cron job name → agent id. Matched by substring (cron names are stable enough).
-// Anything that doesn't match falls under 'other' on the Today page.
+// Fallback for cron jobs missing an agentId: name → agent id by substring.
+// The openclaw CLI reports agentId directly on each job; prefer that.
 const CRON_NAME_TO_AGENT: { pattern: RegExp; agentId: string }[] = [
   // product (engineering / codebase)
   { pattern: /vulnerability-scan|test-coverage|tech-debt|migration-safety|compliance-(backend|ui)|rbac-consistency|doc-freshness|prompt-quality|dependency-config|audit-log/i, agentId: 'product' },
@@ -197,13 +198,16 @@ function cronJobToAgentId(jobName: string): string {
 }
 
 export interface AgentSummary {
-  agentId: string                // 'main' | 'product' | 'intel' | 'sales' | 'other'
+  agentId: string                // 'main' | 'product' | 'intel' | 'sales' | 'voice' | 'other'
   agentName: string
   emoji: string
   runs: number                   // jobs that ran in the last 24h
   failed: number                 // of those, how many failed
   outputsTouched: number         // owned outputs whose mtime is within 24h
   lastActivityAt?: string
+  // Jobs currently in a failed state (regardless of the 24h window) — a job
+  // that broke yesterday and hasn't recovered still needs attention today.
+  failures: { jobName: string; error?: string; consecutiveErrors: number }[]
 }
 
 /**
@@ -224,25 +228,41 @@ export async function getAgent24hSummary(): Promise<AgentSummary[]> {
 
   const [agents, cronJobs] = await Promise.all([
     getAgents().catch(() => [] as Agent[]),
-    getCronJobs().catch(() => []),
+    getNormalizedCronJobs().catch(() => []),
   ])
 
   // Index cron jobs by agent id for quick aggregation.
-  const cronByAgent: Record<string, { runs: number; failed: number; latest?: number }> = {}
-  for (const raw of cronJobs as CronJob[]) {
-    const lastRunAt = raw.state?.lastRunAt || raw.last_run?.completed_at || raw.last_run?.started_at
-    if (!lastRunAt) continue
-    const ts = new Date(lastRunAt).getTime()
+  const cronByAgent: Record<string, {
+    runs: number
+    failed: number
+    latest?: number
+    failures: AgentSummary['failures']
+  }> = {}
+  const bucket = (agentId: string) => {
+    if (!cronByAgent[agentId]) cronByAgent[agentId] = { runs: 0, failed: 0, failures: [] }
+    return cronByAgent[agentId]
+  }
+
+  for (const job of cronJobs) {
+    const agentId = job.agentId || cronJobToAgentId(job.name)
+    const entry = bucket(agentId)
+
+    // Any currently-failing job is surfaced even if its last run predates the window.
+    if (isFailing(job)) {
+      entry.failures.push({
+        jobName: job.name,
+        error: job.lastError,
+        consecutiveErrors: job.consecutiveErrors,
+      })
+    }
+
+    if (!job.lastRunAt) continue
+    const ts = new Date(job.lastRunAt).getTime()
     if (Number.isNaN(ts) || ts < cutoff) continue
 
-    const agentId = cronJobToAgentId(raw.name)
-    if (!cronByAgent[agentId]) cronByAgent[agentId] = { runs: 0, failed: 0 }
-    cronByAgent[agentId].runs += 1
-    const status = raw.state?.lastRunStatus || raw.last_run?.status
-    if (status === 'failed' || status === 'error') cronByAgent[agentId].failed += 1
-    if (!cronByAgent[agentId].latest || ts > cronByAgent[agentId].latest!) {
-      cronByAgent[agentId].latest = ts
-    }
+    entry.runs += 1
+    if (isFailing(job)) entry.failed += 1
+    if (!entry.latest || ts > entry.latest) entry.latest = ts
   }
 
   // Outputs touched within 24h, per agent.
@@ -257,7 +277,7 @@ export async function getAgent24hSummary(): Promise<AgentSummary[]> {
   const touchedById = Object.fromEntries(outputsTouched.map(x => [x.agentId, x.count]))
 
   const summaries: AgentSummary[] = agents.map(a => {
-    const cron = cronByAgent[a.id] || { runs: 0, failed: 0 }
+    const cron = cronByAgent[a.id] || { runs: 0, failed: 0, failures: [] }
     const lastMs = Math.max(cron.latest || 0, a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0)
     return {
       agentId: a.id,
@@ -267,6 +287,7 @@ export async function getAgent24hSummary(): Promise<AgentSummary[]> {
       failed: cron.failed,
       outputsTouched: touchedById[a.id] || 0,
       lastActivityAt: lastMs > 0 ? new Date(lastMs).toISOString() : undefined,
+      failures: cron.failures,
     }
   })
 
@@ -282,6 +303,7 @@ export async function getAgent24hSummary(): Promise<AgentSummary[]> {
         failed: cron.failed,
         outputsTouched: 0,
         lastActivityAt: cron.latest ? new Date(cron.latest).toISOString() : undefined,
+        failures: cron.failures,
       })
     }
   }

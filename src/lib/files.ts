@@ -199,6 +199,21 @@ export async function listScanReports(): Promise<ScanReport[]> {
   return reports.sort((a, b) => b.lastModified.localeCompare(a.lastModified))
 }
 
+/**
+ * Latest report per scan family. Dated files (product-health-2026-07-06) are
+ * runs of the same scan — summing findings across every run counts issues that
+ * later runs already resolved, which is how the header stayed "Critical" forever.
+ */
+export function currentScanReports(reports: ScanReport[]): ScanReport[] {
+  const byFamily = new Map<string, ScanReport>()
+  for (const r of reports) {
+    const family = r.name.replace(/[-_]\d{4}-\d{2}-\d{2}$/, '')
+    const existing = byFamily.get(family)
+    if (!existing || r.lastModified > existing.lastModified) byFamily.set(family, r)
+  }
+  return Array.from(byFamily.values())
+}
+
 // ── Intelligence ──
 
 export async function listIntelAlerts(): Promise<IntelAlert[]> {
@@ -405,12 +420,31 @@ export async function listScripts(): Promise<ScriptInfo[]> {
   return scripts
 }
 
-export async function getOutreachItems() {
+export interface OutreachData {
+  items: OutreachItem[]
+  updatedAt: string | null  // file mtime; null when the file doesn't exist
+}
+
+export interface OutreachItem {
+  priority: number
+  contact: string
+  title: string
+  agency: string
+  product: string
+  owner: string
+  action: string
+  status: string
+}
+
+export async function getOutreachData(): Promise<OutreachData> {
   const { OUTREACH_PATH } = await import('./paths')
   try {
-    const content = await fs.readFile(OUTREACH_PATH, 'utf-8')
+    const [content, stat] = await Promise.all([
+      fs.readFile(OUTREACH_PATH, 'utf-8'),
+      fs.stat(OUTREACH_PATH),
+    ])
     const lines = content.split('\n').filter(l => l.startsWith('|') && !l.includes('---') && !l.includes('Priority'))
-    return lines.map(line => {
+    const items = lines.map(line => {
       const cols = line.split('|').map(c => c.trim()).filter(Boolean)
       return {
         priority: parseInt(cols[0]) || 0,
@@ -423,9 +457,68 @@ export async function getOutreachItems() {
         status: cols[7] || 'pending',
       }
     }).filter(i => i.contact)
+    return { items, updatedAt: stat.mtime.toISOString() }
   } catch {
-    return []
+    return { items: [], updatedAt: null }
   }
+}
+
+// ── Pipeline freshness ──
+
+export interface PipelineFreshness {
+  label: string
+  href: string
+  lastUpdated: string | null  // ISO; null = source missing/empty
+  warnAfterDays: number       // amber past this
+  staleAfterDays: number      // red past this
+}
+
+async function newestMtime(dir: string, ext = '.md'): Promise<string | null> {
+  try {
+    const entries = await fs.readdir(dir)
+    let latest = 0
+    for (const f of entries) {
+      if (f.startsWith('.') || !f.endsWith(ext)) continue
+      try {
+        const stat = await fs.stat(path.join(dir, f))
+        if (stat.mtimeMs > latest) latest = stat.mtimeMs
+      } catch { /* skip */ }
+    }
+    return latest > 0 ? new Date(latest).toISOString() : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * When each pipeline last produced output. This is the "is my automation
+ * alive?" view — a dashboard fed by dead pipelines silently shows old data,
+ * which reads as "nothing happening" instead of "something's broken".
+ * Thresholds follow each source's cron cadence.
+ */
+export async function getPipelineFreshness(): Promise<PipelineFreshness[]> {
+  const { OUTREACH_PATH } = await import('./paths')
+
+  const [bids, alerts, procurements, reports, outreach] = await Promise.all([
+    listBids(),
+    newestMtime(PATHS.intelligence),
+    newestMtime(path.join(PATHS.intelligenceBase, 'procurements')),
+    newestMtime(PATHS.scanReports),
+    fs.stat(OUTREACH_PATH).then(s => s.mtime.toISOString()).catch(() => null),
+  ])
+
+  let bidsLatest: string | null = null
+  for (const b of bids) {
+    if (b.updatedAt && (!bidsLatest || b.updatedAt > bidsLatest)) bidsLatest = b.updatedAt
+  }
+
+  return [
+    { label: 'Procurement scans', href: '/intel',    lastUpdated: procurements, warnAfterDays: 3,  staleAfterDays: 7 },
+    { label: 'Intel alerts',      href: '/intel',    lastUpdated: alerts,       warnAfterDays: 8,  staleAfterDays: 15 },
+    { label: 'Codebase reports',  href: '/health',   lastUpdated: reports,      warnAfterDays: 9,  staleAfterDays: 16 },
+    { label: 'Bid pipeline',      href: '/bids',     lastUpdated: bidsLatest,   warnAfterDays: 7,  staleAfterDays: 21 },
+    { label: 'Priority outreach', href: '/agencies', lastUpdated: outreach,     warnAfterDays: 7,  staleAfterDays: 21 },
+  ]
 }
 
 export async function getMorningActions(): Promise<string> {

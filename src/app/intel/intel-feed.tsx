@@ -7,6 +7,7 @@ import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { EmptyState } from '@/components/shared/empty-state'
 import { ChevronDown, ChevronRight, Radio } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { hasCriticalContent } from '@/lib/markdown'
 import type { IntelAlert } from '@/types'
 
 type TabType = 'daily' | 'weekly' | 'procurement'
@@ -65,7 +66,7 @@ export function IntelFeed({ dailyAlerts, weeklyBriefings, procurements }: IntelF
       ) : (
         <div className="space-y-4">
           {currentAlerts.map((alert) => {
-            const hasCritical = alert.content.toLowerCase().includes('critical')
+            const hasCritical = hasCriticalContent(alert.content)
             return (
               <Card key={alert.filename}>
                 <CardHeader
