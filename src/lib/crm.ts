@@ -279,6 +279,24 @@ function isLive(c: CrmContact): boolean {
 }
 
 /**
+ * Has a human ever actually reached out to this person?
+ *
+ * Seeded records are NOT touches. Scanning someone's badge at a conference tells
+ * you they exist; it does not mean anyone contacted them. Conflating the two made
+ * 86 never-worked leads read as "88 days cold", which implies a decaying
+ * relationship and presents months of debt that was never owed. A board like that
+ * is one you stop opening.
+ */
+function hasBeenWorked(c: CrmContact): boolean {
+  return c.log.some(e => !e.via || !NON_HUMAN_VIA.has(e.via))
+}
+
+// Kept in sync with insights.ts: writes made by machinery rather than by a person
+// talking to someone.
+const NON_HUMAN_VIA = new Set(['seed', 'rederive', 'slug-reconcile', 'verify',
+  'roundtrip-test', 'api-test', 'pavan-correction', 'lead-sync', 'baseline'])
+
+/**
  * The morning view. Buckets are mutually exclusive and ordered by urgency, so a
  * contact appears exactly once and the top of the page is always the thing that
  * needs attention most. Blocked outranks overdue-by-date because a blocked item
@@ -291,9 +309,15 @@ export function bucketize(contacts: CrmContact[]): CrmBuckets {
   const blocked = live.filter(c => c.status === 'blocked')
   const rest = live.filter(c => c.status !== 'blocked')
 
-  const overdue = rest.filter(c => c.daysOverdue !== undefined)
-  const dueToday = rest.filter(c => c.nextActionDue === t)
-  const goingCold = rest.filter(c =>
+  // NEVER CONTACTED is separated from GOING COLD on purpose. "Cold" should mean a
+  // relationship that was warm and cooled; a lead nobody ever called is not cold,
+  // it is untouched. Merging them turns a to-do list into a guilt list.
+  const worked = rest.filter(hasBeenWorked)
+  const neverContacted = rest.filter(c => !hasBeenWorked(c))
+
+  const overdue = worked.filter(c => c.daysOverdue !== undefined)
+  const dueToday = worked.filter(c => c.nextActionDue === t)
+  const goingCold = worked.filter(c =>
     c.daysOverdue === undefined &&
     c.nextActionDue !== t &&
     c.daysSinceTouch !== undefined &&
@@ -301,12 +325,19 @@ export function bucketize(contacts: CrmContact[]): CrmBuckets {
 
   const byOverdue = (a: CrmContactView, b: CrmContactView) => (b.daysOverdue ?? 0) - (a.daysOverdue ?? 0)
   const byStale = (a: CrmContactView, b: CrmContactView) => (b.daysSinceTouch ?? 0) - (a.daysSinceTouch ?? 0)
+  // Leads someone already decided to prioritise surface first, then tier-1, then
+  // by name — so "where do I start" has an answer that is not alphabetical.
+  const byPriority = (a: CrmContactView, b: CrmContactView) =>
+    Number(Boolean(b.nextAction)) - Number(Boolean(a.nextAction)) ||
+    Number(b.tier === 'T1') - Number(a.tier === 'T1') ||
+    a.name.localeCompare(b.name)
 
   return {
     overdue: overdue.sort(byOverdue),
     blocked: blocked.sort(byStale),
     dueToday,
     goingCold: goingCold.sort(byStale),
+    neverContacted: neverContacted.sort(byPriority),
     total: contacts.length,
   }
 }

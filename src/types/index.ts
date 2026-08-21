@@ -236,6 +236,8 @@ export interface CrmBuckets {
   blocked: CrmContactView[]
   dueToday: CrmContactView[]
   goingCold: CrmContactView[]
+  /** Never worked by a human. Seeded research, not a lapsed relationship. */
+  neverContacted: CrmContactView[]
   total: number
 }
 

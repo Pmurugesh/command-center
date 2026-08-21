@@ -14,12 +14,12 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  AlertTriangle, Ban, CalendarClock, Snowflake, Check, Clock, Loader2,
+  AlertTriangle, Ban, CalendarClock, Snowflake, Check, Clock, Loader2, UserPlus,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import type { CrmBuckets, CrmContactView } from '@/types'
 
-type BucketKey = 'overdue' | 'blocked' | 'dueToday' | 'goingCold'
+type BucketKey = 'overdue' | 'blocked' | 'dueToday' | 'goingCold' | 'neverContacted'
 
 const BUCKET_META: Record<BucketKey, {
   label: string
@@ -49,6 +49,13 @@ const BUCKET_META: Record<BucketKey, {
     chip: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
     empty: 'Nothing due today.',
   },
+  neverContacted: {
+    label: 'Never contacted',
+    icon: UserPlus,
+    tone: '',
+    chip: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
+    empty: 'Everyone has been contacted at least once.',
+  },
   goingCold: {
     label: 'Going cold',
     icon: Snowflake,
@@ -62,6 +69,10 @@ function dayLabel(c: CrmContactView, key: BucketKey): string | null {
   if (key === 'blocked') return c.daysBlocked ? `${c.daysBlocked}d blocked` : null
   if (key === 'overdue') return c.daysOverdue ? `${c.daysOverdue}d overdue` : null
   if (key === 'goingCold') return c.daysSinceTouch ? `${c.daysSinceTouch}d cold` : null
+  // Deliberately NO day counter: a lead nobody ever called is not "88 days late",
+  // it is simply unworked, and an age badge on it manufactures guilt for a
+  // commitment that never existed.
+  if (key === 'neverContacted') return c.tier === 'T1' ? 'T1' : null
   return null
 }
 
@@ -214,7 +225,7 @@ export function PipelineBuckets({ buckets }: { buckets: CrmBuckets }) {
 
   // Order is the argument: blocked first (cannot proceed), then overdue (late),
   // then today (on time), then cold (drifting).
-  const order: BucketKey[] = ['blocked', 'overdue', 'dueToday', 'goingCold']
+  const order: BucketKey[] = ['blocked', 'overdue', 'dueToday', 'goingCold', 'neverContacted']
 
   return (
     <div className="space-y-4">
