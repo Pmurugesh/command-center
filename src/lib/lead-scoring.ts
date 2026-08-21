@@ -246,9 +246,15 @@ export async function scoreEvent(
 
   let score = 0
 
+  // Count each 4-digit FAMILY once. A real event carried 81111500, 81111800,
+  // 81112000 and 81112200 — four subcodes of one family — and scored `8111` four
+  // times for a total of 355, which sorted a maintenance contract above every
+  // genuine product fit. Breadth of subcodes is not strength of signal.
+  const seenFamilies = new Set<string>()
   for (const code of event.unspscCodes ?? []) {
     const prefix = String(code).replace(/\D/g, '').slice(0, 4)
-    if (prefix.length < 4) continue
+    if (prefix.length < 4 || seenFamilies.has(prefix)) continue
+    seenFamilies.add(prefix)
     const excluded = R.excludeCodes[prefix]
     if (excluded) {
       score -= 30
