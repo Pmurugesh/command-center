@@ -1,13 +1,20 @@
 /**
  * Today — the morning home.
  *
- * Answers, in order: what needs me right now (decisions, opportunity
- * deadlines), what my agents did overnight (runs + failures), where the work
- * stands (bids kanban, outreach), and whether the automation feeding all of
- * this is still alive (pipeline freshness).
+ * Answers, in order:
+ *  - Am I actually selling? (daily brief: momentum, leverage, pipeline shape,
+ *    machine health)
+ *  - What changed since I last looked? (exact, from git)
+ *  - Who needs me now? (CRM buckets: blocked / overdue / due today / going cold)
+ *  - What needs a decision? (bid decisions, opportunity deadlines)
+ *  - What did the agents do overnight, and is the automation still alive?
+ *
+ * Same route (/), so existing bookmarks still land here.
  */
 
-import { listBids, listIntelAlerts, getActionQueue, getOutreachData, getMorningActions, getPipelineFreshness } from '@/lib/files'
+import { listBids, listIntelAlerts, getActionQueue, getMorningActions, getPipelineFreshness } from '@/lib/files'
+import { getBuckets } from '@/lib/crm'
+import { getInsights } from '@/lib/insights'
 import { getNormalizedCronJobs } from '@/lib/shell'
 import { isFailing } from '@/lib/cron'
 import { getOpenOpportunities } from '@/lib/procurements'
@@ -20,10 +27,12 @@ import { DecisionsCard } from '@/components/today/decisions-card'
 import { AgentsSummaryCard } from '@/components/today/agents-summary'
 import { ActiveBidsKanban } from '@/components/today/active-bids-kanban'
 import { ActionQueueCard } from '@/components/today/action-queue-card'
-import { PriorityOutreachCard } from '@/components/today/priority-outreach-card'
 import { MorningActionsCard } from '@/components/today/morning-actions-card'
 import { OpportunitiesCard } from '@/components/today/opportunities-card'
 import { FreshnessCard } from '@/components/today/freshness-card'
+import { PipelineBuckets } from '@/components/today/pipeline-buckets'
+import { DailyBrief } from '@/components/today/daily-brief'
+import { ChangesFeed } from '@/components/today/changes-feed'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,17 +51,19 @@ function todayLabel(now = new Date()): string {
 
 export default async function TodayPage() {
   // Fetch everything in parallel — each data source is independent.
-  const [bids, alerts, cronJobs, decisions, agentSummaries, actionQueue, outreach, morningActions, opportunities, freshness] = await Promise.all([
+  const [bids, alerts, cronJobs, decisions, agentSummaries, actionQueue,
+         morningActions, opportunities, freshness, buckets, insights] = await Promise.all([
     listBids(),
     listIntelAlerts(),
     getNormalizedCronJobs().catch(() => []),
     getDecisionQueue().catch(() => []),
     getAgent24hSummary().catch(() => []),
     getActionQueue().catch(() => []),
-    getOutreachData().catch(() => ({ items: [], updatedAt: null })),
     getMorningActions().catch(() => ''),
     getOpenOpportunities().catch(() => []),
     getPipelineFreshness().catch(() => []),
+    getBuckets().catch(() => ({ overdue: [], blocked: [], dueToday: [], goingCold: [], total: 0 })),
+    getInsights().catch(() => null),
   ])
 
   // Intel produced this week (alerts + procurements + briefings), not lifetime.
@@ -123,7 +134,18 @@ export default async function TodayPage() {
         />
       </div>
 
-      {/* Decisions — top of the page, the highest-leverage action */}
+      {/* Daily brief — momentum first: this page exists to answer "am I
+          actually selling?", and that number outranks everything else. */}
+      {insights && <DailyBrief insights={insights} />}
+
+      {/* What changed since this browser last looked */}
+      <ChangesFeed />
+
+      {/* Pipeline — who needs you, ranked. A blocked or overdue contact
+          outranks any report. */}
+      <PipelineBuckets buckets={buckets} />
+
+      {/* Decisions — highest-leverage bid action */}
       <DecisionsCard decisions={decisions} />
 
       {/* Opportunity deadlines from procurement scans */}
@@ -137,9 +159,6 @@ export default async function TodayPage() {
 
       {/* Action queue from partnership next-actions */}
       <ActionQueueCard items={actionQueue} />
-
-      {/* Priority outreach */}
-      <PriorityOutreachCard items={outreach.items} updatedAt={outreach.updatedAt} />
 
       {/* Morning actions from overnight scans (hidden until something generates them) */}
       <MorningActionsCard content={morningActions} />

@@ -436,34 +436,6 @@ export interface OutreachItem {
   status: string
 }
 
-export async function getOutreachData(): Promise<OutreachData> {
-  const { OUTREACH_PATH } = await import('./paths')
-  try {
-    const [content, stat] = await Promise.all([
-      fs.readFile(OUTREACH_PATH, 'utf-8'),
-      fs.stat(OUTREACH_PATH),
-    ])
-    const lines = content.split('\n').filter(l => l.startsWith('|') && !l.includes('---') && !l.includes('Priority'))
-    const items = lines.map(line => {
-      const cols = line.split('|').map(c => c.trim()).filter(Boolean)
-      return {
-        priority: parseInt(cols[0]) || 0,
-        contact: cols[1] || '',
-        title: cols[2] || '',
-        agency: cols[3] || '',
-        product: cols[4] || '',
-        owner: cols[5] || '',
-        action: cols[6] || '',
-        status: cols[7] || 'pending',
-      }
-    }).filter(i => i.contact)
-    return { items, updatedAt: stat.mtime.toISOString() }
-  } catch {
-    return { items: [], updatedAt: null }
-  }
-}
-
-// ── Pipeline freshness ──
 
 export interface PipelineFreshness {
   label: string
@@ -473,18 +445,34 @@ export interface PipelineFreshness {
   staleAfterDays: number      // red past this
 }
 
-async function newestMtime(dir: string, ext = '.md'): Promise<string | null> {
+/**
+ * When a directory last produced output.
+ *
+ * Prefers the date embedded in the FILENAME (`2026-07-08-daily.md`) and only
+ * falls back to mtime for undated files. This matters since operations became a
+ * git repo: a clone stamps every file with the checkout time, so an mtime-only
+ * reading reported six-week-dead scanners as produced-today — which is the exact
+ * silence this freshness view exists to break. See tasks/lessons.md 2026-08-21.
+ */
+async function newestOutput(dir: string, ext = '.md'): Promise<string | null> {
   try {
     const entries = await fs.readdir(dir)
-    let latest = 0
+    let latestDated: string | null = null
+    let latestMtime = 0
     for (const f of entries) {
       if (f.startsWith('.') || !f.endsWith(ext)) continue
+      const dated = f.match(/(\d{4}-\d{2}-\d{2})/)
+      if (dated) {
+        if (!latestDated || dated[1] > latestDated) latestDated = dated[1]
+        continue
+      }
       try {
         const stat = await fs.stat(path.join(dir, f))
-        if (stat.mtimeMs > latest) latest = stat.mtimeMs
+        if (stat.mtimeMs > latestMtime) latestMtime = stat.mtimeMs
       } catch { /* skip */ }
     }
-    return latest > 0 ? new Date(latest).toISOString() : null
+    if (latestDated) return new Date(`${latestDated}T12:00:00`).toISOString()
+    return latestMtime > 0 ? new Date(latestMtime).toISOString() : null
   } catch {
     return null
   }
@@ -501,9 +489,9 @@ export async function getPipelineFreshness(): Promise<PipelineFreshness[]> {
 
   const [bids, alerts, procurements, reports, outreach] = await Promise.all([
     listBids(),
-    newestMtime(PATHS.intelligence),
-    newestMtime(path.join(PATHS.intelligenceBase, 'procurements')),
-    newestMtime(PATHS.scanReports),
+    newestOutput(PATHS.intelligence),
+    newestOutput(path.join(PATHS.intelligenceBase, 'procurements')),
+    newestOutput(PATHS.scanReports),
     fs.stat(OUTREACH_PATH).then(s => s.mtime.toISOString()).catch(() => null),
   ])
 

@@ -7,6 +7,12 @@
 #   ./scripts/mini/install-dashboard-service.sh [/path/to/command-center]
 set -euo pipefail
 
+# Homebrew's bin is NOT on the PATH of a non-interactive SSH session, so a
+# remote `ssh mini './install-dashboard-service.sh'` failed with
+# "pnpm: command not found" while the same script worked when run by hand.
+# The LaunchAgent below already hard-codes this PATH; the build half needs it too.
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 REPO_DIR="${1:-$HOME/repos/command-center}"
 LABEL="com.paladin.commandcenter"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
