@@ -5,6 +5,7 @@
  *  - Decisions waiting on you (parsed across every bid)
  *  - Agents last 24h (cron run summary + outputs-touched count)
  *  - Active bids mini-kanban
+ *  - Pipeline buckets (blocked / overdue / due today / going cold)
  *  - Action queue (partnership next-actions)
  *  - System health and bid counters in the header strip
  *
@@ -12,7 +13,8 @@
  * still land here.
  */
 
-import { listBids, listScanReports, listIntelAlerts, getActionQueue, getOutreachItems, getMorningActions } from '@/lib/files'
+import { listBids, listScanReports, listIntelAlerts, getActionQueue, getMorningActions } from '@/lib/files'
+import { getBuckets } from '@/lib/crm'
 import { getCronJobs } from '@/lib/shell'
 import { getDecisionQueue } from '@/lib/decisions'
 import { getAgent24hSummary } from '@/lib/agents'
@@ -24,7 +26,7 @@ import { DecisionsCard } from '@/components/today/decisions-card'
 import { AgentsSummaryCard } from '@/components/today/agents-summary'
 import { ActiveBidsKanban } from '@/components/today/active-bids-kanban'
 import { ActionQueueCard } from '@/components/today/action-queue-card'
-import { PriorityOutreachCard } from "@/components/today/priority-outreach-card"
+import { PipelineBuckets } from "@/components/today/pipeline-buckets"
 import { MorningActionsCard } from "@/components/today/morning-actions-card"
 
 
@@ -47,7 +49,7 @@ function todayLabel(now = new Date()): string {
 
 export default async function TodayPage() {
   // Fetch everything in parallel — each data source is independent.
-  const [bids, reports, alerts, cronJobs, decisions, agentSummaries, actionQueue, outreachItems, morningActions] = await Promise.all([
+  const [bids, reports, alerts, cronJobs, decisions, agentSummaries, actionQueue, buckets, morningActions] = await Promise.all([
     listBids(),
     listScanReports(),
     listIntelAlerts(),
@@ -55,7 +57,7 @@ export default async function TodayPage() {
     getDecisionQueue().catch(() => []),
     getAgent24hSummary().catch(() => []),
     getActionQueue().catch(() => []),
-    getOutreachItems().catch(() => []),
+    getBuckets().catch(() => ({ overdue: [], blocked: [], dueToday: [], goingCold: [], total: 0 })),
     getMorningActions().catch(() => ""),
 
   ])
@@ -124,7 +126,11 @@ export default async function TodayPage() {
         />
       </div>
 
-      {/* Decisions — top of the page, the highest-leverage action */}
+      {/* Pipeline — who needs you, ranked. Above everything else because a
+          blocked or overdue contact outranks any report. */}
+      <PipelineBuckets buckets={buckets} />
+
+      {/* Decisions — highest-leverage bid action */}
       <DecisionsCard decisions={decisions} />
 
       {/* Agents — what your workforce did last 24h */}
@@ -135,9 +141,6 @@ export default async function TodayPage() {
 
       {/* Action queue from partnership next-actions */}
       <ActionQueueCard items={actionQueue} />
-
-      {/* Priority outreach */}
-      <PriorityOutreachCard items={outreachItems} />
 
       {/* Morning actions from overnight scans */}
       <MorningActionsCard content={morningActions} />

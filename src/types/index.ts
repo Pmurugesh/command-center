@@ -184,3 +184,77 @@ export interface Agent {
   status: AgentStatus
   lastActivityAt?: string // ISO; max mtime across owned outputs
 }
+
+// ── CRM (Phase 5 / M1) ──────────────────────────────────────────────────────
+// One file per human at `operations/crm/contacts/<slug>.md`: frontmatter carries
+// the structured record, the body carries notes + an append-only `## Log`.
+// Named CrmContact (not Contact) so the existing scraped {name,email} shape used
+// by Agency/Partnership keeps working untouched.
+
+import type { CrmStage, CrmStatus } from '@/lib/config'
+
+export interface CrmLogEntry {
+  date: string            // YYYY-MM-DD
+  text: string
+  via?: string            // attribution: who/what wrote it (dashboard, telegram, granola…)
+}
+
+export interface CrmContact {
+  slug: string
+  name: string
+  title?: string
+  email?: string
+  phone?: string
+  agency?: string         // agency slug, joins to intelligence/agencies/<slug>.md
+  agencyName?: string
+  product?: string        // product slug (prrai | aihire | reporting | procurement | echo)
+  owner?: string          // who on the team owns this relationship
+  tier?: string           // T1/T2/T3 from CIO Academy triage
+  stage: CrmStage
+  status: CrmStatus
+  blockedOn?: string      // free text: what has to exist before this can proceed
+  lastTouched?: string    // YYYY-MM-DD — drives "going cold"
+  nextAction?: string
+  nextActionDue?: string  // YYYY-MM-DD — drives "overdue" / "due today"
+  source?: string         // provenance of the record (cio-academy-2026, agency-profile…)
+  created?: string
+  notes: string           // body markdown above the ## Log heading
+  log: CrmLogEntry[]
+}
+
+// Everything the Today page needs, computed server-side so the client renders
+// plain data. daysOverdue/daysSinceTouch are the counters that make staleness
+// arguable-with-nobody.
+export interface CrmContactView extends CrmContact {
+  daysOverdue?: number
+  daysSinceTouch?: number
+  daysBlocked?: number
+}
+
+export interface CrmBuckets {
+  overdue: CrmContactView[]
+  blocked: CrmContactView[]
+  dueToday: CrmContactView[]
+  goingCold: CrmContactView[]
+  total: number
+}
+
+// Partial update accepted by PATCH. Every field optional; `via` is required so
+// no write is ever anonymous once the team is on this.
+export interface CrmContactUpdate {
+  name?: string
+  title?: string
+  email?: string
+  phone?: string
+  agency?: string
+  agencyName?: string
+  product?: string
+  owner?: string
+  tier?: string
+  stage?: CrmStage
+  status?: CrmStatus
+  blockedOn?: string | null
+  nextAction?: string | null
+  nextActionDue?: string | null
+  notes?: string
+}
