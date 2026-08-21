@@ -311,7 +311,7 @@ The long-term guarantee is NOT "git forever." It is two pinned invariants plus n
       Two real bugs found and fixed: lock misreporting non-EEXIST errors as contention, and
       `# Name` title accretion on every round trip.
 
-### M2 — The daily dashboard (REWRITTEN 2026-08-21)
+### M2 — The daily dashboard ✅ COMPLETE 2026-08-21
 
 **Why rewritten:** the original M2 made Telegram a first-class write surface with a verb
 parser (`overdue`, `log`, `snooze`…). Pavan: *"telegram is not a user interface I like too
@@ -324,25 +324,31 @@ Also cut, per the same simplicity review: the Telegram verb grammar (an LLM with
 needs a schema description, not a command parser) and the in-dashboard draft-review UI
 (over-built for one person reading a few drafts a week).
 
-- [ ] **Momentum strip — the north-star metric.** Touches this week vs last, derived from
+- [x] **Momentum strip — the north-star metric.** Touches this week vs last, derived from
       `git log crm/contacts/`. The GTM diagnosis was "0 logged outbound touches in 12 weeks";
       this is the number that says whether that is still true. Everything else on the page is
       secondary to it. Green when it moves, honest when it does not.
-- [ ] **What changed since you last looked.** Now trivial and exact: every change to
+      *Built. Touches last 7d vs prior 7d, counted from contacts' own log entries (not commit messages, which are free to change format). `via: seed|rederive|slug-reconcile|verify|…` excluded so the number cannot rise while zero selling happened. Verified live: logging one touch moved 0→1, engaged 0→1, quiet→false. Today it reads 0 with "No outbound touch has ever been logged."*
+- [x] **What changed since you last looked.** Now trivial and exact: every change to
       operations is a dated, attributed commit since M0. Reads `git log --since=<lastVisit>`,
       groups by area (contacts / bids / intel / reports). Replaces Phase 4.3's mtime
       heuristic, which was guesswork by comparison.
-- [ ] **Leverage panel.** Aggregate `blocked_on` across contacts: "1 artifact (AIHire
+      *Built as `ChangesFeed` — client-side, since only the browser knows your last visit; marks seen after 5s so bouncing does not silently clear it. Janitor `auto:` commits filtered out.*
+- [x] **Leverage panel.** Aggregate `blocked_on` across contacts: "1 artifact (AIHire
       one-pager) unblocks 2 contacts." Turns a list of blocked people into a ranked list of
       things to MAKE. This is the single most actionable view in the CRM.
-- [ ] **Pipeline shape.** Stage funnel + owner load + product concentration. Current truth:
+      *Built. Currently renders: "2 — product one-pager does not exist — Unblocks: Linh Thao Huynh, Manohar Sridharan."*
+- [x] **Pipeline shape.** Stage funnel + owner load + product concentration. Current truth:
       94/94 at `identified`, owners Ganapathy 36 / Rani 35 / Isaiah 10 / Pavan 7, products
       prrai 84 / aihire 6 / procurement 4. A flat bar at `identified` IS the insight.
-- [ ] **System health inline.** Scan freshness, git sync age, last cron run — on the page, not
+      *Built. Stage / owner load / product bars. The flat `identified=94` bar carries an explicit callout so it reads as a finding, not a rendering failure.*
+- [x] **System health inline.** Scan freshness, git sync age, last cron run — on the page, not
       in a separate console. The June-15 dead scanner should have been visible here.
-- [ ] Keep every number one click from its source. An insight you cannot drill into is a
+      *Built. Currently: Intel scans **[bad] 37d old** (the dead CaleProcure scanner, finally visible), data sync ok, pushed ok, contact store ok.*
+- [x] Keep every number one click from its source. An insight you cannot drill into is a
       decoration.
-- [ ] Verify: open the dashboard cold and be able to answer "what should I do first, and is
+      *Health links to /system; contacts link through the buckets. Deeper drill-through deferred until a number is actually disputed.*
+- [x] Verify: open the dashboard cold and be able to answer "what should I do first, and is
       the machine healthy?" without clicking anything.
 
 ### M2.5 — Keeping sales consistent with engineering (REWRITTEN 2026-08-21)
@@ -373,6 +379,7 @@ citations of 914. Nothing checked, so nobody knew.
 **The mechanism: a claim that cites evidence can be verified mechanically — so require every
 claim to cite evidence.** Three tiers by how automatable they are:
 
+      *Verified in-browser 2026-08-21: momentum, leverage, shape, health, and the change feed all render; red dot confirmed on the dead scanner; momentum proven to respond to a real touch and then reverted.*
 - [x] **Tier 1 — citation verification (BUILT 2026-08-21).** `scripts/verify-claims.ts`
       resolves every backticked code path in operations markdown against the platform's
       `origin/main` (not the checked-out branch — shipped capability means what is on main).

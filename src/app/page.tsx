@@ -5,6 +5,8 @@
  *  - Decisions waiting on you (parsed across every bid)
  *  - Agents last 24h (cron run summary + outputs-touched count)
  *  - Active bids mini-kanban
+ *  - Daily brief (momentum, leverage, pipeline shape, machine health)
+ *  - What changed since last visit
  *  - Pipeline buckets (blocked / overdue / due today / going cold)
  *  - Action queue (partnership next-actions)
  *  - System health and bid counters in the header strip
@@ -15,6 +17,7 @@
 
 import { listBids, listScanReports, listIntelAlerts, getActionQueue, getMorningActions } from '@/lib/files'
 import { getBuckets } from '@/lib/crm'
+import { getInsights } from '@/lib/insights'
 import { getCronJobs } from '@/lib/shell'
 import { getDecisionQueue } from '@/lib/decisions'
 import { getAgent24hSummary } from '@/lib/agents'
@@ -27,6 +30,8 @@ import { AgentsSummaryCard } from '@/components/today/agents-summary'
 import { ActiveBidsKanban } from '@/components/today/active-bids-kanban'
 import { ActionQueueCard } from '@/components/today/action-queue-card'
 import { PipelineBuckets } from "@/components/today/pipeline-buckets"
+import { DailyBrief } from "@/components/today/daily-brief"
+import { ChangesFeed } from "@/components/today/changes-feed"
 import { MorningActionsCard } from "@/components/today/morning-actions-card"
 
 
@@ -49,7 +54,7 @@ function todayLabel(now = new Date()): string {
 
 export default async function TodayPage() {
   // Fetch everything in parallel — each data source is independent.
-  const [bids, reports, alerts, cronJobs, decisions, agentSummaries, actionQueue, buckets, morningActions] = await Promise.all([
+  const [bids, reports, alerts, cronJobs, decisions, agentSummaries, actionQueue, buckets, insights, morningActions] = await Promise.all([
     listBids(),
     listScanReports(),
     listIntelAlerts(),
@@ -58,6 +63,7 @@ export default async function TodayPage() {
     getAgent24hSummary().catch(() => []),
     getActionQueue().catch(() => []),
     getBuckets().catch(() => ({ overdue: [], blocked: [], dueToday: [], goingCold: [], total: 0 })),
+    getInsights().catch(() => null),
     getMorningActions().catch(() => ""),
 
   ])
@@ -126,8 +132,15 @@ export default async function TodayPage() {
         />
       </div>
 
-      {/* Pipeline — who needs you, ranked. Above everything else because a
-          blocked or overdue contact outranks any report. */}
+      {/* Daily brief — momentum first: this page exists to answer "am I
+          actually selling?", and that number outranks everything else. */}
+      {insights && <DailyBrief insights={insights} />}
+
+      {/* What changed since this browser last looked */}
+      <ChangesFeed />
+
+      {/* Pipeline — who needs you, ranked. A blocked or overdue contact
+          outranks any report. */}
       <PipelineBuckets buckets={buckets} />
 
       {/* Decisions — highest-leverage bid action */}

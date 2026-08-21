@@ -20,3 +20,9 @@
   list nobody committed to and makes `blocked` meaningless. Distinguish COMMITMENTS (8 owned,
   dated actions) from LEADS (86 researched contacts) — leads surface as "going cold", which is
   their true state.
+
+- **[2026-08-21]** Never derive "how fresh is this data" from file mtime in a git-backed store:
+  a clone stamps every file with the checkout time, so the M2 health panel reported the intel
+  scans as "0d old" when they had been dead for 37 days — the exact failure that panel exists
+  to catch. Read the date from the filename (`2026-07-08-daily.md`) or from git. Same class of
+  error as the original Phase 4.3 activity-feed design.
