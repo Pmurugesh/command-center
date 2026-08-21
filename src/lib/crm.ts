@@ -141,6 +141,8 @@ function serialize(c: CrmContact): string {
     last_touched: c.lastTouched,
     next_action: c.nextAction,
     next_action_due: c.nextActionDue,
+    services_client: c.servicesClient || undefined,
+    services_note: c.servicesNote,
     source: c.source,
     created: c.created,
   }
@@ -185,6 +187,8 @@ function hydrate(slug: string, raw: string): CrmContact {
     lastTouched: data.last_touched ? String(data.last_touched) : undefined,
     nextAction: data.next_action ? String(data.next_action) : undefined,
     nextActionDue: data.next_action_due ? String(data.next_action_due) : undefined,
+    servicesClient: Boolean(data.services_client),
+    servicesNote: data.services_note ? String(data.services_note) : undefined,
     source: data.source ? String(data.source) : undefined,
     created: data.created ? String(data.created) : undefined,
     notes,
@@ -419,6 +423,8 @@ export async function createContact(
       product: input.product,
       owner: input.owner,
       tier: input.tier,
+      servicesClient: input.servicesClient,
+      servicesNote: input.servicesNote,
       stage: input.stage ?? 'identified',
       status: input.status ?? 'active',
       blockedOn: input.blockedOn,
@@ -470,6 +476,12 @@ export async function updateContact(
     setStr('product', 'product', 'product')
     setStr('owner', 'owner', 'owner')
     setStr('tier', 'tier', 'tier')
+    setStr('servicesNote', 'servicesNote', 'services_note')
+    if ('servicesClient' in patch && patch.servicesClient !== undefined
+        && patch.servicesClient !== current.servicesClient) {
+      next.servicesClient = patch.servicesClient
+      changed.push(`services_client=${patch.servicesClient}`)
+    }
     setStr('blockedOn', 'blockedOn', 'blocked_on')
     setStr('nextAction', 'nextAction', 'next_action')
     setStr('nextActionDue', 'nextActionDue', 'next_action_due')

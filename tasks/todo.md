@@ -529,6 +529,64 @@ claim to cite evidence.** Three tiers by how automatable they are:
       2026-06-12), and the dashboard service. Surfaces in M2's health panel; Telegram only when
       something is actually wrong.
 
+### M3.5 — Intake: the Scribe (designed 2026-08-21, Pavan's ask)
+
+**Origin:** "lets connect my email so updates and context is flowing more cleanly — which
+agent should be responsible, or should we create a new gathering agent whose sole job is to
+take all the context from these disjoint places into the right category?"
+
+**Decision: yes to the dedicated agent — named Scribe — but make it THIN.** The gathering
+job splits into a mechanical half and a judgment half, and the whole session's failure
+catalog says never to let an LLM own the mechanical half:
+
+```
+Layer 1  CONNECTORS   deterministic cron, NO LLM
+         gmail-sync, granola-sync, (calendar later)
+         → stage raw items in operations/crm/intake/
+         idempotent, change-detected, loud on failure (health panel row)
+
+Layer 2  SCRIBE       one agent, judgment only
+         reads staged items and FILES them:
+           touch on a known contact  → appendLog with real date, via:email
+           unknown person            → draft contact in a review queue
+           action item               → triage bucket (never straight to next_action)
+           bid/lead material         → linked into bids/ or crm/leads/
+           uncertain                 → review queue, never a guess
+           irrelevant                → skipped, but LISTED (no silent drops)
+
+Layer 3  DOMAIN AGENTS unchanged — Scout/Capture/Voice consume the store
+```
+
+**Why a new agent and not Scout or Paladin:** intake spans every domain (an email thread can
+carry a bid update, an outreach touch, and a product signal at once), so giving it to Scout
+makes one domain agent both the bus and a rider. Paladin is the interactive router, not a
+pipeline. Scribe = one new agent id + one cron, the exact wiring pattern already proven by
+Capture/Forge/Voice's per-agent crons.
+
+**Rules that carry over from this session's lessons:**
+- **Observation vs commitment** (the thrice-learned one): an email FROM Robert is evidence of
+  a touch and gets logged with its real date; a newsletter or a cc is not. Scribe records
+  evidence and PROPOSES commitments; only a human confirms one.
+- **Deterministic relevance pre-filter at the connector, not the LLM:** only threads
+  involving known contact emails, *.ca.gov, or known partner domains get staged at all.
+  Granola showed 1 of 5 meetings was even InfiniteAI business; email is worse (personal,
+  Bedrock, legal). The CRM's own contact emails ARE the filter — the store curates its own
+  intake. Everything else never leaves the mailbox.
+- **Inbound only.** No sending. The drafts-automatic/sends-human rule is untouched.
+- **Verify by read-back** — `openclaw agent` exits 0 even when the LLM call fails.
+- Intake freshness gets a health-panel row; a dead connector must be loud within a day.
+
+**Build order:**
+- [ ] Gmail API OAuth (or app-password IMAP) on the mini for the AGENCY mailbox — the
+      claude.ai Gmail connector cannot serve headless cron (same lesson as Granola).
+- [ ] `gmail-sync` connector: pre-filtered threads → `crm/intake/email/`, idempotent by
+      message id, one batch commit.
+- [ ] Scribe agent definition + cron (2x daily), filing pass with the rules above.
+- [ ] Review queue surface on the dashboard (approve draft contacts, confirm actions).
+- [ ] Granola sync folds into the same intake path (Layer 1 exists once, sources plug in).
+- [ ] GATES: which mailbox holds agency correspondence; Pavan connects the claude.ai Gmail
+      connector separately for interactive sessions (2 min, Settings → Connectors).
+
 ### M4 — Outputs and rhythm
 
 - [ ] Drafts: Voice writes to `crm/drafts/`; the dashboard lists them for review; send via

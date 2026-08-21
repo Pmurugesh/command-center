@@ -216,6 +216,17 @@ export interface CrmContact {
   lastTouched?: string    // YYYY-MM-DD — drives "going cold"
   nextAction?: string
   nextActionDue?: string  // YYYY-MM-DD — drives "overdue" / "due today"
+  /**
+   * Infinite Solutions already has a PAID services contract at this agency.
+   *
+   * Deliberately separate from `stage`, which tracks the PRODUCT sale. Pavan,
+   * 2026-08-21: "any billing is for infinite solutions existing contract, none
+   * of it is for AI except the caltrans advisory arrangement." A services client
+   * is not a product win — but it IS warm access, and conflating the two would
+   * both overstate revenue and hide the best product leads the company has.
+   */
+  servicesClient?: boolean
+  servicesNote?: string   // contract reference or scope, when known
   source?: string         // provenance of the record (cio-academy-2026, agency-profile…)
   created?: string
   notes: string           // body markdown above the ## Log heading
@@ -255,6 +266,8 @@ export interface CrmContactUpdate {
   product?: string
   owner?: string
   tier?: string
+  servicesClient?: boolean
+  servicesNote?: string | null
   stage?: CrmStage
   status?: CrmStatus
   blockedOn?: string | null
