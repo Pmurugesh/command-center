@@ -30,6 +30,7 @@ Env:
   IMAP_FOLDERS      (default "INBOX"; comma-separated, e.g. "INBOX,Sent")
 """
 import email
+import email.header
 import email.utils
 import hashlib
 import imaplib
@@ -45,10 +46,43 @@ OPS = HOME / "repos/operations"
 INTAKE = OPS / "crm/intake/email"
 CONTACTS = OPS / "crm/contacts"
 
+# OUR OWN domains. Deliberately NOT relevance signals: every message in the
+# mailbox carries one of these in From, To or Cc, so treating them as a signal
+# matched 58 of 60 messages on the first dry run — newsletters, uptime alerts and
+# Microsoft marketing all "matched". An address only counts toward relevance if it
+# belongs to someone ELSE.
+OWN_DOMAINS = {"4infinitesolutions.com", "infinitellm.ai", "infiniteai.com",
+               "mybedrock.app", "novaerasolutions.com"}
+
+# Third parties worth hearing from regardless of whether they are in the CRM yet.
 PARTNER_DOMAINS = {
-    "4infinitesolutions.com", "infinitellm.ai", "novaerasolutions.com",
-    "caleprocure.ca.gov", "fiscal.ca.gov", "dgs.ca.gov",
+    "caleprocure.ca.gov", "fiscal.ca.gov", "dgs.ca.gov", "bidspro.com",
 }
+
+# Bulk senders that reach a business address constantly and never carry a real
+# thread. Checked BEFORE the allow rules, because a vendor newsletter addressed to
+# a .gov distribution list would otherwise sail through.
+NOISE_HINTS = (
+    "noreply", "no-reply", "donotreply", "notifications@", "marketing@",
+    "newsletter", "@e.", "mailer", "bounce", "@go.", "@info.", "@news.",
+)
+# Subject-line evidence that a message is about the BUSINESS, whoever it is from.
+# Needed because relevant mail is not always from a .gov counterparty: internal
+# threads ("ISI Internal Daily for CSJ CRM") and non-.gov public bodies (SMUD,
+# BidsPro) were both filtered out when domain was the only test. A mailbox of ~60
+# messages a month can afford recall; the cost of a miss is a lost thread, the
+# cost of a false positive is one row a human skips.
+SUBJECT_SIGNALS = (
+    "rfp", "rfi", "rfo", "bid", "solicitation", "proposal", "procurement",
+    "sow", "statement of work", "amendment", "task order", "msa", "cmas",
+    "demo", "poc", "pilot", "contract", "award", "quote", "sole source",
+    "meet the buyers", "vendor", "supplier", "addendum", "intent to award",
+)
+
+NOISE_SUBJECTS = (
+    "uptime check failure", "unsubscribe", "webinar", "livestream",
+    "join us", "register now", "[action required] review",
+)
 
 
 def known_addresses() -> set[str]:
@@ -66,17 +100,54 @@ def known_addresses() -> set[str]:
     return out
 
 
-def is_relevant(addrs: list[str], known: set[str]) -> tuple[bool, str]:
+def is_relevant(addrs: list[str], known: set[str], subject: str,
+                sender: str) -> tuple[bool, str]:
+    """Relevance requires a counterparty who is not us.
+
+    Order matters: noise is rejected before the allow rules, so a vendor blast
+    addressed to a government distribution list cannot slip through on the
+    strength of the recipient's domain.
+    """
+    s = (sender or "").lower()
+    subj = (subject or "").lower()
+    if any(h in s for h in NOISE_HINTS):
+        return False, ""
+    if any(n in subj for n in NOISE_SUBJECTS):
+        return False, ""
+
     for a in addrs:
         a = a.lower()
+        dom = a.split("@")[-1]
+        if dom in OWN_DOMAINS:
+            continue                      # us, not a counterparty
         if a in known:
             return True, f"known contact {a}"
-        dom = a.split("@")[-1]
         if dom.endswith(".ca.gov") or dom.endswith(".gov"):
             return True, f"government domain {dom}"
         if dom in PARTNER_DOMAINS:
             return True, f"partner domain {dom}"
+
+    # No external counterparty matched — fall back to what the subject says it
+    # is about. This is what recovers internal threads and non-.gov public bodies.
+    for sig in SUBJECT_SIGNALS:
+        if re.search(rf"\b{re.escape(sig)}\b", subj):
+            return True, f"subject signal: {sig}"
     return False, ""
+
+
+def decode_hdr(v) -> str:
+    """RFC 2047 subjects arrive as =?UTF-8?Q?...?= — decode before use, since
+    both the human reading the output and the noise filter need real words."""
+    if not v:
+        return ""
+    try:
+        parts = email.header.decode_header(v)
+        return "".join(
+            (b.decode(enc or "utf-8", errors="replace") if isinstance(b, bytes) else b)
+            for b, enc in parts
+        ).strip()
+    except Exception:
+        return str(v).strip()
 
 
 def header_addrs(msg) -> list[str]:
@@ -165,7 +236,8 @@ def main() -> int:
                     continue
 
                 addrs = header_addrs(msg)
-                ok, why = is_relevant(addrs, known)
+                ok, why = is_relevant(addrs, known, msg.get("Subject", ""),
+                                      msg.get("From", ""))
                 if not ok:
                     skipped_irrelevant += 1
                     continue
@@ -181,7 +253,7 @@ def main() -> int:
                     "message_id": mid,
                     "date": iso,
                     "folder": folder,
-                    "subject": (msg.get("Subject") or "").strip(),
+                    "subject": decode_hdr(msg.get("Subject")),
                     "from": msg.get("From", ""),
                     "to": msg.get("To", ""),
                     "cc": msg.get("Cc", ""),
@@ -191,7 +263,7 @@ def main() -> int:
                     "staged_at": datetime.now().isoformat(timespec="seconds"),
                 }
                 if dry:
-                    print(f"  + [{iso}] {rec['subject'][:62]}  ({why})")
+                    print(f"  + [{iso}] {rec['subject'][:62]:64s} {why}")
                 else:
                     (INTAKE / f"{key}.json").write_text(json.dumps(rec, indent=1))
                 staged += 1
