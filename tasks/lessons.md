@@ -30,3 +30,11 @@
   apart (PR #5's `getPipelineFreshness`, and M2's health panel). Both reported dead pipelines
   as fresh once operations became a git repo. When a signal exists to detect silence, verify it
   on a CLONE, not just on the machine that produced the files.
+- **[2026-08-21]** Seeding a store from research produced the same class of error three times in
+  one session: badge scans became "88 days cold", a plan that never started became "85 days
+  overdue", and 92 business cards were listed as pipeline. Each time the fix was the same —
+  distinguish INVENTORY (we hold this person's details) from COMMITMENT (someone decided to
+  pursue them). When seeding any future store, make that distinction in the first write rather
+  than discovering it three corrections later. A board that shows research as though it were
+  owed work is both false and demotivating, and it is the fastest way to make someone stop
+  opening the tool.

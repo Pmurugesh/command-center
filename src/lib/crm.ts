@@ -279,6 +279,44 @@ function isLive(c: CrmContact): boolean {
 }
 
 /**
+ * Has anyone DECIDED to pursue this person?
+ *
+ * A badge scanned at a conference is a business card, not a lead. Pavan:
+ * "I didn't necessarily contact all these people, I just happened to meet
+ * people who are in tech CA at the same time." So the 94 seeded records are
+ * INVENTORY — people whose details we hold — and inventory does not belong on a
+ * daily action board. It becomes pipeline the moment someone gives it an action,
+ * works it, moves its stage, or hits a blocker.
+ *
+ * Showing 92 unworked cards under "Never contacted" was still framing them as
+ * outreach owed. They are browsable on /agencies; the board should show WORK.
+ */
+function isInPipeline(c: CrmContact): boolean {
+  return Boolean(c.nextAction) ||
+    c.status === 'blocked' ||
+    c.stage !== 'identified' ||
+    hasBeenWorked(c)
+}
+
+/**
+ * Has a human ever actually reached out to this person?
+ *
+ * Seeded records are NOT touches. Scanning someone's badge at a conference tells
+ * you they exist; it does not mean anyone contacted them. Conflating the two made
+ * 86 never-worked leads read as "88 days cold", which implies a decaying
+ * relationship and presents months of debt that was never owed. A board like that
+ * is one you stop opening.
+ */
+function hasBeenWorked(c: CrmContact): boolean {
+  return c.log.some(e => !e.via || !NON_HUMAN_VIA.has(e.via))
+}
+
+// Kept in sync with insights.ts: writes made by machinery rather than by a person
+// talking to someone.
+const NON_HUMAN_VIA = new Set(['seed', 'rederive', 'slug-reconcile', 'verify',
+  'roundtrip-test', 'api-test', 'pavan-correction', 'lead-sync', 'baseline'])
+
+/**
  * The morning view. Buckets are mutually exclusive and ordered by urgency, so a
  * contact appears exactly once and the top of the page is always the thing that
  * needs attention most. Blocked outranks overdue-by-date because a blocked item
@@ -291,9 +329,20 @@ export function bucketize(contacts: CrmContact[]): CrmBuckets {
   const blocked = live.filter(c => c.status === 'blocked')
   const rest = live.filter(c => c.status !== 'blocked')
 
-  const overdue = rest.filter(c => c.daysOverdue !== undefined)
-  const dueToday = rest.filter(c => c.nextActionDue === t)
-  const goingCold = rest.filter(c =>
+  // Only PIPELINE reaches the board. Sourced contacts are counted, not listed:
+  // a morning view of 92 business cards is inventory, not work.
+  const pipeline = rest.filter(isInPipeline)
+  const sourcedCount = rest.length - pipeline.length
+
+  // Within the pipeline, "cold" must mean a relationship that was warm and
+  // cooled. Someone prioritised but never called is not cold, they are not
+  // started — merging the two turns a to-do list into a guilt list.
+  const worked = pipeline.filter(hasBeenWorked)
+  const notStarted = pipeline.filter(c => !hasBeenWorked(c))
+
+  const overdue = worked.filter(c => c.daysOverdue !== undefined)
+  const dueToday = worked.filter(c => c.nextActionDue === t)
+  const goingCold = worked.filter(c =>
     c.daysOverdue === undefined &&
     c.nextActionDue !== t &&
     c.daysSinceTouch !== undefined &&
@@ -301,12 +350,20 @@ export function bucketize(contacts: CrmContact[]): CrmBuckets {
 
   const byOverdue = (a: CrmContactView, b: CrmContactView) => (b.daysOverdue ?? 0) - (a.daysOverdue ?? 0)
   const byStale = (a: CrmContactView, b: CrmContactView) => (b.daysSinceTouch ?? 0) - (a.daysSinceTouch ?? 0)
+  // Leads someone already decided to prioritise surface first, then tier-1, then
+  // by name — so "where do I start" has an answer that is not alphabetical.
+  const byPriority = (a: CrmContactView, b: CrmContactView) =>
+    Number(Boolean(b.nextAction)) - Number(Boolean(a.nextAction)) ||
+    Number(b.tier === 'T1') - Number(a.tier === 'T1') ||
+    a.name.localeCompare(b.name)
 
   return {
     overdue: overdue.sort(byOverdue),
     blocked: blocked.sort(byStale),
     dueToday,
     goingCold: goingCold.sort(byStale),
+    notStarted: notStarted.sort(byPriority),
+    sourcedCount,
     total: contacts.length,
   }
 }

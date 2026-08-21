@@ -236,6 +236,10 @@ export interface CrmBuckets {
   blocked: CrmContactView[]
   dueToday: CrmContactView[]
   goingCold: CrmContactView[]
+  /** In the pipeline (someone set an action) but not yet worked. */
+  notStarted: CrmContactView[]
+  /** Sourced contacts nobody has decided to pursue — inventory, not work. */
+  sourcedCount: number
   total: number
 }
 

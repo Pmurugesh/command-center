@@ -12,14 +12,15 @@
  * how a CRM becomes something you stop updating.
  */
 import { useState, useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  AlertTriangle, Ban, CalendarClock, Snowflake, Check, Clock, Loader2,
+  AlertTriangle, Ban, CalendarClock, Snowflake, Check, Clock, Loader2, UserPlus,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import type { CrmBuckets, CrmContactView } from '@/types'
 
-type BucketKey = 'overdue' | 'blocked' | 'dueToday' | 'goingCold'
+type BucketKey = 'overdue' | 'blocked' | 'dueToday' | 'goingCold' | 'notStarted'
 
 const BUCKET_META: Record<BucketKey, {
   label: string
@@ -49,6 +50,13 @@ const BUCKET_META: Record<BucketKey, {
     chip: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
     empty: 'Nothing due today.',
   },
+  notStarted: {
+    label: 'Not started',
+    icon: UserPlus,
+    tone: '',
+    chip: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
+    empty: 'Everything in the pipeline has been worked.',
+  },
   goingCold: {
     label: 'Going cold',
     icon: Snowflake,
@@ -62,6 +70,10 @@ function dayLabel(c: CrmContactView, key: BucketKey): string | null {
   if (key === 'blocked') return c.daysBlocked ? `${c.daysBlocked}d blocked` : null
   if (key === 'overdue') return c.daysOverdue ? `${c.daysOverdue}d overdue` : null
   if (key === 'goingCold') return c.daysSinceTouch ? `${c.daysSinceTouch}d cold` : null
+  // Deliberately NO day counter: a lead nobody ever called is not "88 days late",
+  // it is simply unworked, and an age badge on it manufactures guilt for a
+  // commitment that never existed.
+  if (key === 'notStarted') return c.tier === 'T1' ? 'T1' : null
   return null
 }
 
@@ -214,7 +226,7 @@ export function PipelineBuckets({ buckets }: { buckets: CrmBuckets }) {
 
   // Order is the argument: blocked first (cannot proceed), then overdue (late),
   // then today (on time), then cold (drifting).
-  const order: BucketKey[] = ['blocked', 'overdue', 'dueToday', 'goingCold']
+  const order: BucketKey[] = ['blocked', 'overdue', 'dueToday', 'goingCold', 'notStarted']
 
   return (
     <div className="space-y-4">
@@ -224,6 +236,14 @@ export function PipelineBuckets({ buckets }: { buckets: CrmBuckets }) {
           {buckets.total} contacts
         </span>
       </div>
+      {/* Sourced contacts are counted, not listed. They are business cards from a
+          conference, not work anyone committed to — browsable, not a to-do. */}
+      {buckets.sourcedCount > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {buckets.sourcedCount} sourced contacts not yet in the pipeline ·{' '}
+          <Link href="/agencies" className="text-blue-400 hover:underline">browse by agency →</Link>
+        </p>
+      )}
       {order.map(key => (
         <Bucket key={key} bucket={key} items={buckets[key]} onDone={refresh} />
       ))}
