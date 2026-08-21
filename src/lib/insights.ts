@@ -251,6 +251,18 @@ function buildShape(contacts: CrmContact[]): PipelineShape {
 async function buildHealth(): Promise<HealthItem[]> {
   const items: HealthItem[] = []
 
+  // IS THE RUNNING BUILD THE CURRENT ONE?
+  //
+  // Added after a near-miss: PR #5 merged cleanly, the deploy script then failed
+  // at the lint step, and launchd simply kept serving the previous build. The
+  // dashboard stayed up and answered 200 the entire time, so nothing looked
+  // wrong — the failure was discovered only by reading a deploy log by hand.
+  //
+  // That is the same shape as the scanner that died in June and the outreach
+  // file that went stale in May: silence that reads as health. A panel whose job
+  // is breaking that silence has to check itself too.
+  items.push(await deployFreshness())
+
   // Intel/scan freshness deliberately lives in FreshnessCard (per-pipeline, with
   // each source's own cron cadence). Duplicating it here would give one fact two
   // homes that could disagree — the thing being fixed everywhere else.
@@ -280,6 +292,45 @@ async function buildHealth(): Promise<HealthItem[]> {
   })
 
   return items
+}
+
+/**
+ * Compare the checked-out dashboard commit against origin/main.
+ *
+ * Deliberately compares against the REMOTE ref rather than a local branch: the
+ * question is "is what I am serving what was merged", and a stale local checkout
+ * is exactly the failure being looked for.
+ */
+async function deployFreshness(): Promise<HealthItem> {
+  const repo = process.env.DASHBOARD_REPO || process.cwd()
+  const run = async (args: string[]) => {
+    const out = await runCommandArgs('git', ['-C', repo, ...args], 15_000)
+    return out.trim()
+  }
+  try {
+    const local = await run(['rev-parse', 'HEAD'])
+    if (!local) return { label: 'Deployed build', status: 'warn', detail: 'not a git checkout' }
+
+    // Read the already-fetched remote ref. Deliberately does NOT fetch: a health
+    // panel must not make network calls on every page render.
+    const remote = await run(['rev-parse', 'origin/main'])
+    if (!remote) return { label: 'Deployed build', status: 'warn', detail: 'no origin/main ref' }
+
+    if (local === remote) {
+      return { label: 'Deployed build', status: 'ok', detail: `current (${local.slice(0, 7)})` }
+    }
+    const behind = await run(['rev-list', '--count', `${local}..${remote}`])
+    const n = Number(behind || 0)
+    return {
+      label: 'Deployed build',
+      status: n > 0 ? 'bad' : 'warn',
+      detail: n > 0
+        ? `${n} commit(s) behind origin/main — a deploy failed or did not run`
+        : `diverged from origin/main (${local.slice(0, 7)})`,
+    }
+  } catch {
+    return { label: 'Deployed build', status: 'warn', detail: 'could not determine' }
+  }
 }
 
 // ── entry point ─────────────────────────────────────────────────────────────
