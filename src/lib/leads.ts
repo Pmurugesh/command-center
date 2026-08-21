@@ -31,7 +31,7 @@ import { PATHS } from './paths'
 import { runCommandArgs } from './shell'
 import { acquireLock, atomicWrite, fileExists } from './store'
 import { today } from './crm'
-import { scoreEvent, getAgencyAffinity, LEAD_RULES_VERSION } from './lead-scoring'
+import { scoreEvent, getAgencyAffinity, loadRules } from './lead-scoring'
 import type { LeadVerdict, ProductSlug, ScorableEvent } from './lead-scoring'
 
 export type LeadTriage = 'new' | 'bid' | 'skip' | 'watch'
@@ -48,6 +48,7 @@ export interface Lead {
   score: number
   bucket: LeadVerdict['bucket']
   products: ProductSlug[]
+  tiers: string[]           // have / adjacent / could-build
   reasons: string[]
   rulesVersion: number
   provisional: boolean
@@ -86,6 +87,7 @@ function serialize(l: Lead): string {
     score: l.score,
     bucket: l.bucket,
     products: l.products.length ? l.products : undefined,
+    tiers: l.tiers.length ? l.tiers : undefined,
     reasons: l.reasons.length ? l.reasons : undefined,
     rules_version: l.rulesVersion,
     provisional: l.provisional || undefined,
@@ -125,6 +127,7 @@ function hydrate(slug: string, raw: string): Lead {
     score: Number(data.score ?? 0),
     bucket: (data.bucket ?? 'unlikely') as LeadVerdict['bucket'],
     products: Array.isArray(data.products) ? data.products as ProductSlug[] : [],
+    tiers: Array.isArray(data.tiers) ? data.tiers.map(String) : [],
     reasons: Array.isArray(data.reasons) ? data.reasons.map(String) : [],
     rulesVersion: Number(data.rules_version ?? 0),
     provisional: Boolean(data.provisional),
@@ -174,14 +177,15 @@ export async function syncLeads(
   events: (ScorableEvent & { businessUnit: string; eventId: string; eventVersion?: number; source?: string })[],
   via = 'lead-sync',
 ): Promise<SyncOutcome> {
-  const affinity = await getAgencyAffinity()
+  // Rules and affinity are read ONCE for the whole batch, not per event.
+  const [affinity, rules] = await Promise.all([getAgencyAffinity(), loadRules(true)])
   const outcome: SyncOutcome = { created: 0, updated: 0, unchanged: 0, reasons: [] }
   const release = await acquireLock(PATHS.crm, PATHS.crmLeads)
 
   try {
     for (const ev of events) {
       const slug = leadSlug(ev.businessUnit, ev.eventId)
-      const verdict = scoreEvent(ev, affinity)
+      const verdict = await scoreEvent(ev, affinity, rules)
 
       // Never surface noise. An unlikely event that we have never stored stays
       // unstored: 311 events per refresh, of which ~2-3% are ours.
@@ -207,6 +211,7 @@ export async function syncLeads(
         score: verdict.score,
         bucket: verdict.bucket,
         products: verdict.products,
+        tiers: verdict.tiers,
         reasons: verdict.reasons.map(r => `${r.weight > 0 ? '+' : ''}${r.weight} ${r.reason}`),
         rulesVersion: verdict.rulesVersion,
         provisional: verdict.provisional,
