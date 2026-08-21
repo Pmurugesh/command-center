@@ -427,7 +427,7 @@ export async function createContact(
  * blocker gets removed, so "unblock" needs no special endpoint.
  */
 export async function updateContact(
-  slug: string, patch: CrmContactUpdate, via = 'dashboard',
+  slug: string, patch: CrmContactUpdate, via = 'dashboard', commit = true,
 ): Promise<CrmContact | null> {
   const release = await acquireLock()
   try {
@@ -485,7 +485,7 @@ export async function updateContact(
     }
 
     if (!changed.length) return current
-    return await persist(next, `${current.name}: ${changed.join(', ')}`, via)
+    return await persist(next, `${current.name}: ${changed.join(', ')}`, via, commit)
   } finally {
     await release()
   }

@@ -345,42 +345,68 @@ needs a schema description, not a command parser) and the in-dashboard draft-rev
 - [ ] Verify: open the dashboard cold and be able to answer "what should I do first, and is
       the machine healthy?" without clicking anything.
 
-### M2.5 — Product truth sync (NEW 2026-08-21)
+### M2.5 — Keeping sales consistent with engineering (REWRITTEN 2026-08-21)
 
-**Origin:** Pavan: *"product names are outdated in the openclaw system, how can we ensure it
-is catching up with engineering/product changes on the nexus repo."* Investigated — the drift
-is structural, not cosmetic:
+**Origin:** Pavan: *"how are we making sure the marketing/sales/growth is staying consistent
+with the engineering."* Slugs were one symptom. The audit found three layers of drift, and the
+third is a live risk rather than housekeeping.
 
-| | |
-|---|---|
-| Platform ships (module registry, `main.py`) | `prr` `recruitment` `ad-hoc-reporting` `procurement` `assistants` `data-intelligence` `delivery-management` `plan-review` `web-intelligence` — **9** |
-| Operations knows (`products/_overview.md`) | `prrai` `aihire` `reporting` `procurement` `echo` — **5** |
+**Layer 1 — what exists.** Platform mounts 9 license-gated modules; `products/_overview.md`
+listed 5. Missing: `assistants` (**"Steward"** — the "one governed pane" the GTM playbook
+leads with), `data-intelligence`, `delivery-management`, `plan-review` (which the playbook
+rules OUT as a market — reconcile intent vs code), `web-intelligence`. And `echo` is in the
+catalog but is not a platform module.
 
-Three separate problems:
-1. **5 shipped modules the sales side has never heard of** — including `assistants`, which the
-   GTM playbook calls the actual differentiator ("one governed pane for all AI"). We are
-   selling a 5-product catalog while engineering ships 9.
-2. **`echo` is in the sales catalog but is not a platform module** (backend TBD, partner-based).
-3. **Two vocabularies for one thing**: `prrai`/`prr`, `aihire`/`recruitment`,
-   `reporting`/`ad-hoc-reporting`. Both repos independently declare their slug "stable".
+**Layer 2 — what things are called.** Platform manifest + the GTM playbook both say
+**GovHire**; the sales catalog said **HireCA**. A one-pager saying HireCA beside a demo screen
+saying GovHire is a credibility problem in front of CalHR. Slugs reconciled 2026-08-21
+(prrai→prr, aihire→recruitment, reporting→ad-hoc-reporting; 90 contacts + 3 product docs
+renamed; old values kept as `legacy_slug`). **The display-name conflict is still open and is
+Pavan's call.**
 
-- [ ] **Fix the cause, not the symptom: derive product facts, never hand-maintain them.** The
-      platform already publishes machine-readable module manifests (`manifest.py`/`manifest.ts`
-      + the `_MODULE_REGISTRY` mount list). A sync job reads them.
-- [ ] **Separate derived from authored** — the same rule that fixed the bid statuses. Machine
-      facts (slug, mounted, license-gated, LOC, route count, last commit touching the module)
-      go to a generated `products/_registry.md` marked DO NOT HAND-EDIT. Authored positioning
-      (tagline, target buyers, market evidence, pricing) stays in the per-product files. One
-      home per fact, across repos this time.
-- [ ] **Reconcile + alert on drift**: modules with no product doc (5 today), product docs with
-      no module (echo), and status claims contradicted by the code. Drift becomes a dashboard
-      item and a Telegram notification, not a discovery three months later.
-- [ ] **Slug reconciliation — needs Pavan's call.** Platform slugs are load-bearing in code
-      (license gating, registry keys, DB rows) and cannot move cheaply. Operations slugs are
-      tags on a CRM seeded today, so they are nearly free to change. Recommendation: operations
-      adopts the platform slugs with an alias map for existing docs. Not done unilaterally.
-- [ ] Runs weekly on the mini + on demand; the janitor commits the result.
-- [ ] Verify: rename a module in a Nexus branch, run the sync, see the drift flagged.
+**Layer 3 — whether the claims are still true.** `bids/_platform-knowledge.md` calls itself a
+living document "updated automatically after each bid analysis". Last updated 2026-03-23. It
+is the evidence base for capability claims made to the State of California, and **12 of its
+cited code paths no longer exist on origin/main**. Across all of operations: 130 dead
+citations of 914. Nothing checked, so nobody knew.
+
+**The mechanism: a claim that cites evidence can be verified mechanically — so require every
+claim to cite evidence.** Three tiers by how automatable they are:
+
+- [x] **Tier 1 — citation verification (BUILT 2026-08-21).** `scripts/verify-claims.ts`
+      resolves every backticked code path in operations markdown against the platform's
+      `origin/main` (not the checked-out branch — shipped capability means what is on main).
+      `--gate` exits non-zero on dead citations in bid-facing files, so it can block a
+      submission. Currently: 784 resolved, 130 dead, 12 of them bid-facing.
+      *Deliberate limit: it verifies that citations RESOLVE, not that prose is true. It cannot
+      tell you "6 export formats" is still accurate; it can tell you the file that claim points
+      at is gone. Most of the value for a fraction of the work.*
+- [ ] **Tier 1a — triage the 12 bid-facing dead citations.** Each is either a rename to chase
+      or a capability that quietly went away. Must be resolved before any bid draws on
+      `_platform-knowledge.md` again.
+- [ ] **Tier 2 — derive the facts that can be derived.** A weekly sync reads the platform's
+      module manifests + git and regenerates `products/_registry.md` (marked DO NOT HAND-EDIT):
+      canonical slug, display name, mounted, license-gated, LOC, route/component counts, last
+      commit touching the module. Authored positioning (tagline, buyers, market evidence,
+      pricing) stays in the per-product files. **Derived and authored facts never share a
+      file** — the same split that fixed the bid statuses.
+- [ ] **Tier 2a — make status claims checkable.** "demo-ready" / "needs-frontend" are currently
+      remembered, not measured. Derive the signals: does the module have a frontend beyond a
+      nav shell, a demo seed endpoint, tests? `procurement` is "needs-frontend" because its
+      frontend is 102 lines — that is a computable fact, not an opinion.
+- [ ] **Tier 3 — expire what cannot be derived.** Positioning and market evidence get a
+      `verified_on` date; anything older than a quarter surfaces on the dashboard. The GTM
+      playbook already models this ("re-verify vendor claims ~quarterly — the evidence is
+      dated"); make it enforced rather than aspirational.
+
+**Triggers — the organisational half, and the part that actually prevents recurrence:**
+- [ ] Weekly drift report on the mini → dashboard panel + Telegram only when drift appears.
+- [ ] **On platform release**: a digest of modules added / renamed / status-changed since the
+      last check, routed into operations. Engineering shipped 5 modules sales never heard of
+      because nothing carried the news across the repo boundary.
+- [ ] **Pre-bid gate**: `verify-claims.ts --gate` runs before any submission. This is the one
+      that matters — everything else is hygiene, this one stops a false capability claim
+      reaching a procurement officer.
 
 ### M3 — Inputs: meetings and leads
 
