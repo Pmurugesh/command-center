@@ -12,7 +12,9 @@ interface AgentsSummaryCardProps {
 
 export function AgentsSummaryCard({ summaries }: AgentsSummaryCardProps) {
   const totalRuns = summaries.reduce((s, a) => s + a.runs, 0)
-  const totalFailed = summaries.reduce((s, a) => s + a.failed, 0)
+  // Failing = jobs currently in error state, not just failures inside the 24h
+  // window — a job that broke yesterday and hasn't recovered still counts.
+  const totalFailed = summaries.reduce((s, a) => s + Math.max(a.failed, a.failures.length), 0)
   const totalOutputs = summaries.reduce((s, a) => s + a.outputsTouched, 0)
 
   return (
@@ -58,7 +60,7 @@ export function AgentsSummaryCard({ summaries }: AgentsSummaryCardProps) {
 function AgentRow({ summary: s }: { summary: AgentSummary }) {
   // Dot colour: red if anything failed, amber if no recent activity, green if active.
   const dotClass =
-    s.failed > 0 ? 'bg-status-danger' :
+    s.failed > 0 || s.failures.length > 0 ? 'bg-status-danger' :
     s.runs > 0 || s.outputsTouched > 0 ? 'bg-status-success' :
     'bg-muted-foreground/40'
 
@@ -85,10 +87,17 @@ function AgentRow({ summary: s }: { summary: AgentSummary }) {
           {s.outputsTouched > 0 && (
             <span><span className="font-mono tabular-nums text-foreground">{s.outputsTouched}</span> output{s.outputsTouched === 1 ? '' : 's'} touched</span>
           )}
-          {s.runs === 0 && s.outputsTouched === 0 && (
+          {s.runs === 0 && s.outputsTouched === 0 && s.failures.length === 0 && (
             <span className="text-muted-foreground/70">idle in the last 24h</span>
           )}
         </div>
+        {s.failures.map(f => (
+          <p key={f.jobName} className="text-xs text-status-danger mt-1 truncate">
+            {f.jobName}
+            {f.consecutiveErrors > 1 && <span className="font-mono tabular-nums"> ×{f.consecutiveErrors}</span>}
+            {f.error && <span className="text-status-danger/80"> — {f.error}</span>}
+          </p>
+        ))}
       </div>
     </li>
   )

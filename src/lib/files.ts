@@ -199,6 +199,21 @@ export async function listScanReports(): Promise<ScanReport[]> {
   return reports.sort((a, b) => b.lastModified.localeCompare(a.lastModified))
 }
 
+/**
+ * Latest report per scan family. Dated files (product-health-2026-07-06) are
+ * runs of the same scan — summing findings across every run counts issues that
+ * later runs already resolved, which is how the header stayed "Critical" forever.
+ */
+export function currentScanReports(reports: ScanReport[]): ScanReport[] {
+  const byFamily = new Map<string, ScanReport>()
+  for (const r of reports) {
+    const family = r.name.replace(/[-_]\d{4}-\d{2}-\d{2}$/, '')
+    const existing = byFamily.get(family)
+    if (!existing || r.lastModified > existing.lastModified) byFamily.set(family, r)
+  }
+  return Array.from(byFamily.values())
+}
+
 // ── Intelligence ──
 
 export async function listIntelAlerts(): Promise<IntelAlert[]> {
@@ -405,27 +420,93 @@ export async function listScripts(): Promise<ScriptInfo[]> {
   return scripts
 }
 
-export async function getOutreachItems() {
-  const { OUTREACH_PATH } = await import('./paths')
+export interface OutreachData {
+  items: OutreachItem[]
+  updatedAt: string | null  // file mtime; null when the file doesn't exist
+}
+
+export interface OutreachItem {
+  priority: number
+  contact: string
+  title: string
+  agency: string
+  product: string
+  owner: string
+  action: string
+  status: string
+}
+
+
+export interface PipelineFreshness {
+  label: string
+  href: string
+  lastUpdated: string | null  // ISO; null = source missing/empty
+  warnAfterDays: number       // amber past this
+  staleAfterDays: number      // red past this
+}
+
+/**
+ * When a directory last produced output.
+ *
+ * Prefers the date embedded in the FILENAME (`2026-07-08-daily.md`) and only
+ * falls back to mtime for undated files. This matters since operations became a
+ * git repo: a clone stamps every file with the checkout time, so an mtime-only
+ * reading reported six-week-dead scanners as produced-today — which is the exact
+ * silence this freshness view exists to break. See tasks/lessons.md 2026-08-21.
+ */
+async function newestOutput(dir: string, ext = '.md'): Promise<string | null> {
   try {
-    const content = await fs.readFile(OUTREACH_PATH, 'utf-8')
-    const lines = content.split('\n').filter(l => l.startsWith('|') && !l.includes('---') && !l.includes('Priority'))
-    return lines.map(line => {
-      const cols = line.split('|').map(c => c.trim()).filter(Boolean)
-      return {
-        priority: parseInt(cols[0]) || 0,
-        contact: cols[1] || '',
-        title: cols[2] || '',
-        agency: cols[3] || '',
-        product: cols[4] || '',
-        owner: cols[5] || '',
-        action: cols[6] || '',
-        status: cols[7] || 'pending',
+    const entries = await fs.readdir(dir)
+    let latestDated: string | null = null
+    let latestMtime = 0
+    for (const f of entries) {
+      if (f.startsWith('.') || !f.endsWith(ext)) continue
+      const dated = f.match(/(\d{4}-\d{2}-\d{2})/)
+      if (dated) {
+        if (!latestDated || dated[1] > latestDated) latestDated = dated[1]
+        continue
       }
-    }).filter(i => i.contact)
+      try {
+        const stat = await fs.stat(path.join(dir, f))
+        if (stat.mtimeMs > latestMtime) latestMtime = stat.mtimeMs
+      } catch { /* skip */ }
+    }
+    if (latestDated) return new Date(`${latestDated}T12:00:00`).toISOString()
+    return latestMtime > 0 ? new Date(latestMtime).toISOString() : null
   } catch {
-    return []
+    return null
   }
+}
+
+/**
+ * When each pipeline last produced output. This is the "is my automation
+ * alive?" view — a dashboard fed by dead pipelines silently shows old data,
+ * which reads as "nothing happening" instead of "something's broken".
+ * Thresholds follow each source's cron cadence.
+ */
+export async function getPipelineFreshness(): Promise<PipelineFreshness[]> {
+  const { OUTREACH_PATH } = await import('./paths')
+
+  const [bids, alerts, procurements, reports, outreach] = await Promise.all([
+    listBids(),
+    newestOutput(PATHS.intelligence),
+    newestOutput(path.join(PATHS.intelligenceBase, 'procurements')),
+    newestOutput(PATHS.scanReports),
+    fs.stat(OUTREACH_PATH).then(s => s.mtime.toISOString()).catch(() => null),
+  ])
+
+  let bidsLatest: string | null = null
+  for (const b of bids) {
+    if (b.updatedAt && (!bidsLatest || b.updatedAt > bidsLatest)) bidsLatest = b.updatedAt
+  }
+
+  return [
+    { label: 'Procurement scans', href: '/intel',    lastUpdated: procurements, warnAfterDays: 3,  staleAfterDays: 7 },
+    { label: 'Intel alerts',      href: '/intel',    lastUpdated: alerts,       warnAfterDays: 8,  staleAfterDays: 15 },
+    { label: 'Codebase reports',  href: '/health',   lastUpdated: reports,      warnAfterDays: 9,  staleAfterDays: 16 },
+    { label: 'Bid pipeline',      href: '/bids',     lastUpdated: bidsLatest,   warnAfterDays: 7,  staleAfterDays: 21 },
+    { label: 'Priority outreach', href: '/agencies', lastUpdated: outreach,     warnAfterDays: 7,  staleAfterDays: 21 },
+  ]
 }
 
 export async function getMorningActions(): Promise<string> {

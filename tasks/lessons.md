@@ -26,3 +26,7 @@
   scans as "0d old" when they had been dead for 37 days — the exact failure that panel exists
   to catch. Read the date from the filename (`2026-07-08-daily.md`) or from git. Same class of
   error as the original Phase 4.3 activity-feed design.
+- **[2026-08-21]** The mtime-freshness trap bit twice in one day, in code written six weeks
+  apart (PR #5's `getPipelineFreshness`, and M2's health panel). Both reported dead pipelines
+  as fresh once operations became a git repo. When a signal exists to detect silence, verify it
+  on a CLONE, not just on the machine that produced the files.

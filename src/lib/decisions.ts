@@ -25,8 +25,11 @@ export interface DecisionItem {
   flagIndex: number        // 1st flag in this file, 2nd, etc.
 }
 
+// Flags inside closed bids aren't decisions anymore — they're history.
+const CLOSED_STATUSES = new Set(['submitted', 'won', 'lost', 'no-bid'])
+
 export async function getDecisionQueue(): Promise<DecisionItem[]> {
-  const bids = await listBids()
+  const bids = (await listBids()).filter(b => !CLOSED_STATUSES.has((b.status || '').toLowerCase()))
   const items: DecisionItem[] = []
 
   // Walk every bid in parallel; for each bid walk its files.

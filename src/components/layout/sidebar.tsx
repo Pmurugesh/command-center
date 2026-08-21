@@ -12,7 +12,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {}
-    NAV_SECTIONS.forEach(s => { initial[s.label] = true })
+    NAV_SECTIONS.forEach(s => { initial[s.label] = !s.collapsedByDefault })
     return initial
   })
 

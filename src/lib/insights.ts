@@ -16,8 +16,6 @@
  * automated edits are excluded, so the number only moves when a human really
  * talks to someone.
  */
-import fs from 'fs/promises'
-import path from 'path'
 import { PATHS } from './paths'
 import { runCommandArgs } from './shell'
 import { listContacts, today, addDays } from './crm'
@@ -244,30 +242,6 @@ function buildShape(contacts: CrmContact[]): PipelineShape {
 
 // ── health ──────────────────────────────────────────────────────────────────
 
-/**
- * Age of the newest dated artifact in a directory, read from FILENAMES
- * (`2026-07-08-daily.md`), never from mtime.
- *
- * mtime is worthless here: a git clone stamps every file with the checkout
- * time, so on a fresh clone the mtime check reported "0d old" while the scans
- * had actually been dead for six weeks. That is precisely the failure this
- * panel exists to catch, so it must not depend on a timestamp that a routine
- * clone silently resets. The filename carries the real date.
- */
-async function newestDatedArtifactAge(dir: string): Promise<number | null> {
-  try {
-    const files = await fs.readdir(dir)
-    let newest: string | null = null
-    for (const f of files) {
-      const m = f.match(/(\d{4}-\d{2}-\d{2})/)
-      if (!m) continue
-      if (!newest || m[1] > newest) newest = m[1]
-    }
-    return newest ? daysBetween(newest, today()) : null
-  } catch {
-    return null
-  }
-}
 
 /**
  * The machine's own vital signs, on the page rather than in a separate console.
@@ -277,12 +251,9 @@ async function newestDatedArtifactAge(dir: string): Promise<number | null> {
 async function buildHealth(): Promise<HealthItem[]> {
   const items: HealthItem[] = []
 
-  const scanAge = await newestDatedArtifactAge(PATHS.intelligence)
-  items.push({
-    label: 'Intel scans',
-    status: scanAge === null ? 'bad' : scanAge > 7 ? 'bad' : scanAge > 2 ? 'warn' : 'ok',
-    detail: scanAge === null ? 'no dated scan output found' : `newest alert ${scanAge}d old`,
-  })
+  // Intel/scan freshness deliberately lives in FreshnessCard (per-pipeline, with
+  // each source's own cron cadence). Duplicating it here would give one fact two
+  // homes that could disagree — the thing being fixed everywhere else.
 
   const lastCommit = (await gitLog(['log', '-1', '--pretty=format:%aI']))[0]
   const commitAgeH = lastCommit

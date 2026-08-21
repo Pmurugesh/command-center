@@ -1,4 +1,4 @@
-import { listScanReports } from '@/lib/files'
+import { listScanReports, currentScanReports } from '@/lib/files'
 import { extractDeltaIndicators, extractCriticalCount } from '@/lib/markdown'
 import { DataCard } from '@/components/shared/data-card'
 import { PageHeader } from '@/components/shared/page-header'
@@ -17,16 +17,20 @@ export default async function HealthPage() {
     criticalCount: extractCriticalCount(report.content),
   }))
 
-  const totalNew = reportsWithDeltas.reduce((s, r) => s + r.deltas.new, 0)
-  const totalResolved = reportsWithDeltas.reduce((s, r) => s + r.deltas.resolved, 0)
-  const totalCritical = reportsWithDeltas.reduce((s, r) => s + r.criticalCount, 0)
+  // Totals come from the latest run of each scan only — summing across dated
+  // re-runs of the same scan counts findings that later runs already resolved.
+  const current = new Set(currentScanReports(reports).map(r => r.name))
+  const currentWithDeltas = reportsWithDeltas.filter(r => current.has(r.name))
+  const totalNew = currentWithDeltas.reduce((s, r) => s + r.deltas.new, 0)
+  const totalResolved = currentWithDeltas.reduce((s, r) => s + r.deltas.resolved, 0)
+  const totalCritical = currentWithDeltas.reduce((s, r) => s + r.criticalCount, 0)
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Codebase Health" description="Automated scan reports and findings" />
+      <PageHeader title="Codebase Health" description="Automated scan reports and findings · stats reflect the latest run of each scan" />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <DataCard label="Total Reports" value={reports.length} />
+        <DataCard label="Reports" value={reports.length} subtitle={`${current.size} current scans`} />
         <DataCard label="New Findings" value={totalNew} valueColor="text-red-400" />
         <DataCard label="Resolved" value={totalResolved} valueColor="text-emerald-400" />
         <DataCard label="Critical" value={totalCritical} valueColor={totalCritical > 0 ? 'text-red-400' : 'text-emerald-400'} />

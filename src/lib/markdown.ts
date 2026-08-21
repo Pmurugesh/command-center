@@ -85,9 +85,27 @@ export function extractDeltaIndicators(content: string): { new: number; resolved
 }
 
 export function extractCriticalCount(content: string): number {
-  // Count critical/high severity findings in reports
-  const criticalMatches = content.match(/\*\*Critical\*\*|\*\*HIGH\*\*|severity:\s*critical|🔴\s*Critical/gi) || []
+  // Count findings explicitly labeled critical. HIGH is deliberately excluded —
+  // it's a different tier (e.g. "test coverage: HIGH priority"), and counting it
+  // here is what once inflated the header to a permanent 34 "critical findings".
+  const criticalMatches = content.match(/\*\*Critical\*\*|severity:\s*critical|🔴\s*Critical/gi) || []
   return criticalMatches.length
+}
+
+/**
+ * True only when a critical/high-relevance section actually contains entries.
+ * Every scan template includes a "Critical Alerts" heading (often followed by
+ * "none today"), so matching the word "critical" alone badges everything.
+ */
+export function hasCriticalContent(content: string): boolean {
+  for (const section of content.split(/\n(?=## )/)) {
+    const heading = section.split('\n', 1)[0] ?? ''
+    if (!heading.startsWith('##')) continue
+    if (!/🔴|🚨|critical|urgent/i.test(heading)) continue
+    // An actionable section has at least one ### entry under it.
+    if (/^###\s+\S/m.test(section)) return true
+  }
+  return false
 }
 
 export function extractExecutiveSummary(content: string): string {
