@@ -493,14 +493,37 @@ claim to cite evidence.** Three tiers by how automatable they are:
       items to a triage bucket (never straight to `next_action`; an extracted item is a
       suggestion, not a commitment). Unmatched attendees become a draft-contact review queue.
       Idempotent by meeting UUID.
-- [ ] **Fix the caleprocure 600s timeout.** Last run 2026-06-15 curated 228 events down to 14
-      with IDs, deadlines, and actions. Good scanner, dead cron — cheapest pipeline win here.
-- [ ] Scan output lands in `crm/leads/` for dashboard triage (bid / skip / watch), not intel
-      alerts nobody reads.
-- [ ] **Gate: which RFO site?** The prequalified channel (TDDC / IT MSA RFOs) is where the
-      vehicles already qualify us; CSCR is the open market where ITN-37485 was lost. Verified
-      2026-08-21: `Qual_table_automations` has NO scraper — only refs are the DGS TDDC MSA page
-      and `osi.ca.gov`. Do not build until Pavan names the source.
+- [ ] **DO NOT rebuild Cal eProcure scraping — consume the pipeline that already ships.**
+      Found 2026-08-21 in `Pmurugesh/qual_table_automations` on `main` (invisible to a
+      working-tree grep; it needed an all-refs search): `eprocure_client.py`,
+      `eprocure_parser.py`, `eprocure_relevance.py`, `eprocure_discovery_service.py`,
+      `bid_discovery.py`, plus design docs and gate-check scripts. Proven end to end
+      2026-08-04 against the live site.
+- [ ] **The "bot traffic" premise was wrong, and it changes how M3 is built.**
+      `caleprocure.ca.gov` is a JavaScript shell that 403s any honestly-identifying client
+      (Googlebot included). The host that serves data is `suppliers.fiscal.ca.gov`, which
+      answers an honest non-browser client normally. No login, no browser impersonation: an
+      honest UA plus the site's OWN anonymous bidder identity (`BIDDER_ID=BID0000001`, …)
+      lifted from the share links it generates itself.
+      The real failure was **session handling** — attachment URLs are session-bound, and
+      fetching one without the cookies that produced it returns an HTML error page at HTTP 200
+      that saves under a `.docx` name and looks exactly like a document on disk. That sank four
+      earlier attempts, and it is precisely the subtlety not to reimplement in TypeScript.
+- [ ] **Integration shape: command-center reads, qual-table fetches.** The qual-table backend
+      already exposes list / status / refresh / enrich / documents / adopt. The OpenClaw cron
+      calls that API and writes results into `crm/leads/` as triageable rows. One network client
+      pointed at a state website, not two — which also keeps the politeness controls (shared
+      throttle, daily cap, single-threaded, env-var kill switch) in one place.
+- [ ] Retire the current `caleprocure-scan` cron once leads flow this way: it times out at 600s
+      and has produced nothing since 2026-06-15; its last good run curated 228 events to 14.
+- [ ] Expect ~311 open solicitations statewide per refresh, of which only ~2-3% are plausibly IT
+      staffing. Relevance is deterministic RULES (explainable, free, CI-testable), not an LLM
+      verdict — and commodity-code prefixes must be >=4 digits or civil engineering pollutes
+      the shortlist.
+- [ ] **Open question for Pavan:** the qual-table deploy is a free Render web service that
+      sleeps when idle and has no cron (their deferred item D-CE-2), so refresh is
+      user-triggered there. Decide whether the mini's cron drives the refresh over the API, or
+      whether the lead pull just reads whatever the last refresh produced.
 - [ ] **Staleness watchdog — a ~20-line script, not a monitoring system.** Checks scan
       freshness, git sync age, API credit balance (a low balance silently broke intake once,
       2026-06-12), and the dashboard service. Surfaces in M2's health panel; Telegram only when
