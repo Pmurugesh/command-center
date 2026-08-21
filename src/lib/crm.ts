@@ -19,6 +19,7 @@ import path from 'path'
 import matter from 'gray-matter'
 import { PATHS } from './paths'
 import { runCommandArgs } from './shell'
+import { acquireLock as acquireStoreLock, atomicWrite, fileExists } from './store'
 import {
   CRM_COLD_DAYS, CRM_TERMINAL_STAGES,
   normalizeCrmStage, normalizeCrmStatus,
@@ -28,9 +29,6 @@ import type {
 } from '@/types'
 
 const LOG_HEADING = '## Log'
-const LOCK_STALE_MS = 30_000
-const LOCK_RETRY_MS = 50
-const LOCK_MAX_WAIT_MS = 10_000
 
 // ── dates ───────────────────────────────────────────────────────────────────
 // Everything is date-only (YYYY-MM-DD) in local time. Contact aging is measured
@@ -81,46 +79,12 @@ function contactPath(slug: string): string {
   return path.join(PATHS.crmContacts, `${slug}.md`)
 }
 
-async function exists(p: string): Promise<boolean> {
-  try { await fs.access(p); return true } catch { return false }
-}
 
 // ── lock ────────────────────────────────────────────────────────────────────
-// mkdir is atomic on POSIX: exactly one caller wins. A lock older than
-// LOCK_STALE_MS is assumed orphaned by a crashed process and broken, so a dead
-// agent can never wedge the dashboard permanently.
+// Delegates to the shared store primitives; see src/lib/store.ts for why mkdir.
 
 async function acquireLock(): Promise<() => Promise<void>> {
-  const lockDir = path.join(PATHS.crm, '.write-lock')
-  const deadline = Date.now() + LOCK_MAX_WAIT_MS
-
-  // The store may not exist yet (first ever write). Create the parent before
-  // locking: mkdir of the lock itself is non-recursive on purpose, since that
-  // is what makes it atomic.
-  await fs.mkdir(PATHS.crmContacts, { recursive: true })
-
-  for (;;) {
-    try {
-      await fs.mkdir(lockDir)
-      return async () => { await fs.rm(lockDir, { recursive: true, force: true }) }
-    } catch (err) {
-      // ONLY EEXIST means another writer holds the lock. Anything else (EACCES,
-      // ENOENT, EROFS) is a real failure and must surface immediately — spinning
-      // on it would burn the full timeout and then report the wrong cause.
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
-
-      try {
-        const st = await fs.stat(lockDir)
-        if (Date.now() - st.mtimeMs > LOCK_STALE_MS) {
-          await fs.rm(lockDir, { recursive: true, force: true })
-          continue
-        }
-      } catch { /* lock vanished between calls — just retry */ }
-
-      if (Date.now() > deadline) throw new Error('CRM write lock timeout (10s)')
-      await new Promise(r => setTimeout(r, LOCK_RETRY_MS))
-    }
-  }
+  return acquireStoreLock(PATHS.crm, PATHS.crmContacts)
 }
 
 // ── parse / serialize ───────────────────────────────────────────────────────
@@ -269,7 +233,7 @@ export async function commitBatch(summary: string, via: string): Promise<void> {
 // ── read ────────────────────────────────────────────────────────────────────
 
 export async function listContacts(): Promise<CrmContact[]> {
-  if (!(await exists(PATHS.crmContacts))) return []
+  if (!(await fileExists(PATHS.crmContacts))) return []
   const entries = await fs.readdir(PATHS.crmContacts)
   const files = entries.filter(f => f.endsWith('.md') && !f.startsWith('.'))
 
@@ -288,7 +252,7 @@ export async function getContact(slug: string): Promise<CrmContact | null> {
   const safe = safeSlug(slug)
   if (!safe) return null
   const p = contactPath(safe)
-  if (!(await exists(p))) return null
+  if (!(await fileExists(p))) return null
   try {
     return hydrate(safe, await fs.readFile(p, 'utf-8'))
   } catch {
@@ -353,13 +317,6 @@ export async function getBuckets(): Promise<CrmBuckets> {
 
 // ── write ───────────────────────────────────────────────────────────────────
 
-/** Atomic: write a sibling temp file, then rename over the target. */
-async function atomicWrite(target: string, content: string): Promise<void> {
-  await fs.mkdir(path.dirname(target), { recursive: true })
-  const tmp = `${target}.${process.pid}.tmp`
-  await fs.writeFile(tmp, content, 'utf-8')
-  await fs.rename(tmp, target)
-}
 
 /**
  * Persist a full record. Callers hold the lock; this does the bytes + history.
@@ -388,9 +345,9 @@ export async function createContact(
     // Collision: disambiguate by agency, then by counter. Never silently merge
     // two humans into one file.
     let slug = base
-    if (await exists(contactPath(slug))) {
+    if (await fileExists(contactPath(slug))) {
       slug = input.agency ? `${base}-${slugify(input.agency)}` : base
-      for (let i = 2; await exists(contactPath(slug)); i++) slug = `${base}-${i}`
+      for (let i = 2; await fileExists(contactPath(slug)); i++) slug = `${base}-${i}`
     }
 
     const now = today()

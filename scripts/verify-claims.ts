@@ -42,6 +42,11 @@ const GATE = process.argv.includes('--gate')
 // housekeeping — these get the gate treatment.
 const BID_FACING = [/_platform-knowledge\.md$/, /_response-library\//, /bids\/.*\/response/i]
 
+// A file whose paths describe what we WOULD build, not what exists. Bid
+// responses legitimately sketch a proposed architecture, and gating those would
+// train everyone to ignore the gate. Opt out with this marker near the top.
+const PROPOSED_MARKER = /<!--\s*claims:\s*proposed\s*-->/
+
 // Citations look like `packages/api/app/thing.py` or `path.py::function()`.
 const CITATION = /`([a-zA-Z0-9_][a-zA-Z0-9_./-]*\.(?:py|ts|tsx|sql|ya?ml))(?:::[^`]*)?`/g
 
@@ -132,6 +137,8 @@ async function main() {
   for (const file of files) {
     const rel = path.relative(PATHS.operationsRoot, file)
     const text = await fs.readFile(file, 'utf-8')
+    if (PROPOSED_MARKER.test(text)) continue    // proposed architecture, not a claim
+
     const citations = new Set<string>()
     for (const m of text.matchAll(CITATION)) citations.add(m[1])
     if (!citations.size) continue
