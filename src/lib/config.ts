@@ -150,3 +150,37 @@ export function getCronCategory(jobName: string): string {
   }
   return 'Custom'
 }
+
+// ── CRM (Phase 5 / M1) ──────────────────────────────────────────────────────
+// Pipeline position. Terminal stages stop the aging clocks: a won/lost/
+// disqualified contact is never "overdue" or "going cold".
+export const CRM_STAGES = [
+  'identified', 'contacted', 'meeting-booked', 'demo-given',
+  'pilot-discussion', 'won', 'lost', 'disqualified',
+] as const
+export type CrmStage = typeof CRM_STAGES[number]
+
+export const CRM_TERMINAL_STAGES: readonly CrmStage[] = ['won', 'lost', 'disqualified']
+
+// Orthogonal to stage: where a contact sits in the pipeline vs. whether work on
+// them can currently proceed. `blocked` exists because the 87-day CalHR miss was
+// an action waiting on an artifact nobody had made, with no way to say so.
+export const CRM_STATUSES = ['active', 'blocked', 'dormant'] as const
+export type CrmStatus = typeof CRM_STATUSES[number]
+
+// A contact untouched for this long is "going cold" — the metric that made the
+// GTM gap analysis land. Tuned to ~3 weeks: long enough to not nag, short enough
+// that a lead has not gone stale by the time it surfaces.
+export const CRM_COLD_DAYS = 21
+
+export function normalizeCrmStage(input: unknown): CrmStage | undefined {
+  if (typeof input !== 'string') return undefined
+  const target = input.trim().toLowerCase()
+  return CRM_STAGES.find(s => s === target)
+}
+
+export function normalizeCrmStatus(input: unknown): CrmStatus | undefined {
+  if (typeof input !== 'string') return undefined
+  const target = input.trim().toLowerCase()
+  return CRM_STATUSES.find(s => s === target)
+}

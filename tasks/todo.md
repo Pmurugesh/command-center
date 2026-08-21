@@ -182,3 +182,187 @@ Added a new top-level "Relationships" nav section with two pages, sitting betwee
 - **/partnerships** — quick-glance card stack from `~/repos/operations/intelligence/partnerships/tracker.md`. Splits on H2 headings; each partnership becomes a card with status badge (Active / In Contact / Potential / Unknown) and clickable contact emails.
 
 Both directories may not exist on disk yet — pages render empty state with onboarding hint until files appear. Existing pages (intel, library, bids, health) are untouched: `MarkdownRenderer`'s new `linkifyContacts` prop is opt-in and defaults to off. Phone-link rendering required overriding `react-markdown`'s default URL transform to allow `tel:` (mailto was already allowed).
+
+---
+
+# Phase 5 — The Well-Oiled Machine
+
+**Rewritten 2026-08-21.** Supersedes the same-day Phase 5 draft; every load-bearing finding
+is carried forward. Origin: the GTM gap analysis (2026-08-20, `operations/gtm/`) + the
+source-of-truth investigation (2026-08-21).
+
+**North star:** Pavan never operates the machine. He talks to it (Telegram), looks at it
+(the permanent dashboard URL), and lives his day (meetings, calls, email). The machine
+captures, files, reminds, and reports on its own. Every failure is loud.
+
+## Design rules — each traces to a real failure found this week
+
+1. **One writable truth.** The mini's working tree, git-versioned, GitHub as hub/backup.
+   Clones are workspaces that merge back, never mirrors. *(Retires: rsync drift, orphan
+   `.status.json` files, the gtm analysis stranded on the MacBook.)*
+2. **One home per fact.** Structured fields live in frontmatter/JSON exactly once; prose
+   narrates, never restates; anything shown twice is generated. *(Retires: "no-bid" vs
+   "disqualified".)*
+3. **Capture at the point of life.** Granola in the meeting, Telegram in the pocket,
+   dashboard at the desk. "Go update the file" is never a step. *(Retires: 2 meeting records
+   against 39 researched agencies.)*
+4. **The machine reports; the human never polls.** 8am brief, event-driven alerts.
+   *(Retires: the 87-day invisible block.)*
+5. **Silent failure is a bug class.** A watchdog checks the machine's own organs and texts
+   when one stalls. *(Retires: caleprocure scan dead since 6/15 unnoticed; Tailscale off
+   unnoticed.)*
+6. **Drafts are automatic; sends are human.** Decided 2026-08-21. No unattended process ever
+   emails an agency CIO.
+
+## Scale doctrine (added 2026-08-21, after Pavan's "every write is a commit?" challenge)
+
+The long-term guarantee is NOT "git forever." It is two pinned invariants plus named exits:
+
+- **People are not the scaling axis; writer nodes are.** All humans and agents write through
+  surfaces that funnel into `crm.ts` on the mini — one serialized writer node with a lock.
+  Ten users is still one writer. Humans never touch files directly, so git's hard problem
+  (concurrent working-tree writers, human merge conflicts) is designed out, not survived.
+  Attribution is a field on every write (`via: rani@dashboard`), carried into commits.
+- **Facts vs events.** Files hold facts: current state + curated history. Event streams
+  (email opens, telemetry, raw scan output) NEVER enter git — they stay in logs/DB and agents
+  distill them into facts (caleprocure already does this: 228 events -> 14 curated).
+- **Volume math:** aggressive success ~= 100 writes/day ~= 36K commits/yr. Git carries the
+  Linux kernel's 1.3M commits; a commit is ms and O(changed files). If log noise ever
+  bothers, batch commits per N minutes in the lib — a knob, not a redesign.
+- **Domains have native homes.** Engineering = its own git repos (the platform repo already
+  runs this exact files-in-git pattern for plans/phases). Finance ledger graduates to real
+  accounting software when real. Operations/growth/CRM = this store.
+- **Obsidian (asked 2026-08-21): optional read-only viewer, never a write surface.** The
+  store is already vault-compatible (markdown + frontmatter), so Obsidian can open a clone
+  any time for browsing — but hand edits bypass `crm.ts` (no enum validation, no
+  last_touched bump, no attribution, no semantic commit), and Obsidian Sync over a
+  git-synced folder = two sync systems fighting (the rsync disease again). A personal
+  thinking vault is fine as a SEPARATE vault; if wanted later, an agent can watch a
+  `#promote` tag there and distill facts into the store — one more writer, zero redesign.
+- **Graduation triggers (falsifiable), and the exit:** joins/aggregation beyond a morning
+  scan at ~tens of thousands of entities; row-level permissions; a second writer MACHINE;
+  sustained ~1 write/sec. When one fires: storage swaps to SQLite on the mini behind the
+  unchanged `crm.ts` interface; git demotes to audit/backup export (nightly snapshot commit).
+  No surface changes. Bounded exit cost is the actual long-term design.
+
+## Milestones
+
+| # | Name | Build time | Gated on |
+|---|------|-----------|----------|
+| M0 | Truth + plumbing | ~half day | 2 status answers, GitHub OK |
+| M1 | CRM store + hands | 2–3 days | M0 |
+| M2 | Surfaces (Telegram, brief, Granola, watchdog) | 1–2 days | M1 + Granola signup |
+| M3 | Flow-through (leads in, drafts out) | ~2 days | M2 + RFO-site answer |
+| M4 | Rhythm | ongoing | M3 |
+
+### M0 — Truth + plumbing ✅ COMPLETE 2026-08-21
+
+- [x] Run `scripts/mini/diff-data.sh` (read-only) for the full divergence report first.
+      *Divergence surfaced during adoption instead — bigger than expected: **26 stranded files** (FTB response drafts incl. response-final.md + compliance matrix, ITN working files, 8 intel briefings, Mar–May 2026), not just 3. 24 recovered in `a1ca540`; 2 picker-test files dropped.*
+- [x] Reconcile status schema → `status` + `stage` + `reason`:
+      FTB = `status: submitted, stage: pre-response` (both records were true — one field
+      carried two facts). ITN-37485 = `lost` or `no-bid` per Pavan's answer, with
+      `reason: "did not meet LLM ownership requirement"` either way.
+      *Done: ITN = `lost`/`closed`, reason `disqualified: did not meet LLM ownership requirement` (Pavan: submitted then disqualified). FTB = `submitted`/`pre-response`. `Lost` already canonical in `BID_STATUSES` — zero code change.*
+- [x] Orphans: push `gtm/` analysis up to the mini (keep); `_templates/.status.json` is
+      harmless (`listBids` skips `_` dirs).
+      *Done via adoption commits `f5e5fa3` + `a1ca540`.*
+- [x] Move `branding/` (135MB static assets) out of operations → mini-side `~/repos/branding`.
+      Living data is then ~13MB of text.
+      *Done: mini-side `~/repos/branding`.*
+- [x] `git init` on the mini → initial commit → **private** GitHub repo → push.
+      *Done: genesis `0a741a9`, private repo github.com/Pmurugesh/operations, mini deploy key (write) + `github-operations` SSH alias (matches mini's per-repo key convention).*
+- [x] MacBook: retire the rsync; `git clone` in its place. rsync command is dead forever.
+      *Done: `~/repos/operations` is now a git clone (https + gh credential helper); old mirror preserved at `~/repos/operations.pre-git-backup`.*
+- [x] Mini automation: writers commit semantically via lib; an `fswatch` janitor sweeps
+      stragglers every ~5m; push with retry; pull cron (~5m) so MacBook-authored commits land.
+      Truth never depends on GitHub being up — hub is transport + backup only.
+      *Done (janitor half): `~/bin/operations-janitor.sh` + LaunchAgent `com.paladin.operations-janitor`, every 120s: add → auto-commit → pull --rebase --autostash → push. Semantic commits arrive with crm.ts in M1.*
+- [x] Permanent URL LIVE: https://paladins-mac-mini.tail722dc1.ts.net → proxy :3000.
+      Serve feature enabled on the tailnet by Pavan 2026-08-21; cert minted; verified 200
+      from the MacBook. (tailscale **serve** only; NEVER funnel — the app has no auth.)
+- [x] Verified 2026-08-21: mini write → janitor commit `10669a3` → GitHub → MacBook pull,
+      content matched; reverse direction proven by adoption commits (`f5e5fa3`, `a1ca540`);
+      janitor loaded in launchd (120s interval). Phone bookmark: on Pavan.
+
+### M1 — CRM store + hands
+
+- [ ] Store: `operations/crm/{contacts,meetings,drafts,leads}/`.
+- [ ] Contact schema (frontmatter + appended `## Log`): name, title, email, phone, agency,
+      product, owner, tier, `stage` (identified | contacted | meeting-booked | demo-given |
+      pilot-discussion | won | lost | disqualified), `status` (active | blocked | dormant),
+      `blocked_on`, `last_touched`, `next_action`, `next_action_due`.
+      `blocked_on` + `last_touched` are the two load-bearing fields.
+- [ ] Idempotent seed: priority-outreach (8) + agency profiles (39) + CIO Academy (~100 dedup).
+- [ ] `src/lib/crm.ts`: list/get/write/appendLog; atomic temp+rename; **every write = a git
+      commit with a semantic message** ("log touch: chris-rouse via dashboard") — git log IS
+      the touch history.
+- [ ] API: `GET/POST /api/crm/contacts`, `GET/PATCH .../[slug]`, `POST .../[slug]/log`.
+- [ ] Today page buckets, in order: Overdue → Blocked (days-blocked counter) → Due today →
+      Going cold (>21d, active stages) → New leads → Meetings to triage. Mono day-counters,
+      severity-colored. Inline actions: log touch / stage / block-unblock / snooze / reassign.
+- [ ] Retire hand-edited `priority-outreach.md` → generated from the store (agents keep the
+      view they already read).
+- [ ] Verify: a stage change in the UI produces a semantic commit; Rouse renders ~89d overdue.
+
+### M2 — Surfaces into the day
+
+- [ ] Telegram verbs on `main`: `overdue`, `today`, `blocked`, `log <contact> <note>`,
+      `snooze <contact> <days>`, `draft <contact>` — same crm semantics as the app. Every
+      Telegram-triggered write is confirmed by **file read-back**, never exit code
+      (`openclaw agent` exits 0 even when the LLM call fails).
+- [ ] Repoint `sales-daily-bid-review` (Capture, `0 8 * * 1-5`, → `telegram:8097059385`) at
+      the contact store: the 8am brief = overdue + blocked + due + going-cold + top-3 actions.
+      It has been faithfully briefing on a file that died in May.
+- [ ] Granola — **gate: Pavan signs up (granola.ai/mcp-signup) + installs the app on the
+      MacBook** (capture device; the mini never runs the app). Mini cron pulls via MCP/API
+      with its own credential (headless runs do NOT inherit the claude.ai connector) →
+      `crm/meetings/` → attendee match by email → bump `last_touched` → action items to the
+      triage bucket (never straight to `next_action`); unmatched attendees → draft-contact
+      review queue. Idempotent by meeting UUID.
+- [ ] Watchdog cron (the nervous system): scan freshness, git push/pull age, Anthropic credit
+      balance (a low balance silently broke intake once, 2026-06-12), disk, dashboard service
+      up → Telegram alert on anomaly, silence when healthy.
+- [ ] Verify: text "log rouse test" → file change lands on the mini + ack; deliberately stop
+      a cron → an alert arrives.
+
+### M3 — Flow-through: leads in, outreach out
+
+- [ ] Fix `caleprocure-scan` 600s timeout. Last output 2026-06-15: 228 events → 14 curated
+      with IDs/deadlines/actions. Good scanner, dead cron — the cheapest pipeline win.
+- [ ] Scan output → `crm/leads/` with triage verdicts (bid / skip / watch), not intel alerts.
+- [ ] **Gate: which RFO site?** Add the prequalified-channel scan (TDDC / IT MSA RFOs — the
+      channel we are prequalified for; CSCR is the open market where ITN-37485 was lost).
+      Investigated 2026-08-21: `Qual_table_automations` has NO scraper; its only external
+      refs are the DGS TDDC MSA page and `osi.ca.gov`. Do not build until the source is named.
+- [ ] Drafts: Voice → `crm/drafts/` → dashboard review (recipient, subject, body, context
+      used) → mailto/copy send (no connector needed to start) → sending auto-logs the touch
+      and clears `blocked_on` when the draft was the blocker.
+- [ ] Verify end-to-end: lead → triage → draft → send → touch logged, all in git history.
+
+### M4 — Rhythm
+
+- [ ] Friday pipeline briefing cron: stage movement, aging, win/loss, next week's focus.
+- [ ] Bid `.status.json` adopts the same status+stage+reason schema (one schema everywhere).
+- [ ] Absorb Phase 4.0 (search) + 4.5 (mobile QA) where they serve daily use.
+- [ ] Calendar + email-reply ingestion stay deferred **writers** — adding one later is one
+      more writer into `crm/`, zero redesign.
+
+## Coordination budget — everything Pavan ever has to do
+
+**Once:** answer 2 status questions · OK the private GitHub repo · Granola signup + app
+install · name the RFO site · approve 2 mini scripts.
+**Daily:** read one 8am brief · one-line Telegram replies as life happens · click send on
+drafts · desk triage when convenient.
+**Never:** edit a markdown file · run a sync · remember a follow-up · wonder whether a cron ran.
+
+## Open gates
+
+1. ITN-37485: submitted-then-disqualified (`lost`) or pulled-out-first (`no-bid`)?
+2. FTB: confirm `status: submitted, stage: pre-response`.
+3. Private GitHub repo for operations: OK?
+4. Granola signup + MacBook app install.
+5. RFO site name.
+
+## Review
+(to be filled in per milestone)
