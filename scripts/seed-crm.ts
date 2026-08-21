@@ -43,21 +43,46 @@ const OUTREACH_DATE = '2026-05-28'      // priority-outreach.md last edit
 // one cannot proceed, so it seeds blocked.
 const MISSING_COLLATERAL = /one-pager|onepager|one pager/i
 
-const PRODUCT_SLUGS: Record<string, string> = {
-  prrai: 'prrai', candor: 'prrai',
-  aihire: 'aihire', hireca: 'aihire',
-  reporting: 'reporting', 'ad hoc reporting': 'reporting',
-  procurement: 'procurement', 'procurement solution': 'procurement',
-  echo: 'echo',
-}
+// Operations-side product slugs. NOTE: these differ from the platform's module
+// slugs (prr / recruitment / ad-hoc-reporting) — see the drift finding in
+// tasks/todo.md M2.5. Kept as-is here so this seeder does not unilaterally
+// re-vocabulary the CRM; reconciliation is a tracked decision.
+const PRODUCT_SLUGS: Array<[RegExp, string]> = [
+  [/\bai\s?hire\b|\bhireca\b|recruitment/i, 'aihire'],
+  [/\bprrai\b|\bcandor\b|public records/i, 'prrai'],
+  [/ad[- ]hoc reporting|\breporting\b/i, 'reporting'],
+  [/procurement/i, 'procurement'],
+  [/\becho\b/i, 'echo'],
+]
 
+/**
+ * Pick the PRIMARY product for an agency.
+ *
+ * The naive version (first match in dictionary order) tagged 93 of 94 contacts
+ * `prrai`, because PRRAI is named in almost every agency profile as the
+ * secondary fit and it happened to be checked first. Product concentration is a
+ * real GTM signal, so it has to reflect the profile's actual emphasis:
+ *   1. an explicit "(primary)" marker wins
+ *   2. otherwise the product mentioned EARLIEST in the line wins, since these
+ *      lines are written best-fit-first
+ */
 function productSlug(text?: string): string | undefined {
   if (!text) return undefined
-  const lower = text.toLowerCase()
-  for (const [key, slug] of Object.entries(PRODUCT_SLUGS)) {
-    if (lower.includes(key)) return slug
+
+  // "**AIHire (primary)** -- ..." — the profile already told us the answer.
+  const primary = text.match(/([A-Za-z][A-Za-z\s-]*?)\s*\(primary\)/i)
+  if (primary) {
+    for (const [re, slug] of PRODUCT_SLUGS) if (re.test(primary[1])) return slug
   }
-  return undefined
+
+  let best: { slug: string; at: number } | undefined
+  for (const [re, slug] of PRODUCT_SLUGS) {
+    const m = text.match(re)
+    if (m && m.index !== undefined && (!best || m.index < best.at)) {
+      best = { slug, at: m.index }
+    }
+  }
+  return best?.slug
 }
 
 interface Seed {

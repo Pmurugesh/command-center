@@ -311,55 +311,120 @@ The long-term guarantee is NOT "git forever." It is two pinned invariants plus n
       Two real bugs found and fixed: lock misreporting non-EEXIST errors as contention, and
       `# Name` title accretion on every round trip.
 
-### M2 — Surfaces into the day
+### M2 — The daily dashboard (REWRITTEN 2026-08-21)
 
-- [ ] Telegram verbs on `main`: `overdue`, `today`, `blocked`, `log <contact> <note>`,
-      `snooze <contact> <days>`, `draft <contact>` — same crm semantics as the app. Every
-      Telegram-triggered write is confirmed by **file read-back**, never exit code
-      (`openclaw agent` exits 0 even when the LLM call fails).
-- [ ] Repoint `sales-daily-bid-review` (Capture, `0 8 * * 1-5`, → `telegram:8097059385`) at
-      the contact store: the 8am brief = overdue + blocked + due + going-cold + top-3 actions.
-      It has been faithfully briefing on a file that died in May.
-- [ ] Granola — **gate: Pavan signs up (granola.ai/mcp-signup) + installs the app on the
-      MacBook** (capture device; the mini never runs the app). Mini cron pulls via MCP/API
-      with its own credential (headless runs do NOT inherit the claude.ai connector) →
-      `crm/meetings/` → attendee match by email → bump `last_touched` → action items to the
-      triage bucket (never straight to `next_action`); unmatched attendees → draft-contact
-      review queue. Idempotent by meeting UUID.
-- [ ] Watchdog cron (the nervous system): scan freshness, git push/pull age, Anthropic credit
-      balance (a low balance silently broke intake once, 2026-06-12), disk, dashboard service
-      up → Telegram alert on anomaly, silence when healthy.
-- [ ] Verify: text "log rouse test" → file change lands on the mini + ack; deliberately stop
-      a cron → an alert arrives.
+**Why rewritten:** the original M2 made Telegram a first-class write surface with a verb
+parser (`overdue`, `log`, `snooze`…). Pavan: *"telegram is not a user interface I like too
+much, I want something more custom and showing me insights on daily updates."* That inverts
+the design. **Telegram demotes to notifications only** (briefs and alerts arrive there; you
+never operate through it). The dashboard carries the whole daily loop, so it has to be worth
+opening — insight, not just a list.
 
-### M3 — Flow-through: leads in, outreach out
+Also cut, per the same simplicity review: the Telegram verb grammar (an LLM with file access
+needs a schema description, not a command parser) and the in-dashboard draft-review UI
+(over-built for one person reading a few drafts a week).
 
-- [ ] Fix `caleprocure-scan` 600s timeout. Last output 2026-06-15: 228 events → 14 curated
-      with IDs/deadlines/actions. Good scanner, dead cron — the cheapest pipeline win.
-- [ ] Scan output → `crm/leads/` with triage verdicts (bid / skip / watch), not intel alerts.
-- [ ] **Gate: which RFO site?** Add the prequalified-channel scan (TDDC / IT MSA RFOs — the
-      channel we are prequalified for; CSCR is the open market where ITN-37485 was lost).
-      Investigated 2026-08-21: `Qual_table_automations` has NO scraper; its only external
-      refs are the DGS TDDC MSA page and `osi.ca.gov`. Do not build until the source is named.
-- [ ] Drafts: Voice → `crm/drafts/` → dashboard review (recipient, subject, body, context
-      used) → mailto/copy send (no connector needed to start) → sending auto-logs the touch
-      and clears `blocked_on` when the draft was the blocker.
-- [ ] Verify end-to-end: lead → triage → draft → send → touch logged, all in git history.
+- [ ] **Momentum strip — the north-star metric.** Touches this week vs last, derived from
+      `git log crm/contacts/`. The GTM diagnosis was "0 logged outbound touches in 12 weeks";
+      this is the number that says whether that is still true. Everything else on the page is
+      secondary to it. Green when it moves, honest when it does not.
+- [ ] **What changed since you last looked.** Now trivial and exact: every change to
+      operations is a dated, attributed commit since M0. Reads `git log --since=<lastVisit>`,
+      groups by area (contacts / bids / intel / reports). Replaces Phase 4.3's mtime
+      heuristic, which was guesswork by comparison.
+- [ ] **Leverage panel.** Aggregate `blocked_on` across contacts: "1 artifact (AIHire
+      one-pager) unblocks 2 contacts." Turns a list of blocked people into a ranked list of
+      things to MAKE. This is the single most actionable view in the CRM.
+- [ ] **Pipeline shape.** Stage funnel + owner load + product concentration. Current truth:
+      94/94 at `identified`, owners Ganapathy 36 / Rani 35 / Isaiah 10 / Pavan 7, products
+      prrai 84 / aihire 6 / procurement 4. A flat bar at `identified` IS the insight.
+- [ ] **System health inline.** Scan freshness, git sync age, last cron run — on the page, not
+      in a separate console. The June-15 dead scanner should have been visible here.
+- [ ] Keep every number one click from its source. An insight you cannot drill into is a
+      decoration.
+- [ ] Verify: open the dashboard cold and be able to answer "what should I do first, and is
+      the machine healthy?" without clicking anything.
 
-### M4 — Rhythm
+### M2.5 — Product truth sync (NEW 2026-08-21)
 
-- [ ] Friday pipeline briefing cron: stage movement, aging, win/loss, next week's focus.
-- [ ] Bid `.status.json` adopts the same status+stage+reason schema (one schema everywhere).
-- [ ] Absorb Phase 4.0 (search) + 4.5 (mobile QA) where they serve daily use.
-- [ ] Calendar + email-reply ingestion stay deferred **writers** — adding one later is one
-      more writer into `crm/`, zero redesign.
+**Origin:** Pavan: *"product names are outdated in the openclaw system, how can we ensure it
+is catching up with engineering/product changes on the nexus repo."* Investigated — the drift
+is structural, not cosmetic:
+
+| | |
+|---|---|
+| Platform ships (module registry, `main.py`) | `prr` `recruitment` `ad-hoc-reporting` `procurement` `assistants` `data-intelligence` `delivery-management` `plan-review` `web-intelligence` — **9** |
+| Operations knows (`products/_overview.md`) | `prrai` `aihire` `reporting` `procurement` `echo` — **5** |
+
+Three separate problems:
+1. **5 shipped modules the sales side has never heard of** — including `assistants`, which the
+   GTM playbook calls the actual differentiator ("one governed pane for all AI"). We are
+   selling a 5-product catalog while engineering ships 9.
+2. **`echo` is in the sales catalog but is not a platform module** (backend TBD, partner-based).
+3. **Two vocabularies for one thing**: `prrai`/`prr`, `aihire`/`recruitment`,
+   `reporting`/`ad-hoc-reporting`. Both repos independently declare their slug "stable".
+
+- [ ] **Fix the cause, not the symptom: derive product facts, never hand-maintain them.** The
+      platform already publishes machine-readable module manifests (`manifest.py`/`manifest.ts`
+      + the `_MODULE_REGISTRY` mount list). A sync job reads them.
+- [ ] **Separate derived from authored** — the same rule that fixed the bid statuses. Machine
+      facts (slug, mounted, license-gated, LOC, route count, last commit touching the module)
+      go to a generated `products/_registry.md` marked DO NOT HAND-EDIT. Authored positioning
+      (tagline, target buyers, market evidence, pricing) stays in the per-product files. One
+      home per fact, across repos this time.
+- [ ] **Reconcile + alert on drift**: modules with no product doc (5 today), product docs with
+      no module (echo), and status claims contradicted by the code. Drift becomes a dashboard
+      item and a Telegram notification, not a discovery three months later.
+- [ ] **Slug reconciliation — needs Pavan's call.** Platform slugs are load-bearing in code
+      (license gating, registry keys, DB rows) and cannot move cheaply. Operations slugs are
+      tags on a CRM seeded today, so they are nearly free to change. Recommendation: operations
+      adopts the platform slugs with an alias map for existing docs. Not done unilaterally.
+- [ ] Runs weekly on the mini + on demand; the janitor commits the result.
+- [ ] Verify: rename a module in a Nexus branch, run the sync, see the drift flagged.
+
+### M3 — Inputs: meetings and leads
+
+- [ ] **Granola sync — gate: Pavan signs up + installs the app on this MacBook** (the capture
+      device; the mini never runs the app). Mini cron pulls via MCP/API with its own
+      credential — headless runs do NOT inherit the claude.ai connector. Writes
+      `crm/meetings/`, matches attendees by email, bumps `last_touched`, and routes action
+      items to a triage bucket (never straight to `next_action`; an extracted item is a
+      suggestion, not a commitment). Unmatched attendees become a draft-contact review queue.
+      Idempotent by meeting UUID.
+- [ ] **Fix the caleprocure 600s timeout.** Last run 2026-06-15 curated 228 events down to 14
+      with IDs, deadlines, and actions. Good scanner, dead cron — cheapest pipeline win here.
+- [ ] Scan output lands in `crm/leads/` for dashboard triage (bid / skip / watch), not intel
+      alerts nobody reads.
+- [ ] **Gate: which RFO site?** The prequalified channel (TDDC / IT MSA RFOs) is where the
+      vehicles already qualify us; CSCR is the open market where ITN-37485 was lost. Verified
+      2026-08-21: `Qual_table_automations` has NO scraper — only refs are the DGS TDDC MSA page
+      and `osi.ca.gov`. Do not build until Pavan names the source.
+- [ ] **Staleness watchdog — a ~20-line script, not a monitoring system.** Checks scan
+      freshness, git sync age, API credit balance (a low balance silently broke intake once,
+      2026-06-12), and the dashboard service. Surfaces in M2's health panel; Telegram only when
+      something is actually wrong.
+
+### M4 — Outputs and rhythm
+
+- [ ] Drafts: Voice writes to `crm/drafts/`; the dashboard lists them for review; send via
+      mailto/copy so no mail connector is needed to start. Sending logs the touch and clears
+      `blocked_on` when the draft was the blocker.
+- [ ] Retire hand-edited `priority-outreach.md` → regenerate from the contact store, and
+      repoint `sales-daily-bid-review` (Capture, `0 8 * * 1-5` → telegram) at the store in the
+      SAME change, so the 8am brief never reads a dead file. It has been briefing on a file
+      that died in May.
+- [ ] Friday pipeline briefing: stage movement, aging, win/loss, next week's focus.
+- [ ] Bid `.status.json` adopts the same status+stage+reason schema everywhere.
+- [ ] Calendar + email-reply ingestion stay deferred WRITERS — each is one more writer into
+      the store, zero redesign.
 
 ## Coordination budget — everything Pavan ever has to do
 
 **Once:** answer 2 status questions · OK the private GitHub repo · Granola signup + app
 install · name the RFO site · approve 2 mini scripts.
-**Daily:** read one 8am brief · one-line Telegram replies as life happens · click send on
-drafts · desk triage when convenient.
+**Daily:** open the dashboard (the primary surface) · click send on reviewed drafts · triage
+what the machine surfaced. Telegram receives the 8am brief and alerts; you never operate
+through it.
 **Never:** edit a markdown file · run a sync · remember a follow-up · wonder whether a cron ran.
 
 ## Open gates
