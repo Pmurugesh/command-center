@@ -27,6 +27,15 @@ import os from 'os'
 import { PATHS } from '../src/lib/paths.ts'
 
 const PLATFORM = path.join(os.homedir(), 'infiniteai_platform')
+// Operations docs legitimately cite BOTH repos: platform paths for product
+// capability claims, and command-center paths for the tooling that supports
+// them. Checking only the platform reported every dashboard citation as dead.
+// The dashboard lives at a different path on each machine (~/command-center on
+// the MacBook, ~/repos/command-center on the mini), so try both.
+const DASHBOARD_CANDIDATES = [
+  path.join(os.homedir(), 'command-center'),
+  path.join(os.homedir(), 'repos/command-center'),
+]
 const GATE = process.argv.includes('--gate')
 
 // Files whose claims reach a customer. A dead citation here is a live risk, not
@@ -96,14 +105,22 @@ async function main() {
     console.error('could not list platform files — is the repo initialised?')
     process.exit(2)
   }
-  const byBasename = new Set(platformFiles.map(f => path.basename(f)))
-  const allPaths = new Set(platformFiles)
+  // Second index: the dashboard repo, so citations to its tooling resolve too.
+  let dashFiles: string[] = []
+  for (const candidate of DASHBOARD_CANDIDATES) {
+    if (!(await exists(candidate))) continue
+    const { files } = await gitFiles(candidate)
+    if (files.length) { dashFiles = files; break }
+  }
+  const platformFilesAll = [...platformFiles, ...dashFiles]
+  const byBasename = new Set(platformFilesAll.map(f => path.basename(f)))
+  const allPaths = new Set(platformFilesAll)
   // Citations are frequently written relative to a subdirectory
   // ("api/app/routers/admin.py" for "packages/api/app/routers/admin.py"), so
   // index every path suffix. Without this the checker reports renames that
   // never happened and the signal drowns in noise.
   const bySuffix = new Set<string>()
-  for (const f of platformFiles) {
+  for (const f of platformFilesAll) {
     const parts = f.split('/')
     for (let i = 0; i < parts.length; i++) bySuffix.add(parts.slice(i).join('/'))
   }
