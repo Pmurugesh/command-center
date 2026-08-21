@@ -285,25 +285,31 @@ The long-term guarantee is NOT "git forever." It is two pinned invariants plus n
       content matched; reverse direction proven by adoption commits (`f5e5fa3`, `a1ca540`);
       janitor loaded in launchd (120s interval). Phone bookmark: on Pavan.
 
-### M1 — CRM store + hands
+### M1 — CRM store + hands ✅ COMPLETE 2026-08-21 (PR #6)
 
-- [ ] Store: `operations/crm/{contacts,meetings,drafts,leads}/`.
-- [ ] Contact schema (frontmatter + appended `## Log`): name, title, email, phone, agency,
+- [x] Store: `operations/crm/{contacts,meetings,drafts,leads}/`.
+- [x] Contact schema (frontmatter + appended `## Log`): name, title, email, phone, agency,
       product, owner, tier, `stage` (identified | contacted | meeting-booked | demo-given |
       pilot-discussion | won | lost | disqualified), `status` (active | blocked | dormant),
       `blocked_on`, `last_touched`, `next_action`, `next_action_due`.
       `blocked_on` + `last_touched` are the two load-bearing fields.
-- [ ] Idempotent seed: priority-outreach (8) + agency profiles (39) + CIO Academy (~100 dedup).
-- [ ] `src/lib/crm.ts`: list/get/write/appendLog; atomic temp+rename; **every write = a git
+- [x] Idempotent seed: priority-outreach (8) + agency profiles (39) + CIO Academy (~100 dedup).
+- [x] `src/lib/crm.ts`: list/get/write/appendLog; atomic temp+rename; **every write = a git
       commit with a semantic message** ("log touch: chris-rouse via dashboard") — git log IS
       the touch history.
-- [ ] API: `GET/POST /api/crm/contacts`, `GET/PATCH .../[slug]`, `POST .../[slug]/log`.
-- [ ] Today page buckets, in order: Overdue → Blocked (days-blocked counter) → Due today →
+- [x] API: `GET/POST /api/crm/contacts`, `GET/PATCH .../[slug]`, `POST .../[slug]/log`.
+- [x] Today page buckets, in order: Overdue → Blocked (days-blocked counter) → Due today →
       Going cold (>21d, active stages) → New leads → Meetings to triage. Mono day-counters,
       severity-colored. Inline actions: log touch / stage / block-unblock / snooze / reassign.
 - [ ] Retire hand-edited `priority-outreach.md` → generated from the store (agents keep the
-      view they already read).
-- [ ] Verify: a stage change in the UI produces a semantic commit; Rouse renders ~89d overdue.
+      view they already read). *Deferred to M2: the 8am cron reads it, so regenerate and
+      repoint in the same change rather than breaking the brief in between.*
+- [x] Verified 2026-08-21: seeded 94 (2 blocked / 6 overdue @85d / 86 cold); live PATCH
+      unblock produced `crm: Manohar Sridharan: cleared blocked_on, status=active` and moved
+      bucket; appendLog bumps last_touched + advances stage + clears the action; rendered in
+      browser; synced to the mini (94 contacts, HEAD matches).
+      Two real bugs found and fixed: lock misreporting non-EEXIST errors as contention, and
+      `# Name` title accretion on every round trip.
 
 ### M2 — Surfaces into the day
 
