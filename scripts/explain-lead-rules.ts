@@ -34,7 +34,7 @@ const lines: string[] = []
 lines.push('# Lead criteria — what we look for in California solicitations')
 lines.push('')
 lines.push('> **GENERATED — do not hand-edit.** Source of truth is')
-lines.push('> `command-center/src/lib/lead-scoring.ts`. Regenerate with')
+lines.push('> `src/lib/lead-scoring.ts` (command-center repo). Regenerate with')
 lines.push('> `scripts/explain-lead-rules.ts`. Rules version: ' + rules.LEAD_RULES_VERSION + '.')
 lines.push('')
 lines.push('Applied to every open state solicitation (~311 per refresh) pulled through the Cal')
