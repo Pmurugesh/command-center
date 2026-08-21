@@ -279,6 +279,26 @@ function isLive(c: CrmContact): boolean {
 }
 
 /**
+ * Has anyone DECIDED to pursue this person?
+ *
+ * A badge scanned at a conference is a business card, not a lead. Pavan:
+ * "I didn't necessarily contact all these people, I just happened to meet
+ * people who are in tech CA at the same time." So the 94 seeded records are
+ * INVENTORY — people whose details we hold — and inventory does not belong on a
+ * daily action board. It becomes pipeline the moment someone gives it an action,
+ * works it, moves its stage, or hits a blocker.
+ *
+ * Showing 92 unworked cards under "Never contacted" was still framing them as
+ * outreach owed. They are browsable on /agencies; the board should show WORK.
+ */
+function isInPipeline(c: CrmContact): boolean {
+  return Boolean(c.nextAction) ||
+    c.status === 'blocked' ||
+    c.stage !== 'identified' ||
+    hasBeenWorked(c)
+}
+
+/**
  * Has a human ever actually reached out to this person?
  *
  * Seeded records are NOT touches. Scanning someone's badge at a conference tells
@@ -309,11 +329,16 @@ export function bucketize(contacts: CrmContact[]): CrmBuckets {
   const blocked = live.filter(c => c.status === 'blocked')
   const rest = live.filter(c => c.status !== 'blocked')
 
-  // NEVER CONTACTED is separated from GOING COLD on purpose. "Cold" should mean a
-  // relationship that was warm and cooled; a lead nobody ever called is not cold,
-  // it is untouched. Merging them turns a to-do list into a guilt list.
-  const worked = rest.filter(hasBeenWorked)
-  const neverContacted = rest.filter(c => !hasBeenWorked(c))
+  // Only PIPELINE reaches the board. Sourced contacts are counted, not listed:
+  // a morning view of 92 business cards is inventory, not work.
+  const pipeline = rest.filter(isInPipeline)
+  const sourcedCount = rest.length - pipeline.length
+
+  // Within the pipeline, "cold" must mean a relationship that was warm and
+  // cooled. Someone prioritised but never called is not cold, they are not
+  // started — merging the two turns a to-do list into a guilt list.
+  const worked = pipeline.filter(hasBeenWorked)
+  const notStarted = pipeline.filter(c => !hasBeenWorked(c))
 
   const overdue = worked.filter(c => c.daysOverdue !== undefined)
   const dueToday = worked.filter(c => c.nextActionDue === t)
@@ -337,7 +362,8 @@ export function bucketize(contacts: CrmContact[]): CrmBuckets {
     blocked: blocked.sort(byStale),
     dueToday,
     goingCold: goingCold.sort(byStale),
-    neverContacted: neverContacted.sort(byPriority),
+    notStarted: notStarted.sort(byPriority),
+    sourcedCount,
     total: contacts.length,
   }
 }

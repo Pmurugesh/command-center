@@ -62,7 +62,7 @@ export default async function TodayPage() {
     getMorningActions().catch(() => ''),
     getOpenOpportunities().catch(() => []),
     getPipelineFreshness().catch(() => []),
-    getBuckets().catch(() => ({ overdue: [], blocked: [], dueToday: [], goingCold: [], neverContacted: [], total: 0 })),
+    getBuckets().catch(() => ({ overdue: [], blocked: [], dueToday: [], goingCold: [], notStarted: [], sourcedCount: 0, total: 0 })),
     getInsights().catch(() => null),
   ])
 
