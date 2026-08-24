@@ -641,11 +641,27 @@ class, live: nothing noticed until a person tried the URL.
       `~/bin/email-sync.sh` + LaunchAgent `com.paladin.email-sync` (15 min). Deliberately
       inert (exits 0) until `~/.config/command-center/mail.env` exists, so installing it
       early is safe.
-- [ ] **The ONE remaining step — Pavan, on the mini:** create
-      `~/.config/command-center/mail.env` (mode 600) with `IMAP_HOST` / `IMAP_USER` /
-      `IMAP_PASSWORD` (use an app password, not the account password). Next timer tick
-      starts staging relevant mail into `operations/crm/intake/email/` — read-only against
-      the mailbox by protocol, gitignored staging.
+- [x] **DONE 2026-08-24 — email intake is autonomous.** Pavan created
+      `~/.config/command-center/mail.env` (600) on the mini; first attempt failed because
+      the host was assumed to be Google — `4infinitesolutions.com` mail is SELF-HOSTED
+      (MX → `mail.4infinitesolutions.com`, Namecheap-style, regular mailbox password, no
+      app-password concept). Host corrected; first live run: 55 INBOX messages since
+      25-Jul → **8 staged, 47 filtered, 0 dupes**. The timer now runs every 15 min with no
+      laptop involved. Mailbox `pavanm@4infinitesolutions.com` closes M3.5's "which
+      mailbox" gate. Staged items wait in `crm/intake/email/` for Scribe (Layer 2) —
+      the filing agent is now the next build.
+
+**CORRECTION (same day, ~2h later): the sleep diagnosis above was WRONG.** When the tunnel
+died a second time — ten minutes after the "fix" — ground truth said otherwise: the mini's
+`uptime` was **32 days** and `pmset -g log` contained **zero sleep events**. The machine
+never slept once. The one-commit-per-day pattern just meant nothing else changed on those
+days; the real fault was the **Tailscale data path**, and the proven cure was cycling
+Tailscale on the **MacBook** (`tailscale down && up` — the GUI quit/reopen is NOT enough,
+the network extension survives it). The mini needed nothing either time. The pmset change
+is kept (right for a server, irrelevant to the outage). Watchdog design unaffected — it
+detects path-down regardless of which side broke, and it caught the second outage
+unprompted at 11:21. Recovery levers, in order: `tailscale down && up` on the MacBook →
+same on the mini → then suspect the machine. Full pattern in `tasks/lessons.md`.
 
 ## Open gates
 

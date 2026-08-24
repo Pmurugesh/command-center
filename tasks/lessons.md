@@ -54,3 +54,14 @@
   next branch from `origin/main`** rather than continuing on the merged one. The
   "Deployed build" health row catches the deploy half of this; the branch half has no detector
   yet, so the habit is the control.
+- **[2026-08-24]** Diagnosed "the mini sleeps" from consistent circumstantial evidence — one
+  auto-commit per day at exactly 03:05, unreachable the rest of the time, a pending
+  needs-sudo pmset fix that made the story satisfying. Ground truth: `uptime` said 32 days,
+  the sleep log had ZERO sleep events. The machine never slept once. The actual fault was the
+  Tailscale data path, and the second outage was cured by cycling Tailscale on the OBSERVING
+  machine (`tailscale down && up` on the MacBook) — the remote side needed nothing. Two rules:
+  **check ground truth (`uptime`, `pmset -g log`) before asserting machine state**, and
+  **when a peer is unreachable, falsify your own network client first** — it is the only
+  component you can test AND fix without the peer's cooperation, and here it was the culprit.
+  Corollary: a fix applied right before recovery (waking the machine, the pmset command) gets
+  credited by narrative, not evidence — the second outage 10 minutes later disproved both.
