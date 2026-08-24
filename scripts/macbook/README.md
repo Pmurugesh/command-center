@@ -10,6 +10,7 @@ copy, not this one.
 |---|---|---|
 | `operations-janitor` | 5 min | Auto-commit `~/repos/operations`, pull --rebase, push. The MacBook half of the two-way git sync (the mini runs its counterpart every 2 min). |
 | `mini-watchdog` | 30 min | Notices when the mini stops answering (dashboard URL down) and raises a macOS notification — the one health check that cannot live on the mini itself. |
+| `drift-check` | Mon 9:00 | Facts vs evidence: dead citations in authored docs, agency slugs with no profile, stale agent context. Runs here because the platform clone lives here. Findings land as a dated intel alert, re-announced only when they change. Runs `scripts/drift-check.ts` from `~/repos/command-center` main — no `~/bin` copy. |
 
 ## Install / update
 

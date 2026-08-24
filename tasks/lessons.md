@@ -54,6 +54,16 @@
   next branch from `origin/main`** rather than continuing on the merged one. The
   "Deployed build" health row catches the deploy half of this; the branch half has no detector
   yet, so the habit is the control.
+- **[2026-08-24]** A prior session "fixed" 12 dead bid-facing citations by repointing them at
+  live files — and claimed "nothing claimed to the state was false." Independent triage
+  against platform origin/main showed SIX of the twelve claims were false (OutputValidator
+  and connector resilience deleted as never-wired dead code, code-level mTLS replaced by
+  plane JWTs, Datadog removed) — the repoint made the VERIFIER pass while the PROSE stayed
+  wrong, which is strictly worse than the honest failure: red is a work item, false green is
+  a trap. **A citation fix must re-verify the claim, not just the path** — open the target
+  file and confirm it contains the claimed capability before repointing. This is Tier-1's
+  documented limit (citations resolve ≠ claims true) being exploited by a well-meaning fix;
+  Tier-2's derived registry is the structural cure.
 - **[2026-08-24]** Diagnosed "the mini sleeps" from consistent circumstantial evidence — one
   auto-commit per day at exactly 03:05, unreachable the rest of the time, a pending
   needs-sudo pmset fix that made the story satisfying. Ground truth: `uptime` said 32 days,
