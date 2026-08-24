@@ -38,3 +38,11 @@
   than discovering it three corrections later. A board that shows research as though it were
   owed work is both false and demotivating, and it is the fastest way to make someone stop
   opening the tool.
+- **[2026-08-24]** Reported "your mini is down" from `ping` failing. The machine was up —
+  Tailscale's coordinator showed `Online: True`; only the peer-to-peer path was dead
+  (`Active: False`, last handshake the previous morning). This is the fourth instance of one
+  error this session: reporting a PROXY as the thing itself. A truncated grep became "no
+  pricing exists"; a records check became "zero outbound touches"; a `last_touched` date became
+  "88 days cold"; unreachability became "down". **State what the evidence shows, not what it
+  suggests** — "I can't reach it from here" is both true and more useful than "it's down", and
+  it points at the right fix instead of the wrong one.
