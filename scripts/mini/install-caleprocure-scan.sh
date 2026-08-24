@@ -77,13 +77,22 @@ EXISTING=$(jobs_of_kind command | head -1)
 if [ -n "$EXISTING" ]; then
   echo "    already registered ($EXISTING) — leaving as is"
 else
+  # Delivery must be EXPLICIT: openclaw refuses the implicit "last" channel
+  # for isolated crons (ambiguous target) and marks every run as error even
+  # when the command exits 0. Same telegram target the legacy job used.
+  # --agent intel: attribution only (the payload is a command, not an agent
+  # turn) — keeps the job grouped under Scout on the dashboard's cron page,
+  # where the procurement scan has always lived.
   openclaw cron add "$JOB_NAME" \
     --cron "0 7 * * 1-5" --tz "America/Los_Angeles" \
+    --agent intel \
     --command "python3 $RUNNER" \
     --command-env "EPROCURE_ENABLED=true" \
     --command-env "QUAL_TABLE_BACKEND=$BACKEND" \
+    --announce --channel telegram --to "telegram:8097059385" \
     --description "Daily Cal eProcure scan via suppliers.fiscal.ca.gov list export (qual_table client, 1 request/run) — replaced browser automation 2026-08-24"
   echo "    registered: weekdays 07:00 PT"
 fi
 
-echo "==> Done. Verify with: openclaw cron run $JOB_NAME  (writes today's report immediately)"
+NEW_ID=$(jobs_of_kind command | head -1)
+echo "==> Done. Verify with: openclaw cron run $NEW_ID  (writes today's report immediately)"
