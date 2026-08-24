@@ -460,16 +460,19 @@ claim to cite evidence.** Three tiers by how automatable they are:
 - [ ] **Tier 1a — triage the 12 bid-facing dead citations.** Each is either a rename to chase
       or a capability that quietly went away. Must be resolved before any bid draws on
       `_platform-knowledge.md` again.
-- [ ] **Tier 2 — derive the facts that can be derived.** A weekly sync reads the platform's
-      module manifests + git and regenerates `products/_registry.md` (marked DO NOT HAND-EDIT):
-      canonical slug, display name, mounted, license-gated, LOC, route/component counts, last
-      commit touching the module. Authored positioning (tagline, buyers, market evidence,
-      pricing) stays in the per-product files. **Derived and authored facts never share a
-      file** — the same split that fixed the bid statuses.
-- [ ] **Tier 2a — make status claims checkable.** "demo-ready" / "needs-frontend" are currently
-      remembered, not measured. Derive the signals: does the module have a frontend beyond a
-      nav shell, a demo seed endpoint, tests? `procurement` is "needs-frontend" because its
-      frontend is 102 lines — that is a computable fact, not an opinion.
+- [x] **Tier 2 — derive the facts that can be derived.** *BUILT 2026-08-24:
+      `scripts/generate-registry.ts` parses each module's `MANIFEST = ModuleManifest(...)`
+      on the platform's origin/main and regenerates `products/_registry.md` (DO NOT
+      HAND-EDIT): canonical slug, display name, version, route, frontend size/file count,
+      test count, last touched, manifest citation. Weekly via the MacBook `weekly-sync`
+      job (registry then drift-check — replaced the drift-check-only launchd job).
+      First run: 9 modules @ bb9986ed — canonical names Steward / Milestone / Attest /
+      Candor / Proc / GovHire / Reporting / Data Intelligence / Web Intelligence.
+      The GovHire-vs-HireCA class of dispute is now decided by a generated table.*
+- [x] **Tier 2a — make status claims checkable.** *The registry's frontend column IS the
+      signal: `data-intelligence` 3KB/2 files and `procurement` 4KB/3 files read "thin
+      frontend — look before you demo", vs Candor 1.2MB/117 files + 136 tests. Demo-seed
+      detection deferred until a demo actually stumbles on it.*
 - [ ] **Tier 3 — expire what cannot be derived.** Positioning and market evidence get a
       `verified_on` date; anything older than a quarter surfaces on the dashboard. The GTM
       playbook already models this ("re-verify vendor claims ~quarterly — the evidence is
