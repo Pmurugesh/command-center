@@ -49,8 +49,11 @@ for env_file in "$CFG/mail.env" "$CFG"/mail-*.env; do
   )
 done
 [ "$found" = 1 ] || exit 0
-cd "$HOME/repos/command-center" && exec node --experimental-strip-types --no-warnings \
-  scripts/run-ts.mjs scripts/scribe.ts
+cd "$HOME/repos/command-center" || exit 0
+node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/scribe.ts
+# Regenerate the 8am brief's source view from the store — the M4 fix for the
+# hand-edited file that died in May. No-op (zero commits) when nothing changed.
+node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/generate-outreach.ts
 EOF
 chmod +x "$WRAPPER"
 
