@@ -78,7 +78,7 @@ launchctl bootstrap "$DOMAIN" "$PLIST" 2>/dev/null \
   || { DOMAIN="user/$(id -u)"; launchctl bootstrap "$DOMAIN" "$PLIST"; }
 
 echo "==> Loaded $LABEL in $DOMAIN (every 15 min)"
-accounts=$(ls "$HOME/.config/command-center"/mail.env "$HOME/.config/command-center"/mail-*.env 2>/dev/null | wc -l | tr -d ' ')
+accounts=$(ls "$HOME/.config/command-center"/mail.env "$HOME/.config/command-center"/mail-*.env 2>/dev/null | wc -l | tr -d ' ' || true)
 if [ "$accounts" != "0" ]; then
   echo "==> $accounts account file(s) present — intake is LIVE; log: $LOG_DIR/email-sync.log"
 else
