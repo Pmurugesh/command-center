@@ -22,16 +22,33 @@ mkdir -p "$HOME/bin" "$HOME/Library/LaunchAgents" "$LOG_DIR" "$(dirname "$ENV_FI
 
 cat > "$WRAPPER" <<'EOF'
 #!/bin/bash
-# Email intake tick — inert until the credentials file exists.
-# Two stages, both deterministic: the connector stages relevant mail, then
-# Scribe files it (touches on exact CRM matches, everything else to the
-# review queue). Scribe runs even if the connector fails — a backlog of
-# staged-but-unfiled mail should never wait on the mailbox being reachable.
-ENV_FILE="$HOME/.config/command-center/mail.env"
-[ -f "$ENV_FILE" ] || exit 0
-set -a; . "$ENV_FILE"; set +a
+# Email intake tick — one connector pass per account, then one filing pass.
+#
+# Accounts are env files in ~/.config/command-center: `mail.env` plus any
+# `mail-<name>.env` (e.g. mail-infiniteai.env). Each carries its own
+# IMAP_HOST / IMAP_USER / IMAP_PASSWORD (and optionally IMAP_FOLDERS — folder
+# names differ per server). Dropping a new file in makes that account live on
+# the next tick; nothing else to install. Each pass runs in a subshell so one
+# account's variables never leak into the next.
+#
+# All accounts stage into the same dir (dedupe is by message hash, so a message
+# two accounts both hold is staged once), and the filer runs once at the end —
+# it never needs to know which account a message came from. It also runs even
+# if a connector pass failed: staged-but-unfiled mail should never wait on a
+# mailbox being reachable.
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
-/usr/bin/python3 "$HOME/repos/command-center/scripts/sync-email.py"
+CFG="$HOME/.config/command-center"
+found=0
+for env_file in "$CFG/mail.env" "$CFG"/mail-*.env; do
+  [ -f "$env_file" ] || continue
+  found=1
+  (
+    set -a; . "$env_file"; set +a
+    echo "== account: $IMAP_USER =="
+    /usr/bin/python3 "$HOME/repos/command-center/scripts/sync-email.py"
+  )
+done
+[ "$found" = 1 ] || exit 0
 cd "$HOME/repos/command-center" && exec node --experimental-strip-types --no-warnings \
   scripts/run-ts.mjs scripts/scribe.ts
 EOF
@@ -61,10 +78,12 @@ launchctl bootstrap "$DOMAIN" "$PLIST" 2>/dev/null \
   || { DOMAIN="user/$(id -u)"; launchctl bootstrap "$DOMAIN" "$PLIST"; }
 
 echo "==> Loaded $LABEL in $DOMAIN (every 15 min)"
-if [ -f "$ENV_FILE" ]; then
-  echo "==> $ENV_FILE present — intake is LIVE; log: $LOG_DIR/email-sync.log"
+accounts=$(ls "$HOME/.config/command-center"/mail.env "$HOME/.config/command-center"/mail-*.env 2>/dev/null | wc -l | tr -d ' ')
+if [ "$accounts" != "0" ]; then
+  echo "==> $accounts account file(s) present — intake is LIVE; log: $LOG_DIR/email-sync.log"
 else
   echo "==> Waiting on credentials. Create $ENV_FILE (chmod 600) with:"
   echo "    IMAP_HOST=...  IMAP_USER=...  IMAP_PASSWORD=<app password>"
   echo "    (optional: IMAP_PORT, IMAP_SINCE_DAYS, IMAP_FOLDERS)"
+  echo "    Additional accounts: mail-<name>.env beside it, same format."
 fi
