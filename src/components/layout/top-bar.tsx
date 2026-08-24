@@ -2,6 +2,7 @@
 
 import { useSystemHealth } from '@/hooks/use-system-status'
 import { HealthDot } from '@/components/shared/status-badge'
+import { MobileNav } from '@/components/layout/mobile-nav'
 import { Clock } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -25,8 +26,9 @@ export function TopBar() {
   }, [])
 
   return (
-    <div className="h-10 border-b border-border bg-card flex items-center justify-between px-4">
-      <div className="flex items-center gap-3">
+    <div className="flex h-12 items-center justify-between border-b border-border bg-card px-2 md:h-10 md:px-4">
+      <div className="flex items-center gap-1 md:gap-3">
+        <MobileNav />
         {health && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <HealthDot status={health.overall} />

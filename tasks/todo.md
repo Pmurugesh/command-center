@@ -805,3 +805,47 @@ Scribe is email-only). Chose full capture with CRM integration.
 
 ## Review
 (to be filled in per milestone)
+
+---
+
+# Phase 7 — CEO layout rebuild (approved plan 2026-08-24)
+
+Full plan: `~/.claude/plans/greedy-wiggling-blanket.md`. One-line thesis: Today answered
+"is the machine running?"; it must answer "what do I do next and am I on pace?" —
+strategic decisions from gtm/intel markdown, a scoreboard vs declared targets, channel/
+vehicle cold-clocks, one ranked queue instead of five, a Waiting On delegation view,
+and a real mobile pass.
+
+- [x] Phase 0.1 — rebase: fast-forwarded to origin/main (edc56b7; gained lib/meetings.ts —
+      scoreboard reuses listMeetings())
+- [x] Phase 0.2 — GTM v2 draft (`operations/gtm/2026-08-24-gtm-plan-v2.md`) sent to Pavan;
+      updated same-day to fold in his seven answers (2026-08-24-strategy-revision.md landed
+      mid-build from another session). Two [DECISION] flags remain his: price + targets.
+- [x] A — Foundations: NON_HUMAN_VIA single source · parameterized flag parsing · bid
+      deadline normalization (all three on-disk variants verified)
+- [x] B — Scoreboard: targets.md seeded (DRAFT values, Pavan edits in place); actuals
+      derived from crm/meetings; MomentumCard absorbed (honest-quiet line kept)
+- [x] C — Today's Moves: one ranked queue (leverage scoring verified against real data —
+      26d-overdue CDT POC 64 > one-pager blocker 45 > strategic 45 > dated 37); /gtm page;
+      resolve API round-trip proven incl. path-guard refusals
+- [x] D — The Clock: 14-day merge, lead↔opportunity dedupe by slug (caught live dupe)
+- [x] E — Channels: 5 vehicle seeds; SLP reads 339d cold + blocked, CAPSMA 146d — both
+      alert on Today; /partnerships 307s; nav = Now/Sell/Machine/Planned; kanban → /bids
+- [x] F — Waiting On (counts verified vs raw files: Rani 4 / Isaiah 2 / Ganapathy 1) ·
+      Machine Room (<details open={isRed}>) · one-line Changes · ShapeCompact ·
+      daily-brief deleted
+- [x] G — Mobile: drawer round-trip verified at 375×812; zero horizontal page scroll on
+      Today/Channels/Bids; 44px touch targets via new Button primitive
+- [x] Mid-build: resolved the 7 email-synthesis questions ([RESOLVED 2026-08-24], one
+      semantic operations commit each) after Pavan's answers landed — queue went 9→2
+      strategic items, which is the system doing its job on day one
+
+## Phase 7 review
+
+Every phase shipped green (`pnpm lint` + `pnpm build` per phase) and was verified against
+the real operations data, then walked in the browser at desktop and 375×812. The Today
+page now leads with the campaign scoreboard (0/10 · 0/3 · 0/1 · Phase-0 0/3 · 30d left)
+and a single ranked queue whose top item is the actual highest-leverage action on file.
+Monitoring collapsed to two one-line rows that only open when red. Remaining for Pavan:
+the two [DECISION] flags (Candor price, targets confirm), and editing gtm/targets.md
+flips the scoreboard live — no deploy needed for target changes.

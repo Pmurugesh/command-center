@@ -1,40 +1,45 @@
 /**
- * Today — the morning home.
+ * Today — the CEO screen.
  *
  * Answers, in order:
- *  - Am I actually selling? (daily brief: momentum, leverage, pipeline shape,
- *    machine health)
- *  - What changed since I last looked? (exact, from git)
- *  - Who needs me now? (CRM buckets: blocked / overdue / due today / going cold)
- *  - What needs a decision? (bid decisions, opportunity deadlines)
- *  - What did the agents do overnight, and is the automation still alive?
+ *  - Am I on pace against the campaign I declared? (scoreboard)
+ *  - What is the single highest-leverage thing to do next? (Today's Moves —
+ *    one ranked queue: strategic decisions, artifact blockers, bid flags,
+ *    due touches, closing deadlines)
+ *  - What is dated in the next two weeks? (the Clock)
+ *  - Who needs me, who did I delegate to, and is any channel going dark?
+ *  - Below the fold, collapsed: what changed, and is the machine healthy.
  *
  * Same route (/), so existing bookmarks still land here.
  */
 
-import { listBids, listIntelAlerts, getActionQueue, getMorningActions, getPipelineFreshness } from '@/lib/files'
+import { listBids, getPipelineFreshness } from '@/lib/files'
 import { getBuckets } from '@/lib/crm'
 import { getInsights } from '@/lib/insights'
+import { getCampaignScore, getStrategicDecisions } from '@/lib/gtm'
+import { listChannels, channelAlerts } from '@/lib/channels'
+import { buildMoves, buildWaitingOn } from '@/lib/moves'
+import { listContacts } from '@/lib/crm'
 import { getNormalizedCronJobs } from '@/lib/shell'
 import { isFailing } from '@/lib/cron'
 import { getOpenOpportunities } from '@/lib/procurements'
 import { getUpcomingMeetings } from '@/lib/calendar'
 import { getDecisionQueue } from '@/lib/decisions'
 import { getAgent24hSummary } from '@/lib/agents'
+import { listLeads } from '@/lib/leads'
+import { buildClock } from '@/lib/clock'
 import { PageHeader } from '@/components/shared/page-header'
 import { HealthDot } from '@/components/shared/status-badge'
-import { DataCard } from '@/components/shared/data-card'
-import { DecisionsCard } from '@/components/today/decisions-card'
-import { AgentsSummaryCard } from '@/components/today/agents-summary'
-import { ActiveBidsKanban } from '@/components/today/active-bids-kanban'
-import { ActionQueueCard } from '@/components/today/action-queue-card'
-import { MorningActionsCard } from '@/components/today/morning-actions-card'
-import { OpportunitiesCard } from '@/components/today/opportunities-card'
-import { FreshnessCard } from '@/components/today/freshness-card'
+import { Scoreboard } from '@/components/today/scoreboard'
+import { MovesCard } from '@/components/today/moves-card'
+import { ClockCard } from '@/components/today/clock-card'
+import { ActiveBidsList } from '@/components/today/active-bids-list'
+import { ChannelsHealthCard } from '@/components/today/channels-health-card'
+import { WaitingOnCard } from '@/components/today/waiting-on-card'
 import { PipelineBuckets } from '@/components/today/pipeline-buckets'
-import { UpcomingMeetingsCard } from '@/components/today/upcoming-meetings-card'
-import { DailyBrief } from '@/components/today/daily-brief'
+import { ShapeCompact } from '@/components/today/shape-compact'
 import { ChangesFeed } from '@/components/today/changes-feed'
+import { MachineRoom } from '@/components/today/machine-room'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,25 +58,39 @@ function todayLabel(now = new Date()): string {
 
 export default async function TodayPage() {
   // Fetch everything in parallel — each data source is independent.
-  const [bids, alerts, cronJobs, decisions, agentSummaries, actionQueue,
-         morningActions, opportunities, freshness, buckets, insights, calendar] = await Promise.all([
+  const [bids, score, cronJobs, decisions, agentSummaries, strategic,
+         channels, opportunities, freshness, buckets, insights, calendar, leads, contacts] = await Promise.all([
     listBids(),
-    listIntelAlerts(),
+    getCampaignScore().catch(() => ({ targets: null, meetingsHeld: 0, demosGiven: 0, daysLeft: null })),
     getNormalizedCronJobs().catch(() => []),
     getDecisionQueue().catch(() => []),
     getAgent24hSummary().catch(() => []),
-    getActionQueue().catch(() => []),
-    getMorningActions().catch(() => ''),
+    getStrategicDecisions().catch(() => []),
+    listChannels().catch(() => []),
     getOpenOpportunities().catch(() => []),
     getPipelineFreshness().catch(() => []),
     getBuckets().catch(() => ({ overdue: [], blocked: [], dueToday: [], goingCold: [], notStarted: [], sourcedCount: 0, total: 0 })),
     getInsights().catch(() => null),
     getUpcomingMeetings().catch(() => ({ configured: true, meetings: [], errors: ['calendar lookup failed'] })),
+    listLeads().catch(() => []),
+    listContacts().catch(() => []),
   ])
 
-  // Intel produced this week (alerts + procurements + briefings), not lifetime.
-  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-  const intelThisWeek = alerts.filter(a => a.date && new Date(a.date).getTime() >= weekAgo).length
+  // The merge that used to happen in Pavan's head: one ranked queue.
+  const moves = buildMoves({
+    strategic,
+    bidDecisions: decisions,
+    blockers: insights?.blockers ?? [],
+    buckets,
+    opportunities,
+    channels: channelAlerts(channels),
+  })
+
+  // Everything dated in the next 14 days — meetings and deadlines, one agenda.
+  const clock = buildClock({ meetings: calendar.meetings, bids, opportunities, leads })
+
+  // Delegation: live next-actions owned by people other than Pavan.
+  const waiting = buildWaitingOn(contacts)
 
   const failingJobs = cronJobs.filter(isFailing)
   const persistentFailure = failingJobs.some(j => j.consecutiveErrors >= 2)
@@ -92,10 +111,6 @@ export default async function TodayPage() {
   const CLOSED = new Set(['won', 'lost', 'no-bid', 'submitted'])
   const activeBids = bids.filter(b => !CLOSED.has((b.status || '').toLowerCase()))
 
-  const urgentDeadlines = opportunities.filter(o =>
-    o.deadlineAt && new Date(o.deadlineAt).getTime() - Date.now() <= 7 * 24 * 60 * 60 * 1000
-  ).length
-
   const now = new Date()
 
   return (
@@ -111,66 +126,47 @@ export default async function TodayPage() {
         }
       />
 
-      {/* Header counter strip — the morning glance metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <DataCard
-          label="Decisions"
-          value={decisions.length}
-          subtitle={decisions.length === 0 ? "You're clear" : 'Need your call'}
-          valueColor={decisions.length > 0 ? 'text-status-warning' : undefined}
-        />
-        <DataCard
-          label="Opportunities"
-          value={opportunities.length}
-          subtitle={urgentDeadlines > 0 ? `${urgentDeadlines} due this week` : 'Open, from scans'}
-          valueColor={urgentDeadlines > 0 ? 'text-status-danger' : undefined}
-        />
-        <DataCard
-          label="Active bids"
-          value={activeBids.length}
-          subtitle="In flight"
-        />
-        <DataCard
-          label="Intel this week"
-          value={intelThisWeek}
-          subtitle="New scans & alerts"
-        />
-      </div>
+      {/* Scoreboard — progress against the declared campaign. "Am I actually
+          selling, and am I on pace?" outranks every other number on the page. */}
+      <Scoreboard momentum={insights?.momentum ?? null} score={score} />
 
-      {/* Daily brief — momentum first: this page exists to answer "am I
-          actually selling?", and that number outranks everything else. */}
-      {insights && <DailyBrief insights={insights} />}
+      {/* Today's moves — the single ranked queue. Strategic decisions,
+          artifact blockers, bid flags, due touches, closing deadlines: merged
+          and leverage-ranked so the top row is the day's highest-value action. */}
+      <MovesCard moves={moves} />
 
-      {/* What changed since this browser last looked */}
-      <ChangesFeed />
-
-      {/* Scheduled time — demos and meetings on the calendar, next two weeks */}
-      <UpcomingMeetingsCard result={calendar} />
+      {/* The clock — meetings, bid deadlines, and scored solicitations for
+          the next two weeks, one agenda */}
+      <ClockCard items={clock} calendarConfigured={calendar.configured} calendarErrors={calendar.errors} />
 
       {/* Pipeline — who needs you, ranked. A blocked or overdue contact
           outranks any report. */}
       <PipelineBuckets buckets={buckets} />
 
-      {/* Decisions — highest-leverage bid action */}
-      <DecisionsCard decisions={decisions} />
+      {/* Active bids — compact; the kanban lives on /bids */}
+      <ActiveBidsList bids={activeBids} />
 
-      {/* Opportunity deadlines from procurement scans */}
-      <OpportunitiesCard items={opportunities} />
+      {/* Waiting on — what's delegated, to whom, and what's stuck */}
+      <WaitingOnCard groups={waiting} />
 
-      {/* Agents — what your workforce did last 24h, including failures */}
-      <AgentsSummaryCard summaries={agentSummaries} />
+      {/* Channels going dark — renders only when a vehicle/partner is blocked
+          or cold (the SLP failure class) */}
+      <ChannelsHealthCard alerts={channelAlerts(channels)} />
 
-      {/* Active bids kanban with inline triage */}
-      <ActiveBidsKanban bids={activeBids} />
+      {/* Pipeline shape — stage funnel, owner load, product concentration */}
+      {insights && <ShapeCompact shape={insights.shape} />}
 
-      {/* Action queue from partnership next-actions */}
-      <ActionQueueCard items={actionQueue} />
+      {/* What changed since this browser last looked — one line, expandable */}
+      <ChangesFeed />
 
-      {/* Morning actions from overnight scans (hidden until something generates them) */}
-      <MorningActionsCard content={morningActions} />
-
-      {/* Is the automation feeding this page still alive? */}
-      <FreshnessCard sources={freshness} />
+      {/* Machine room — agents, feeds, health. Collapsed unless something is
+          red; the header dot carries the green-state signal. */}
+      <MachineRoom
+        summaries={agentSummaries}
+        freshness={freshness}
+        health={insights?.health ?? []}
+        failingJobs={failingJobs.length}
+      />
     </div>
   )
 }

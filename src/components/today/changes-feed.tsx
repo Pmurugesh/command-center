@@ -13,8 +13,7 @@
  * report dead scans as fresh.
  */
 import { useEffect, useState } from 'react'
-import { History, Users, FileText, Radar, Package, ClipboardList, GitCommit } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { History, Users, FileText, Radar, Package, ClipboardList, GitCommit, ChevronRight } from 'lucide-react'
 import type { ChangeEntry } from '@/lib/insights'
 
 const LAST_VISIT_KEY = 'cc:lastVisit'
@@ -59,28 +58,25 @@ export function ChangesFeed() {
     return () => { cancelled = true; clearTimeout(t) }
   }, [])
 
-  if (changes === null) {
-    return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base"><History className="h-5 w-5" />What changed</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0"><div className="h-16 animate-pulse rounded-md bg-accent/30" /></CardContent>
-      </Card>
-    )
-  }
+  // One line collapsed — the feed is context, not action. It expands on tap
+  // and never competes with the queues above it for vertical space.
+  const summaryText =
+    changes === null ? 'checking…' :
+    changes.length === 0 ? `nothing since ${since ? timeAgo(since) : 'your last visit'}` :
+    `${changes.length} change${changes.length > 1 ? 's' : ''} since ${since ? timeAgo(since) : 'your last visit'}`
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <History className="h-5 w-5" />
-          What changed
-          <span className="font-mono text-sm text-muted-foreground">{changes.length}</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2 pt-0">
-        {changes.length === 0 ? (
+    <details className="group rounded-lg border border-border bg-card">
+      <summary className="flex cursor-pointer select-none items-center gap-2 px-6 py-3 text-sm text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
+        <History className="h-4 w-4 shrink-0" />
+        <span className="font-medium">What changed</span>
+        <span className="truncate text-xs">{summaryText}</span>
+      </summary>
+      <div className="space-y-2 border-t border-border px-6 py-4">
+        {changes === null ? (
+          <div className="h-16 animate-pulse rounded-md bg-accent/30" />
+        ) : changes.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Nothing since {since ? timeAgo(since) : 'your last visit'}.
           </p>
@@ -101,7 +97,7 @@ export function ChangesFeed() {
             )
           })
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </details>
   )
 }

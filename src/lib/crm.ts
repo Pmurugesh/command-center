@@ -21,7 +21,7 @@ import { PATHS } from './paths'
 import { runCommandArgs } from './shell'
 import { acquireLock as acquireStoreLock, atomicWrite, fileExists } from './store'
 import {
-  CRM_COLD_DAYS, CRM_TERMINAL_STAGES,
+  CRM_COLD_DAYS, CRM_TERMINAL_STAGES, NON_HUMAN_VIA,
   normalizeCrmStage, normalizeCrmStatus,
 } from './config'
 import type {
@@ -318,15 +318,6 @@ function isInPipeline(c: CrmContact): boolean {
 function hasBeenWorked(c: CrmContact): boolean {
   return c.log.some(e => !e.via || !NON_HUMAN_VIA.has(e.via))
 }
-
-// Kept in sync with insights.ts: writes made by machinery rather than by a person
-// talking to someone. 'email-in' is here because an inbound email is the CONTACT
-// touching US — evidence of a live thread (it bumps last_touched), but not proof
-// anyone here worked them. 'email-out' is deliberately absent: a sent email is a
-// human selling, whichever machine recorded it.
-const NON_HUMAN_VIA = new Set(['seed', 'rederive', 'slug-reconcile', 'verify',
-  'roundtrip-test', 'api-test', 'pavan-correction', 'lead-sync', 'baseline',
-  'email-in'])
 
 /**
  * The morning view. Buckets are mutually exclusive and ordered by urgency, so a

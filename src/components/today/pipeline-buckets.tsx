@@ -18,6 +18,7 @@ import {
   AlertTriangle, Ban, CalendarClock, Snowflake, Check, Clock, Loader2, UserPlus,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import type { CrmBuckets, CrmContactView } from '@/types'
 
 type BucketKey = 'overdue' | 'blocked' | 'dueToday' | 'goingCold' | 'notStarted'
@@ -146,32 +147,17 @@ function ContactRow({ contact, bucket, onDone }: {
 
       <div className="flex flex-shrink-0 items-center gap-1">
         {working && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-        <button
-          onClick={() => act('log')}
-          disabled={working}
-          title="Log a touch"
-          className="rounded border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-40"
-        >
+        <Button size="touch" onClick={() => act('log')} disabled={working} title="Log a touch">
           <Check className="h-3.5 w-3.5" />
-        </button>
+        </Button>
         {contact.status === 'blocked' ? (
-          <button
-            onClick={() => act('unblock')}
-            disabled={working}
-            title="Clear the blocker"
-            className="rounded border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-40"
-          >
+          <Button size="touch" onClick={() => act('unblock')} disabled={working} title="Clear the blocker">
             Unblock
-          </button>
+          </Button>
         ) : (
-          <button
-            onClick={() => act('snooze')}
-            disabled={working}
-            title="Snooze 7 days"
-            className="rounded border border-border px-2 py-1 text-xs hover:bg-accent disabled:opacity-40"
-          >
+          <Button size="touch" onClick={() => act('snooze')} disabled={working} title="Snooze 7 days">
             <Clock className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         )}
       </div>
     </div>
@@ -229,7 +215,8 @@ export function PipelineBuckets({ buckets }: { buckets: CrmBuckets }) {
   const order: BucketKey[] = ['blocked', 'overdue', 'dueToday', 'goingCold', 'notStarted']
 
   return (
-    <div className="space-y-4">
+    // scroll-mt clears the top bar when a Move deep-links here via /#pipeline
+    <div id="pipeline" className="scroll-mt-16 space-y-4">
       <div className="flex items-baseline justify-between">
         <h2 className="text-lg font-semibold">Pipeline</h2>
         <span className="font-mono text-xs text-muted-foreground">
