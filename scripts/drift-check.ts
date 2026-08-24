@@ -33,6 +33,13 @@ async function citationDrift(): Promise<string[]> {
     '--experimental-strip-types', '--no-warnings',
     'scripts/run-ts.mjs', 'scripts/verify-claims.ts',
   ], 300_000)
+  // A run that produced no summary did not run — wrong cwd, missing platform
+  // clone, script error. Failing loudly here is the whole point: a drift
+  // checker that silently reports clean on its own failure is the exact bug
+  // class it exists to catch (it did precisely that on 2026-08-24).
+  if (!out.includes('resolved:')) {
+    throw new Error('verify-claims produced no summary — run from the command-center repo root')
+  }
   const findings: string[] = []
   for (const line of out.split('\n')) {
     const m = line.match(/^((?:bids|gtm|intelligence|workflows)\/\S+)\s+\((\d+) dead\)/)
