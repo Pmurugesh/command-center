@@ -528,6 +528,8 @@ claim to cite evidence.** Three tiers by how automatable they are:
       freshness, git sync age, API credit balance (a low balance silently broke intake once,
       2026-06-12), and the dashboard service. Surfaces in M2's health panel; Telegram only when
       something is actually wrong.
+      *MacBook half built 2026-08-24 (see the outage entry below): the mini-unreachable check
+      cannot live on the mini, so it runs here. The mini-side organ checks remain.*
 
 ### M4 — Outputs and rhythm
 
@@ -551,6 +553,36 @@ install · name the RFO site · approve 2 mini scripts.
 what the machine surfaced. Telegram receives the 8am brief and alerts; you never operate
 through it.
 **Never:** edit a markdown file · run a sync · remember a follow-up · wonder whether a cron ran.
+
+### 2026-08-24 — The mini went dark, and now something notices
+
+**Found:** the mini has been network-dead most of each day since ~8/22 — asleep except for
+scheduled wakes. Evidence: exactly one auto commit per day (03:05, the product-health scan),
+Tailscale no-reply even via relay, dashboard/SSH/intake all unreachable from the MacBook.
+Data sync survives because the janitor pushes during the wakes; the access layer (the
+permanent URL, i.e. the entire "look at it" surface) does not. This is design rule #5's bug
+class, live: nothing noticed until a person tried the URL.
+
+- [x] **MacBook-side mini-watchdog** — `scripts/macbook/mini-watchdog.sh` + LaunchAgent
+      `com.pavan.mini-watchdog` (30 min). Notifies on the down-transition, re-alerts every
+      6h while down, once on recovery. Distinguishes "asleep / Tailscale wedged" (mini
+      committed within 26h) from "fully down" (it hasn't). The dashboard's own health panel
+      cannot carry this check — when the mini dies, the panel dies with it.
+      *Installed + verified against the real outage: first run notified with the correct
+      diagnosis, second run stayed silent inside the throttle window.*
+- [x] **Janitor infra adopted into git** — `scripts/macbook/` now versions both MacBook
+      launchd jobs (script + plist), which previously existed only in `~/bin` and
+      `~/Library/LaunchAgents`. Unversioned plumbing was its own silent-failure risk.
+- [ ] **BLOCKED on Pavan — 2 minutes at the mini:** run `sudo pmset -a sleep 0 autorestart 1`
+      (the deploy script has been printing "Skipped — needs sudo" for this since 8/21), then
+      toggle Tailscale off/on if the URL still doesn't answer. The watchdog will notify
+      "Mini is back" when it works.
+- [ ] **BLOCKED on Pavan — 2 clicks:** merge PR #14 (email connector; gates moving intake to
+      the mini) and PR #15 (lessons). Both mergeable, no failing checks; the merge action was
+      permission-denied for the agent in this session.
+- [ ] After the mini is back: deploy latest `main` there, put mail credentials in
+      `~/.config/command-center/mail.env`, add the sync-email launchd timer (same shape as
+      the janitor) — the three steps that move email intake off the MacBook.
 
 ## Open gates
 
