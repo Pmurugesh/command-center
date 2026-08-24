@@ -1,72 +1,16 @@
 /**
- * The daily brief: momentum, leverage, and pipeline shape.
+ * Brief sub-cards, being decomposed into the new Today layout.
  *
- * Ordered by what should change behaviour. Momentum is first and largest
- * because the question this dashboard exists to answer is "am I actually
- * selling?" — the GTM diagnosis was 0 logged outbound touches in 12 weeks, and
- * a number that stays at zero should be uncomfortable to look at.
- *
- * Leverage comes next because it is the only panel that converts a problem into
- * an instruction: not "2 contacts are blocked" but "make this one artifact and
- * 2 contacts unblock."
+ * MomentumCard is gone (absorbed by the Scoreboard). LeverageCard folds into
+ * Today's Moves next; ShapeCard and HealthCard move to their own homes after
+ * that, and then this file goes away.
  */
 import Link from 'next/link'
-import {
-  Activity, Hammer, BarChart3, HeartPulse, TrendingUp, TrendingDown, Minus,
-} from 'lucide-react'
+import { Hammer, BarChart3, HeartPulse } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import type { Insights, ShapeBucket } from '@/lib/insights'
 
-function Delta({ value, previous }: { value: number; previous: number }) {
-  if (value === previous) {
-    return <span className="flex items-center gap-1 text-xs text-muted-foreground"><Minus className="h-3 w-3" />flat</span>
-  }
-  const up = value > previous
-  const Icon = up ? TrendingUp : TrendingDown
-  return (
-    <span className={`flex items-center gap-1 text-xs ${up ? 'text-emerald-400' : 'text-red-400'}`}>
-      <Icon className="h-3 w-3" />
-      {up ? '+' : ''}{value - previous} vs prior week
-    </span>
-  )
-}
-
-function MomentumCard({ momentum }: { momentum: Insights['momentum'] }) {
-  const { metrics, daysSinceLastTouch, quiet } = momentum
-  return (
-    <Card className={quiet ? 'border-amber-500/40 bg-amber-500/5' : 'border-emerald-500/30 bg-emerald-500/5'}>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Activity className="h-5 w-5" />
-          Momentum
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="grid grid-cols-3 gap-4">
-          {metrics.map(m => (
-            <div key={m.label}>
-              <p className="font-mono text-3xl font-semibold tabular-nums">{m.value}</p>
-              <p className="text-sm font-medium">{m.label}</p>
-              <p className="text-xs text-muted-foreground">{m.hint}</p>
-              {m.label === 'Touches' && <div className="mt-1"><Delta value={m.value} previous={m.previous} /></div>}
-            </div>
-          ))}
-        </div>
-        {/* The honest line. A CRM that stays quiet should say so out loud
-            rather than presenting an empty week as a neutral fact. */}
-        <p className={`mt-4 border-t border-border pt-3 text-sm ${quiet ? 'text-amber-400' : 'text-muted-foreground'}`}>
-          {daysSinceLastTouch === null
-            ? 'No outbound touch has ever been logged. The pipeline is entirely research so far.'
-            : quiet
-              ? `Nothing logged in 7 days. Last touch was ${daysSinceLastTouch} days ago.`
-              : `Last touch ${daysSinceLastTouch === 0 ? 'today' : `${daysSinceLastTouch}d ago`}.`}
-        </p>
-      </CardContent>
-    </Card>
-  )
-}
-
-function LeverageCard({ blockers }: { blockers: Insights['blockers'] }) {
+export function LeverageCard({ blockers }: { blockers: Insights['blockers'] }) {
   const total = blockers.reduce((n, b) => n + b.contacts.length, 0)
   return (
     <Card className={blockers.length ? 'border-red-500/30 bg-red-500/5' : ''}>
@@ -118,7 +62,7 @@ function Bar({ buckets, tone }: { buckets: ShapeBucket[]; tone: string }) {
   )
 }
 
-function ShapeCard({ shape }: { shape: Insights['shape'] }) {
+export function ShapeCard({ shape }: { shape: Insights['shape'] }) {
   const allIdentified = shape.stages.length === 1 && shape.stages[0].key === 'identified'
   return (
     <Card>
@@ -153,7 +97,7 @@ function ShapeCard({ shape }: { shape: Insights['shape'] }) {
   )
 }
 
-function HealthCard({ health }: { health: Insights['health'] }) {
+export function HealthCard({ health }: { health: Insights['health'] }) {
   const dot = { ok: 'bg-emerald-500', warn: 'bg-amber-500', bad: 'bg-red-500' }
   const worst = health.some(h => h.status === 'bad') ? 'bad'
     : health.some(h => h.status === 'warn') ? 'warn' : 'ok'
@@ -183,15 +127,3 @@ function HealthCard({ health }: { health: Insights['health'] }) {
   )
 }
 
-export function DailyBrief({ insights }: { insights: Insights }) {
-  return (
-    <div className="space-y-4">
-      <MomentumCard momentum={insights.momentum} />
-      <div className="grid gap-4 lg:grid-cols-2">
-        <LeverageCard blockers={insights.blockers} />
-        <ShapeCard shape={insights.shape} />
-      </div>
-      <HealthCard health={insights.health} />
-    </div>
-  )
-}

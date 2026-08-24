@@ -12,9 +12,10 @@
  * Same route (/), so existing bookmarks still land here.
  */
 
-import { listBids, listIntelAlerts, getActionQueue, getMorningActions, getPipelineFreshness } from '@/lib/files'
+import { listBids, getActionQueue, getMorningActions, getPipelineFreshness } from '@/lib/files'
 import { getBuckets } from '@/lib/crm'
 import { getInsights } from '@/lib/insights'
+import { getCampaignScore } from '@/lib/gtm'
 import { getNormalizedCronJobs } from '@/lib/shell'
 import { isFailing } from '@/lib/cron'
 import { getOpenOpportunities } from '@/lib/procurements'
@@ -23,7 +24,7 @@ import { getDecisionQueue } from '@/lib/decisions'
 import { getAgent24hSummary } from '@/lib/agents'
 import { PageHeader } from '@/components/shared/page-header'
 import { HealthDot } from '@/components/shared/status-badge'
-import { DataCard } from '@/components/shared/data-card'
+import { Scoreboard } from '@/components/today/scoreboard'
 import { DecisionsCard } from '@/components/today/decisions-card'
 import { AgentsSummaryCard } from '@/components/today/agents-summary'
 import { ActiveBidsKanban } from '@/components/today/active-bids-kanban'
@@ -33,7 +34,7 @@ import { OpportunitiesCard } from '@/components/today/opportunities-card'
 import { FreshnessCard } from '@/components/today/freshness-card'
 import { PipelineBuckets } from '@/components/today/pipeline-buckets'
 import { UpcomingMeetingsCard } from '@/components/today/upcoming-meetings-card'
-import { DailyBrief } from '@/components/today/daily-brief'
+import { LeverageCard, ShapeCard, HealthCard } from '@/components/today/daily-brief'
 import { ChangesFeed } from '@/components/today/changes-feed'
 
 export const dynamic = 'force-dynamic'
@@ -53,10 +54,10 @@ function todayLabel(now = new Date()): string {
 
 export default async function TodayPage() {
   // Fetch everything in parallel — each data source is independent.
-  const [bids, alerts, cronJobs, decisions, agentSummaries, actionQueue,
+  const [bids, score, cronJobs, decisions, agentSummaries, actionQueue,
          morningActions, opportunities, freshness, buckets, insights, calendar] = await Promise.all([
     listBids(),
-    listIntelAlerts(),
+    getCampaignScore().catch(() => ({ targets: null, meetingsHeld: 0, demosGiven: 0, daysLeft: null })),
     getNormalizedCronJobs().catch(() => []),
     getDecisionQueue().catch(() => []),
     getAgent24hSummary().catch(() => []),
@@ -68,10 +69,6 @@ export default async function TodayPage() {
     getInsights().catch(() => null),
     getUpcomingMeetings().catch(() => ({ configured: true, meetings: [], errors: ['calendar lookup failed'] })),
   ])
-
-  // Intel produced this week (alerts + procurements + briefings), not lifetime.
-  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-  const intelThisWeek = alerts.filter(a => a.date && new Date(a.date).getTime() >= weekAgo).length
 
   const failingJobs = cronJobs.filter(isFailing)
   const persistentFailure = failingJobs.some(j => j.consecutiveErrors >= 2)
@@ -92,10 +89,6 @@ export default async function TodayPage() {
   const CLOSED = new Set(['won', 'lost', 'no-bid', 'submitted'])
   const activeBids = bids.filter(b => !CLOSED.has((b.status || '').toLowerCase()))
 
-  const urgentDeadlines = opportunities.filter(o =>
-    o.deadlineAt && new Date(o.deadlineAt).getTime() - Date.now() <= 7 * 24 * 60 * 60 * 1000
-  ).length
-
   const now = new Date()
 
   return (
@@ -111,35 +104,18 @@ export default async function TodayPage() {
         }
       />
 
-      {/* Header counter strip — the morning glance metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <DataCard
-          label="Decisions"
-          value={decisions.length}
-          subtitle={decisions.length === 0 ? "You're clear" : 'Need your call'}
-          valueColor={decisions.length > 0 ? 'text-status-warning' : undefined}
-        />
-        <DataCard
-          label="Opportunities"
-          value={opportunities.length}
-          subtitle={urgentDeadlines > 0 ? `${urgentDeadlines} due this week` : 'Open, from scans'}
-          valueColor={urgentDeadlines > 0 ? 'text-status-danger' : undefined}
-        />
-        <DataCard
-          label="Active bids"
-          value={activeBids.length}
-          subtitle="In flight"
-        />
-        <DataCard
-          label="Intel this week"
-          value={intelThisWeek}
-          subtitle="New scans & alerts"
-        />
-      </div>
+      {/* Scoreboard — progress against the declared campaign. "Am I actually
+          selling, and am I on pace?" outranks every other number on the page. */}
+      <Scoreboard momentum={insights?.momentum ?? null} score={score} />
 
-      {/* Daily brief — momentum first: this page exists to answer "am I
-          actually selling?", and that number outranks everything else. */}
-      {insights && <DailyBrief insights={insights} />}
+      {/* Brief remnants — being decomposed into Moves / Shape / Machine Room */}
+      {insights && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <LeverageCard blockers={insights.blockers} />
+          <ShapeCard shape={insights.shape} />
+        </div>
+      )}
+      {insights && <HealthCard health={insights.health} />}
 
       {/* What changed since this browser last looked */}
       <ChangesFeed />

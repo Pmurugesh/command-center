@@ -23,6 +23,9 @@ export const PATHS = {
   // commits relative to it, so every write lands in the same history as the
   // bids and intel it references.
   operationsRoot: path.join(HOME, 'repos/operations'),
+  // GTM strategy docs + the campaign targets file the scoreboard reads.
+  gtm: path.join(HOME, 'repos/operations/gtm'),
+  gtmTargets: path.join(HOME, 'repos/operations/gtm/targets.md'),
   crm: path.join(HOME, 'repos/operations/crm'),
   crmContacts: path.join(HOME, 'repos/operations/crm/contacts'),
   crmMeetings: path.join(HOME, 'repos/operations/crm/meetings'),

@@ -52,7 +52,9 @@ export const LOOKAHEAD_DAYS = 14
 const DAY_MS = 24 * 60 * 60 * 1000
 const MAX_OCCURRENCES = 2000 // recurrence-expansion hard stop
 
-const DEMO_RE = /\b(demo|walkthrough|poc|pilot)\b/i
+// Exported: the scoreboard counts demos in the meeting archive with the same
+// definition the calendar uses, so "demo" means one thing everywhere.
+export const DEMO_RE = /\b(demo|walkthrough|poc|pilot)\b/i
 
 export interface FeedConfig {
   url: string
