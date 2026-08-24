@@ -46,3 +46,11 @@
   "88 days cold"; unreachability became "down". **State what the evidence shows, not what it
   suggests** — "I can't reach it from here" is both true and more useful than "it's down", and
   it points at the right fix instead of the wrong one.
+- **[2026-08-24]** Twice this session, work was pushed to a branch whose PR had ALREADY merged
+  (leads → PR #12, email connector → PR #14). Commits pushed to a merged branch have no path to
+  `main`, and nothing surfaces it: `git status` is clean, the push succeeds, and the branch
+  looks healthy. Both were found by accident — an import failing because `store.ts` was absent
+  from a fresh branch, and a check for `sync-email.py` on main. **After a PR merges, start the
+  next branch from `origin/main`** rather than continuing on the merged one. The
+  "Deployed build" health row catches the deploy half of this; the branch half has no detector
+  yet, so the habit is the control.
