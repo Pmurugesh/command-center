@@ -41,9 +41,14 @@ async function listGtmDocs(): Promise<GtmDoc[]> {
         }
       })
   )
-  // Newest first — date-prefixed filenames sort naturally; undated (targets,
-  // lead-rules) sink to the bottom, which reads correctly.
-  return docs.filter((d): d is GtmDoc => d !== null).sort((a, b) => b.slug.localeCompare(a.slug))
+  // Newest dated docs first; undated reference docs (targets, lead-rules) sink
+  // to the bottom. Plain desc-lexicographic would float letters above digits.
+  const dated = (s: string) => /^\d/.test(s)
+  return docs
+    .filter((d): d is GtmDoc => d !== null)
+    .sort((a, b) =>
+      Number(dated(b.slug)) - Number(dated(a.slug)) || b.slug.localeCompare(a.slug)
+    )
 }
 
 export default async function GtmPage() {

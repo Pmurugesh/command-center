@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation'
 import { Zap, ArrowRight, Loader2, Check } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import type { Move } from '@/lib/moves'
 
 function daysUntil(due: string): number {
@@ -46,7 +47,8 @@ function MoveRow({ move, working, onLogTouch, onResolve }: {
   onResolve: (file: string, lineNumber: number) => void
 }) {
   return (
-    <li className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+    // Meta stacks under the action on phones — chips must never eat the verb.
+    <li className="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0 md:flex-row md:items-start md:gap-3">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <Link href={move.href} className="group flex min-w-0 items-center gap-1.5">
@@ -60,27 +62,23 @@ function MoveRow({ move, working, onLogTouch, onResolve }: {
           <p className="mt-0.5 truncate text-xs text-muted-foreground">{move.detail}</p>
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         {move.due && <DueChip due={move.due} />}
         <Badge variant="outline" className="text-[10px]">{move.source}</Badge>
         {move.kind === 'crm-due' && move.contactSlug && (
-          <button
-            onClick={() => onLogTouch(move.contactSlug!)}
-            disabled={working}
-            className="rounded border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
-          >
+          <Button size="touch" onClick={() => onLogTouch(move.contactSlug!)} disabled={working}>
             {working ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Log touch'}
-          </button>
+          </Button>
         )}
         {move.kind === 'strategic' && move.file && move.lineNumber !== undefined && (
-          <button
+          <Button
+            size="touch"
             onClick={() => onResolve(move.file!, move.lineNumber!)}
             disabled={working}
             title="Mark answered — appends [RESOLVED] to the line in the source file"
-            className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
           >
             {working ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Check className="h-3 w-3" />Resolve</>}
-          </button>
+          </Button>
         )}
       </div>
     </li>

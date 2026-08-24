@@ -120,7 +120,7 @@ export function ClockCard({ items, calendarConfigured, calendarErrors }: {
           <p className="text-xs text-muted-foreground">
             Calendar not connected — deadlines only. Paste each calendar&apos;s secret iCal address
             (Google Calendar → Settings → Integrate calendar) into{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">~/.openclaw/workspace/.credentials/calendar.json</code>{' '}
+            <code className="break-all rounded bg-muted px-1 py-0.5 text-xs">~/.openclaw/workspace/.credentials/calendar.json</code>{' '}
             as <code className="rounded bg-muted px-1 py-0.5 text-xs">{'{ "icsUrls": ["…"] }'}</code>.
           </p>
         )}
