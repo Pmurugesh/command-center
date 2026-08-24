@@ -743,6 +743,17 @@ Scribe is email-only). Chose full capture with CRM integration.
       Granola connector tools. Uncaptured marginal tail: Euclidean series,
       interviews (Vedant), Paychex, Salesforce Lorne, Google 4/21, Oracle
       4/30 — fetch on demand if relevant.
+- [ ] ROADMAP (Pavan, 8/24): this becomes COMPANY-WIDE meeting intake, not
+      just Pavan's notes. The bottleneck is account access, not the scheduler:
+      the connector sees only Pavan's Granola. Plan when the team is ready:
+      (1) everyone (Ganapathy/Rani/Isaiah/new hires) on Granola sharing
+      business meetings into one shared Team Space — the governance boundary;
+      (2) widen the sync filter to workspace-visible meetings + stamp each
+      archive with who captured it (feeds the CRM's existing owner model, so
+      Rani's meetings log touches under Rani); (3) move the runner to an
+      always-on home — mini (needs one-time `claude login` there, then a
+      headless probe to confirm connectors surface non-interactively; CLI
+      currently NOT logged in) or a cloud routine pushing to GitHub.
 
 ## Open gates
 
