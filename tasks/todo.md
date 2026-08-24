@@ -579,15 +579,40 @@ Capture/Forge/Voice's per-agent crons.
 - Intake freshness gets a health-panel row; a dead connector must be loud within a day.
 
 **Build order:**
-- [ ] Gmail API OAuth (or app-password IMAP) on the mini for the AGENCY mailbox — the
-      claude.ai Gmail connector cannot serve headless cron (same lesson as Granola).
-- [ ] `gmail-sync` connector: pre-filtered threads → `crm/intake/email/`, idempotent by
-      message id, one batch commit.
-- [ ] Scribe agent definition + cron (2x daily), filing pass with the rules above.
-- [ ] Review queue surface on the dashboard (approve draft contacts, confirm actions).
+- [x] Gmail API OAuth (or app-password IMAP) on the mini for the AGENCY mailbox.
+      *Done 2026-08-24: app-password IMAP against the self-hosted
+      `mail.4infinitesolutions.com` (the domain is not on Google), creds in
+      `~/.config/command-center/mail.env` on the mini.*
+- [x] `gmail-sync` connector: pre-filtered threads → `crm/intake/email/`, idempotent by
+      message id, one batch commit. *`scripts/sync-email.py`, live on a 15-min timer.*
+- [x] **Scribe, deterministic half (BUILT 2026-08-24)** — `scripts/scribe.ts`, chained
+      after the connector in the same 15-min tick. Files on exact email match only:
+      inbound from a CRM contact → touch via `email-in` (bumps last_touched, does NOT
+      advance stage, excluded from momentum — the contact touched us); outbound to a CRM
+      contact → touch via `email-out` (counts as selling — a human wrote it); us→us
+      internal threads → ledgered skip (listed, never queued); everyone else → review
+      queue. Idempotent by message hash (`.ledger` beside the staging; staged files are
+      never moved — the connector dedupes by directory contents). `appendLog` gained
+      `advanceStage` + forward-only last_touched (a backfilled 2025 email can no longer
+      rewind recency). Found + fixed: `NON_HUMAN_VIA` had drifted between crm.ts and
+      insights.ts, so `lead-sync` writes could inflate momentum.
+      *Dry-run on the MacBook's 257-message backlog: 12 in / 7 out touches on real slugs,
+      212 review messages collapsing to 36 correspondents, 26 internal.*
+- [x] Review queue surface on the dashboard. *Per-CORRESPONDENT, not per-message
+      (`crm/intake/review/email-queue.json`, committed — distilled facts, never bodies);
+      /intake renders pending rows with Add-to-CRM (deterministic prefill: name, address,
+      agency from a .gov domain) and Dismiss; a dismissed address stays dismissed when
+      they write again. Plus an "Email intake" health row from the connector log's mtime —
+      loud within a day, omitted on machines that don't run the connector.*
+- [ ] Scribe, judgment half: OpenClaw agent + cron (2x daily) for what a match cannot
+      decide — action-item extraction to a triage bucket, draft-contact enrichment
+      (title/agency from signatures), uncertain routing. Gated on OpenClaw API credits
+      being live.
 - [ ] Granola sync folds into the same intake path (Layer 1 exists once, sources plug in).
-- [ ] GATES: which mailbox holds agency correspondence; Pavan connects the claude.ai Gmail
-      connector separately for interactive sessions (2 min, Settings → Connectors).
+- [ ] Decision for Pavan: file the MacBook's year-long backlog (the 257 staged messages)?
+      One command, but check overlap first — `import-engagements.ts` already hand-logged
+      some of the same CDT/LCI/Caltrans touches, and scribe would add near-duplicates.
+- [x] GATES: mailbox = `pavanm@4infinitesolutions.com` (closed 2026-08-24).
 
 ### M4 — Outputs and rhythm
 

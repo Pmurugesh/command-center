@@ -316,9 +316,13 @@ function hasBeenWorked(c: CrmContact): boolean {
 }
 
 // Kept in sync with insights.ts: writes made by machinery rather than by a person
-// talking to someone.
+// talking to someone. 'email-in' is here because an inbound email is the CONTACT
+// touching US — evidence of a live thread (it bumps last_touched), but not proof
+// anyone here worked them. 'email-out' is deliberately absent: a sent email is a
+// human selling, whichever machine recorded it.
 const NON_HUMAN_VIA = new Set(['seed', 'rederive', 'slug-reconcile', 'verify',
-  'roundtrip-test', 'api-test', 'pavan-correction', 'lead-sync', 'baseline'])
+  'roundtrip-test', 'api-test', 'pavan-correction', 'lead-sync', 'baseline',
+  'email-in'])
 
 /**
  * The morning view. Buckets are mutually exclusive and ordered by urgency, so a
@@ -526,7 +530,7 @@ export async function updateContact(
 export async function appendLog(
   slug: string,
   text: string,
-  opts: { via?: string; date?: string; clearNextAction?: boolean } = {},
+  opts: { via?: string; date?: string; clearNextAction?: boolean; advanceStage?: boolean } = {},
 ): Promise<CrmContact | null> {
   const via = opts.via ?? 'dashboard'
   const release = await acquireLock()
@@ -535,12 +539,19 @@ export async function appendLog(
     if (!current) return null
 
     const date = opts.date ?? today()
+    // Backfilled history (an email synced from last year) must never rewind
+    // recency: last_touched only moves forward.
+    const lastTouched = current.lastTouched && current.lastTouched > date
+      ? current.lastTouched
+      : date
     const next: CrmContact = {
       ...current,
-      lastTouched: date,
+      lastTouched,
       log: [...current.log, { date, text, via }],
     }
-    if (current.stage === 'identified') next.stage = 'contacted'
+    // advanceStage=false lets observers (inbound email filing) record evidence
+    // without claiming WE contacted them — observation vs commitment.
+    if (current.stage === 'identified' && (opts.advanceStage ?? true)) next.stage = 'contacted'
     if (opts.clearNextAction) {
       next.nextAction = undefined
       next.nextActionDue = undefined

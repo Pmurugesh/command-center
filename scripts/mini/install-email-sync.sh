@@ -23,11 +23,17 @@ mkdir -p "$HOME/bin" "$HOME/Library/LaunchAgents" "$LOG_DIR" "$(dirname "$ENV_FI
 cat > "$WRAPPER" <<'EOF'
 #!/bin/bash
 # Email intake tick — inert until the credentials file exists.
+# Two stages, both deterministic: the connector stages relevant mail, then
+# Scribe files it (touches on exact CRM matches, everything else to the
+# review queue). Scribe runs even if the connector fails — a backlog of
+# staged-but-unfiled mail should never wait on the mailbox being reachable.
 ENV_FILE="$HOME/.config/command-center/mail.env"
 [ -f "$ENV_FILE" ] || exit 0
 set -a; . "$ENV_FILE"; set +a
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
-exec /usr/bin/python3 "$HOME/repos/command-center/scripts/sync-email.py"
+/usr/bin/python3 "$HOME/repos/command-center/scripts/sync-email.py"
+cd "$HOME/repos/command-center" && exec node --experimental-strip-types --no-warnings \
+  scripts/run-ts.mjs scripts/scribe.ts
 EOF
 chmod +x "$WRAPPER"
 
