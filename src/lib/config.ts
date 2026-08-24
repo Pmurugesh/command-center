@@ -1,6 +1,7 @@
 import {
   Calendar,
   FileText,
+  NotebookPen,
   Shield,
   Radio,
   Settings,
@@ -103,6 +104,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/bids', label: 'Bids', icon: FileText, section: 'Work' },
       { href: '/agencies', label: 'Agencies', icon: Building2, section: 'Work' },
+      { href: '/meetings', label: 'Meetings', icon: NotebookPen, section: 'Work' },
       { href: '/partnerships', label: 'Partnerships', icon: Handshake, section: 'Work' },
     ],
   },
