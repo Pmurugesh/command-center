@@ -719,6 +719,27 @@ only. Done this session:
       into the installer). Verified end-to-end via `openclaw cron run <id>`:
       status ok, delivered, report rewritten.
 
+## Phase 6c — Granola meeting backfill — DONE 2026-08-24
+
+Pavan asked whether Granola was captured; it wasn't (crm/meetings was empty;
+Scribe is email-only). Chose full capture with CRM integration.
+
+- [x] Reviewed all 119 Granola meetings (Sept 2025 - Aug 2026); 49 business-
+      relevant fetched in full; Bedrock-venture, SIEN, and personal excluded
+- [x] 48 meeting archives in operations `crm/meetings/YYYY-MM-DD-slug.md`
+      (frontmatter: granola_id, category agency/partnership/gtm/product/
+      operations, agency, contact slugs) — the engagement-import had distilled
+      log lines for 6 contacts but never archived the meetings themselves
+- [x] Contact gaps filled: christine-lci +2 pre-engagement demos (9/4, 9/11);
+      NEW contacts pindi-oeis + shafi-oeis (demos given Sept 2025, both went
+      quiet — now visible as going-cold) and jamie-burke-lci (technical
+      counterpart on the LCI engagement). Unknowns flagged needs-detail.
+- [x] Verified live: 104 contacts, Pindi/Shafi in the pipeline buckets
+- [ ] OPEN: ongoing capture — Granola is a session connector, not on the mini;
+      new meetings need a periodic sync (scheduled task) or manual ask.
+      Uncaptured marginal tail: Euclidean series, interviews (Vedant), Paychex,
+      Salesforce Lorne, Google 4/21, Oracle 4/30 — fetch on demand if relevant.
+
 ## Open gates
 
 1. ITN-37485: submitted-then-disqualified (`lost`) or pulled-out-first (`no-bid`)?
