@@ -596,8 +596,17 @@ Capture/Forge/Voice's per-agent crons.
       `advanceStage` + forward-only last_touched (a backfilled 2025 email can no longer
       rewind recency). Found + fixed: `NON_HUMAN_VIA` had drifted between crm.ts and
       insights.ts, so `lead-sync` writes could inflate momentum.
-      *Dry-run on the MacBook's 257-message backlog: 12 in / 7 out touches on real slugs,
-      212 review messages collapsing to 36 correspondents, 26 internal.*
+      *Dry-run on the MacBook's 257-message backlog: 11 in / 7 out touches on real slugs,
+      212 review messages collapsing to 36 correspondents, 26 internal, 1 auto-reply
+      (Wesley's OOO — previously would have logged as him engaging).*
+      Edge cases handled deterministically (2026-08-24): `alt_emails` frontmatter — link a
+      second address to a contact once and every future message files correctly (the jothi
+      case: llmatscale.ai + dmv.ca.gov are one human, two review rows until linked);
+      auto-replies/OOO ledgered, never a touch, never queued; duplicate (contact, date,
+      text) log entries guarded, so a double-delivered message or a lost ledger cannot
+      double-log history. Left for the judgment half: forwarded solicitations buried in
+      internal threads, bounce-driven dead-address flags, shared-mailbox labeling,
+      same-person-different-address linking proposals.
 - [x] Review queue surface on the dashboard. *Per-CORRESPONDENT, not per-message
       (`crm/intake/review/email-queue.json`, committed — distilled facts, never bodies);
       /intake renders pending rows with Add-to-CRM (deterministic prefill: name, address,

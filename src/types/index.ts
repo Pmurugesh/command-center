@@ -204,6 +204,14 @@ export interface CrmContact {
   name: string
   title?: string
   email?: string
+  /**
+   * Other addresses the same human writes from (personal gmail, a consultancy
+   * domain, an old agency address). The email filer matches these exactly like
+   * the primary, so linking an address once files every future message. Which
+   * addresses belong to the same person is a human/judgment call — nothing
+   * ever auto-populates this.
+   */
+  altEmails?: string[]
   phone?: string
   agency?: string         // agency slug, joins to intelligence/agencies/<slug>.md
   agencyName?: string
@@ -260,6 +268,7 @@ export interface CrmContactUpdate {
   name?: string
   title?: string
   email?: string
+  altEmails?: string[] | null
   phone?: string
   agency?: string
   agencyName?: string

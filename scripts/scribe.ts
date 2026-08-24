@@ -52,10 +52,17 @@ interface StagedEmail {
 }
 
 interface LedgerEntry {
-  action: 'touch-in' | 'touch-out' | 'review' | 'internal'
+  action: 'touch-in' | 'touch-out' | 'review' | 'internal' | 'auto-reply'
   slugs?: string[]
   at: string
 }
+
+// An autoresponder is a robot answering, not a person engaging: logging it as a
+// touch would bump last_touched (and, from a known contact, fake thread
+// activity), and queueing an unknown sender's OOO robot would ask "add this
+// person?" about someone who never wrote to us. Ledgered, never filed.
+const AUTO_REPLY_SUBJECT =
+  /^\s*(re:\s*)?(automatic reply|auto[- ]?reply|out of (the )?office|autosvar|abwesenheit)/i
 
 function parseAddr(header: string): { email: string; name?: string } {
   const angle = header.match(/<([^>]+)>/)
@@ -70,9 +77,23 @@ async function main() {
   const dry = process.argv.includes('--dry')
 
   const contacts = await listContacts()
+  // Primary and alt addresses resolve identically: linking an address to a
+  // contact once (alt_emails frontmatter) files every future message from it.
   const byEmail = new Map(
-    contacts.filter(c => c.email).map(c => [c.email!.toLowerCase(), c]),
+    contacts.flatMap(c =>
+      [c.email, ...(c.altEmails ?? [])]
+        .filter((e): e is string => Boolean(e))
+        .map(e => [e.toLowerCase(), c] as const),
+    ),
   )
+  // Guards duplicate log entries: same contact + date + text is one fact,
+  // whether the duplicate comes from a double-delivered message in this run or
+  // a lost ledger causing a re-sweep.
+  const written = new Set<string>()
+  const alreadyLogged = (c: { slug: string; log: { date: string; text: string }[] },
+    date: string, text: string) =>
+    written.has(`${c.slug}|${date}|${text}`) ||
+    c.log.some(e => e.date === date && e.text === text)
 
   let ledger: Record<string, LedgerEntry> = {}
   try { ledger = JSON.parse(await fs.readFile(LEDGER_PATH, 'utf8')) } catch { /* first run */ }
@@ -81,7 +102,7 @@ async function main() {
   try { names = await fs.readdir(PATHS.crmIntakeEmail) } catch { /* no staging dir on this machine */ }
   const pendingFiles = names.filter(n => STAGED_NAME.test(n) && !ledger[n.replace('.json', '')])
 
-  const counts = { in: 0, out: 0, review: 0, internal: 0, skipped: 0 }
+  const counts = { in: 0, out: 0, review: 0, internal: 0, autoReply: 0, skipped: 0 }
   const today = new Date().toISOString().slice(0, 10)
 
   // The review queue is per correspondent, not per message: five emails from
@@ -121,14 +142,24 @@ async function main() {
     const sender = parseAddr(msg.from)
     const subject = (msg.subject || '(no subject)').trim()
 
+    if (AUTO_REPLY_SUBJECT.test(subject)) {
+      counts.autoReply++
+      if (dry) console.log(`auto-reply ${sender.email}  ${date}  "${subject}"`)
+      else ledger[stem] = { action: 'auto-reply', at: today }
+      continue
+    }
+
     const fromContact = byEmail.get(sender.email)
     if (fromContact) {
       counts.in++
+      const text = `email from ${fromContact.name}: "${subject}"`
       if (dry) {
         console.log(`touch-in   ${fromContact.slug}  ${date}  "${subject}"`)
       } else {
-        await appendLog(fromContact.slug, `email from ${fromContact.name}: "${subject}"`,
-          { via: 'email-in', date, advanceStage: false })
+        if (!alreadyLogged(fromContact, date, text)) {
+          await appendLog(fromContact.slug, text, { via: 'email-in', date, advanceStage: false })
+          written.add(`${fromContact.slug}|${date}|${text}`)
+        }
         ledger[stem] = { action: 'touch-in', slugs: [fromContact.slug], at: today }
       }
       continue
@@ -144,11 +175,12 @@ async function main() {
       if (known.length) {
         counts.out++
         for (const c of known) {
+          const text = `email to ${c!.name}: "${subject}"`
           if (dry) {
             console.log(`touch-out  ${c!.slug}  ${date}  "${subject}"`)
-          } else {
-            await appendLog(c!.slug, `email to ${c!.name}: "${subject}"`,
-              { via: 'email-out', date })
+          } else if (!alreadyLogged(c!, date, text)) {
+            await appendLog(c!.slug, text, { via: 'email-out', date })
+            written.add(`${c!.slug}|${date}|${text}`)
           }
         }
         if (!dry) ledger[stem] = { action: 'touch-out', slugs: known.map(c => c!.slug), at: today }
@@ -187,7 +219,7 @@ async function main() {
     `scribe${dry ? ' (dry)' : ''}: ${pendingFiles.length} new — ` +
     `touches in ${counts.in} / out ${counts.out}, ` +
     `review ${counts.review} msg → ${reviewByEmail.size} correspondent(s), ` +
-    `internal ${counts.internal}, unreadable ${counts.skipped}`,
+    `internal ${counts.internal}, auto-replies ${counts.autoReply}, unreadable ${counts.skipped}`,
   )
 }
 
