@@ -1,49 +1,14 @@
 /**
  * Brief sub-cards, being decomposed into the new Today layout.
  *
- * MomentumCard is gone (absorbed by the Scoreboard). LeverageCard folds into
- * Today's Moves next; ShapeCard and HealthCard move to their own homes after
- * that, and then this file goes away.
+ * MomentumCard is gone (Scoreboard) and LeverageCard is gone (Today's Moves).
+ * ShapeCard and HealthCard move to their own homes next, then this file goes
+ * away.
  */
 import Link from 'next/link'
-import { Hammer, BarChart3, HeartPulse } from 'lucide-react'
+import { BarChart3, HeartPulse } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import type { Insights, ShapeBucket } from '@/lib/insights'
-
-export function LeverageCard({ blockers }: { blockers: Insights['blockers'] }) {
-  const total = blockers.reduce((n, b) => n + b.contacts.length, 0)
-  return (
-    <Card className={blockers.length ? 'border-red-500/30 bg-red-500/5' : ''}>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Hammer className="h-5 w-5" />
-          Leverage
-          {total > 0 && <span className="font-mono text-sm text-muted-foreground">{total} blocked</span>}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 pt-0">
-        {blockers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing is blocked. No artifacts owed.</p>
-        ) : (
-          <>
-            <p className="text-xs text-muted-foreground">Make these, in this order. Each unblocks the contacts listed.</p>
-            {blockers.map(b => (
-              <div key={b.reason} className="rounded-md border border-border p-3">
-                <div className="flex items-baseline gap-2">
-                  <span className="font-mono text-lg font-semibold text-red-400 tabular-nums">{b.contacts.length}</span>
-                  <p className="text-sm font-medium">{b.reason}</p>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Unblocks: {b.contacts.map(c => c.name).join(', ')}
-                </p>
-              </div>
-            ))}
-          </>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
 
 function Bar({ buckets, tone }: { buckets: ShapeBucket[]; tone: string }) {
   const max = Math.max(1, ...buckets.map(b => b.count))

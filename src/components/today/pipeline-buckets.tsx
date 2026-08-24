@@ -229,7 +229,8 @@ export function PipelineBuckets({ buckets }: { buckets: CrmBuckets }) {
   const order: BucketKey[] = ['blocked', 'overdue', 'dueToday', 'goingCold', 'notStarted']
 
   return (
-    <div className="space-y-4">
+    // scroll-mt clears the top bar when a Move deep-links here via /#pipeline
+    <div id="pipeline" className="scroll-mt-16 space-y-4">
       <div className="flex items-baseline justify-between">
         <h2 className="text-lg font-semibold">Pipeline</h2>
         <span className="font-mono text-xs text-muted-foreground">

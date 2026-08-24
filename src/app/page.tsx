@@ -12,10 +12,12 @@
  * Same route (/), so existing bookmarks still land here.
  */
 
-import { listBids, getActionQueue, getMorningActions, getPipelineFreshness } from '@/lib/files'
+import { listBids, getPipelineFreshness } from '@/lib/files'
 import { getBuckets } from '@/lib/crm'
 import { getInsights } from '@/lib/insights'
-import { getCampaignScore } from '@/lib/gtm'
+import { getCampaignScore, getStrategicDecisions } from '@/lib/gtm'
+import { listChannels, channelAlerts } from '@/lib/channels'
+import { buildMoves } from '@/lib/moves'
 import { getNormalizedCronJobs } from '@/lib/shell'
 import { isFailing } from '@/lib/cron'
 import { getOpenOpportunities } from '@/lib/procurements'
@@ -25,16 +27,14 @@ import { getAgent24hSummary } from '@/lib/agents'
 import { PageHeader } from '@/components/shared/page-header'
 import { HealthDot } from '@/components/shared/status-badge'
 import { Scoreboard } from '@/components/today/scoreboard'
-import { DecisionsCard } from '@/components/today/decisions-card'
+import { MovesCard } from '@/components/today/moves-card'
 import { AgentsSummaryCard } from '@/components/today/agents-summary'
 import { ActiveBidsKanban } from '@/components/today/active-bids-kanban'
-import { ActionQueueCard } from '@/components/today/action-queue-card'
-import { MorningActionsCard } from '@/components/today/morning-actions-card'
 import { OpportunitiesCard } from '@/components/today/opportunities-card'
 import { FreshnessCard } from '@/components/today/freshness-card'
 import { PipelineBuckets } from '@/components/today/pipeline-buckets'
 import { UpcomingMeetingsCard } from '@/components/today/upcoming-meetings-card'
-import { LeverageCard, ShapeCard, HealthCard } from '@/components/today/daily-brief'
+import { ShapeCard, HealthCard } from '@/components/today/daily-brief'
 import { ChangesFeed } from '@/components/today/changes-feed'
 
 export const dynamic = 'force-dynamic'
@@ -54,21 +54,31 @@ function todayLabel(now = new Date()): string {
 
 export default async function TodayPage() {
   // Fetch everything in parallel — each data source is independent.
-  const [bids, score, cronJobs, decisions, agentSummaries, actionQueue,
-         morningActions, opportunities, freshness, buckets, insights, calendar] = await Promise.all([
+  const [bids, score, cronJobs, decisions, agentSummaries, strategic,
+         channels, opportunities, freshness, buckets, insights, calendar] = await Promise.all([
     listBids(),
     getCampaignScore().catch(() => ({ targets: null, meetingsHeld: 0, demosGiven: 0, daysLeft: null })),
     getNormalizedCronJobs().catch(() => []),
     getDecisionQueue().catch(() => []),
     getAgent24hSummary().catch(() => []),
-    getActionQueue().catch(() => []),
-    getMorningActions().catch(() => ''),
+    getStrategicDecisions().catch(() => []),
+    listChannels().catch(() => []),
     getOpenOpportunities().catch(() => []),
     getPipelineFreshness().catch(() => []),
     getBuckets().catch(() => ({ overdue: [], blocked: [], dueToday: [], goingCold: [], notStarted: [], sourcedCount: 0, total: 0 })),
     getInsights().catch(() => null),
     getUpcomingMeetings().catch(() => ({ configured: true, meetings: [], errors: ['calendar lookup failed'] })),
   ])
+
+  // The merge that used to happen in Pavan's head: one ranked queue.
+  const moves = buildMoves({
+    strategic,
+    bidDecisions: decisions,
+    blockers: insights?.blockers ?? [],
+    buckets,
+    opportunities,
+    channels: channelAlerts(channels),
+  })
 
   const failingJobs = cronJobs.filter(isFailing)
   const persistentFailure = failingJobs.some(j => j.consecutiveErrors >= 2)
@@ -108,17 +118,10 @@ export default async function TodayPage() {
           selling, and am I on pace?" outranks every other number on the page. */}
       <Scoreboard momentum={insights?.momentum ?? null} score={score} />
 
-      {/* Brief remnants — being decomposed into Moves / Shape / Machine Room */}
-      {insights && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <LeverageCard blockers={insights.blockers} />
-          <ShapeCard shape={insights.shape} />
-        </div>
-      )}
-      {insights && <HealthCard health={insights.health} />}
-
-      {/* What changed since this browser last looked */}
-      <ChangesFeed />
+      {/* Today's moves — the single ranked queue. Strategic decisions,
+          artifact blockers, bid flags, due touches, closing deadlines: merged
+          and leverage-ranked so the top row is the day's highest-value action. */}
+      <MovesCard moves={moves} />
 
       {/* Scheduled time — demos and meetings on the calendar, next two weeks */}
       <UpcomingMeetingsCard result={calendar} />
@@ -127,11 +130,14 @@ export default async function TodayPage() {
           outranks any report. */}
       <PipelineBuckets buckets={buckets} />
 
-      {/* Decisions — highest-leverage bid action */}
-      <DecisionsCard decisions={decisions} />
-
       {/* Opportunity deadlines from procurement scans */}
       <OpportunitiesCard items={opportunities} />
+
+      {/* Pipeline shape — stage funnel, owner load, product concentration */}
+      {insights && <ShapeCard shape={insights.shape} />}
+
+      {/* What changed since this browser last looked */}
+      <ChangesFeed />
 
       {/* Agents — what your workforce did last 24h, including failures */}
       <AgentsSummaryCard summaries={agentSummaries} />
@@ -139,11 +145,8 @@ export default async function TodayPage() {
       {/* Active bids kanban with inline triage */}
       <ActiveBidsKanban bids={activeBids} />
 
-      {/* Action queue from partnership next-actions */}
-      <ActionQueueCard items={actionQueue} />
-
-      {/* Morning actions from overnight scans (hidden until something generates them) */}
-      <MorningActionsCard content={morningActions} />
+      {/* Machine health rows (folding into the Machine Room next) */}
+      {insights && <HealthCard health={insights.health} />}
 
       {/* Is the automation feeding this page still alive? */}
       <FreshnessCard sources={freshness} />
