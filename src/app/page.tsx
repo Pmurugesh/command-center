@@ -24,16 +24,17 @@ import { getOpenOpportunities } from '@/lib/procurements'
 import { getUpcomingMeetings } from '@/lib/calendar'
 import { getDecisionQueue } from '@/lib/decisions'
 import { getAgent24hSummary } from '@/lib/agents'
+import { listLeads } from '@/lib/leads'
+import { buildClock } from '@/lib/clock'
 import { PageHeader } from '@/components/shared/page-header'
 import { HealthDot } from '@/components/shared/status-badge'
 import { Scoreboard } from '@/components/today/scoreboard'
 import { MovesCard } from '@/components/today/moves-card'
+import { ClockCard } from '@/components/today/clock-card'
 import { AgentsSummaryCard } from '@/components/today/agents-summary'
 import { ActiveBidsKanban } from '@/components/today/active-bids-kanban'
-import { OpportunitiesCard } from '@/components/today/opportunities-card'
 import { FreshnessCard } from '@/components/today/freshness-card'
 import { PipelineBuckets } from '@/components/today/pipeline-buckets'
-import { UpcomingMeetingsCard } from '@/components/today/upcoming-meetings-card'
 import { ShapeCard, HealthCard } from '@/components/today/daily-brief'
 import { ChangesFeed } from '@/components/today/changes-feed'
 
@@ -55,7 +56,7 @@ function todayLabel(now = new Date()): string {
 export default async function TodayPage() {
   // Fetch everything in parallel — each data source is independent.
   const [bids, score, cronJobs, decisions, agentSummaries, strategic,
-         channels, opportunities, freshness, buckets, insights, calendar] = await Promise.all([
+         channels, opportunities, freshness, buckets, insights, calendar, leads] = await Promise.all([
     listBids(),
     getCampaignScore().catch(() => ({ targets: null, meetingsHeld: 0, demosGiven: 0, daysLeft: null })),
     getNormalizedCronJobs().catch(() => []),
@@ -68,6 +69,7 @@ export default async function TodayPage() {
     getBuckets().catch(() => ({ overdue: [], blocked: [], dueToday: [], goingCold: [], notStarted: [], sourcedCount: 0, total: 0 })),
     getInsights().catch(() => null),
     getUpcomingMeetings().catch(() => ({ configured: true, meetings: [], errors: ['calendar lookup failed'] })),
+    listLeads().catch(() => []),
   ])
 
   // The merge that used to happen in Pavan's head: one ranked queue.
@@ -79,6 +81,9 @@ export default async function TodayPage() {
     opportunities,
     channels: channelAlerts(channels),
   })
+
+  // Everything dated in the next 14 days — meetings and deadlines, one agenda.
+  const clock = buildClock({ meetings: calendar.meetings, bids, opportunities, leads })
 
   const failingJobs = cronJobs.filter(isFailing)
   const persistentFailure = failingJobs.some(j => j.consecutiveErrors >= 2)
@@ -123,15 +128,13 @@ export default async function TodayPage() {
           and leverage-ranked so the top row is the day's highest-value action. */}
       <MovesCard moves={moves} />
 
-      {/* Scheduled time — demos and meetings on the calendar, next two weeks */}
-      <UpcomingMeetingsCard result={calendar} />
+      {/* The clock — meetings, bid deadlines, and scored solicitations for
+          the next two weeks, one agenda */}
+      <ClockCard items={clock} calendarConfigured={calendar.configured} calendarErrors={calendar.errors} />
 
       {/* Pipeline — who needs you, ranked. A blocked or overdue contact
           outranks any report. */}
       <PipelineBuckets buckets={buckets} />
-
-      {/* Opportunity deadlines from procurement scans */}
-      <OpportunitiesCard items={opportunities} />
 
       {/* Pipeline shape — stage funnel, owner load, product concentration */}
       {insights && <ShapeCard shape={insights.shape} />}
