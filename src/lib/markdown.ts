@@ -34,8 +34,10 @@ export function extractSections(content: string): { heading: string; content: st
   return sections
 }
 
-export function countFlags(content: string): number {
-  return (content.match(/\[HUMAN DECISION NEEDED\]/g) || []).length
+export function countFlags(content: string, flag = '[HUMAN DECISION NEEDED]'): number {
+  let n = 0
+  for (let i = content.indexOf(flag); i !== -1; i = content.indexOf(flag, i + flag.length)) n++
+  return n
 }
 
 export interface FlagLocation {
@@ -45,17 +47,17 @@ export interface FlagLocation {
 }
 
 /**
- * Walk the markdown content yielding every [HUMAN DECISION NEEDED] flag's location,
- * with a short context snippet (the flag line + up to 2 following lines, trimmed).
- * Used by the Today page's Decisions Waiting card.
+ * Walk the markdown content yielding every flag's location (default:
+ * [HUMAN DECISION NEEDED]), with a short context snippet (the flag line + up to
+ * 2 following lines, trimmed). Flags are matched as literal substrings.
  */
-export function iterateFlags(content: string): FlagLocation[] {
+export function iterateFlags(content: string, flag = '[HUMAN DECISION NEEDED]'): FlagLocation[] {
   const lines = content.split('\n')
   const flags: FlagLocation[] = []
   let count = 0
 
   for (let i = 0; i < lines.length; i++) {
-    if (!lines[i].includes('[HUMAN DECISION NEEDED]')) continue
+    if (!lines[i].includes(flag)) continue
     count += 1
     // Pull a small context window — current line + up to 2 following lines.
     // Skip blank lines in the trailing window so the snippet stays informative.

@@ -9,6 +9,7 @@ export interface Bid {
   entity?: Entity
   hasDocuments?: boolean
   updatedAt?: string // ISO; from .status.json updatedAt OR bid dir mtime
+  deadlineAt?: string // YYYY-MM-DD; normalized from .status.json (deadline | deadlineProposalDue)
 }
 
 export interface BidFile {
@@ -32,6 +33,10 @@ export interface BidStatusData {
   status: BidStatus
   entity: Entity
   updatedAt: string
+  // Deadline lives under two historical keys on disk (plus "no sidecar at all");
+  // consumers read the normalized Bid.deadlineAt, never these directly.
+  deadline?: string
+  deadlineProposalDue?: string
 }
 
 export interface DocumentFile {

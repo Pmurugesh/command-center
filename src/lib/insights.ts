@@ -20,19 +20,8 @@ import fs from 'fs/promises'
 import { PATHS } from './paths'
 import { runCommandArgs } from './shell'
 import { listContacts, today, addDays } from './crm'
-import { CRM_TERMINAL_STAGES } from './config'
+import { CRM_TERMINAL_STAGES, NON_HUMAN_VIA } from './config'
 import type { CrmContact } from '@/types'
-
-// Log entries written by machinery rather than by a person talking to someone.
-// Counting these as "touches" would let the momentum number rise while zero
-// selling happened, which is the exact failure this metric exists to catch.
-// This set had drifted from crm.ts's copy (missing pavan-correction, lead-sync,
-// baseline — so a lead sync could inflate momentum); now identical again.
-// 'email-in' = the contact emailing us: bumps last_touched, never momentum.
-// 'email-out' deliberately absent — a sent email is a human selling.
-const NON_HUMAN_VIA = new Set(['seed', 'rederive', 'slug-reconcile', 'verify',
-  'roundtrip-test', 'api-test', 'pavan-correction', 'lead-sync', 'baseline',
-  'email-in'])
 
 export interface MomentumMetric {
   label: string

@@ -179,6 +179,16 @@ export type CrmStatus = typeof CRM_STATUSES[number]
 // that a lead has not gone stale by the time it surfaces.
 export const CRM_COLD_DAYS = 21
 
+// Log entries written by machinery rather than by a person talking to someone.
+// Counting these as "touches" would let momentum rise while zero selling
+// happened. 'email-in' = the contact emailing us: bumps last_touched, never
+// momentum. 'email-out' deliberately absent — a sent email is a human selling.
+// Single source of truth: this Set was once duplicated in crm.ts and insights.ts
+// and drifted, letting lead-sync writes inflate momentum.
+export const NON_HUMAN_VIA = new Set(['seed', 'rederive', 'slug-reconcile', 'verify',
+  'roundtrip-test', 'api-test', 'pavan-correction', 'lead-sync', 'baseline',
+  'email-in'])
+
 export function normalizeCrmStage(input: unknown): CrmStage | undefined {
   if (typeof input !== 'string') return undefined
   const target = input.trim().toLowerCase()

@@ -805,3 +805,31 @@ Scribe is email-only). Chose full capture with CRM integration.
 
 ## Review
 (to be filled in per milestone)
+
+---
+
+# Phase 7 — CEO layout rebuild (approved plan 2026-08-24)
+
+Full plan: `~/.claude/plans/greedy-wiggling-blanket.md`. One-line thesis: Today answered
+"is the machine running?"; it must answer "what do I do next and am I on pace?" —
+strategic decisions from gtm/intel markdown, a scoreboard vs declared targets, channel/
+vehicle cold-clocks, one ranked queue instead of five, a Waiting On delegation view,
+and a real mobile pass.
+
+- [x] Phase 0.1 — rebase: fast-forwarded to origin/main (edc56b7; gained lib/meetings.ts —
+      scoreboard MUST reuse listMeetings())
+- [ ] Phase 0.2 — GTM v2 draft (`operations/gtm/2026-08-24-gtm-plan-v2.md`) → Pavan review;
+      targets.md seeds from it after sign-off
+- [ ] A — Foundations: NON_HUMAN_VIA dedupe · generalized flag parsing · bid deadline
+      normalization (deadline | deadlineProposalDue | absent → Bid.deadlineAt)
+- [ ] B — Scoreboard (gtm.ts getTargets/getScoreboard, scoreboard.tsx; waits on 0.2 sign-off,
+      seeds draft targets meanwhile marked DRAFT)
+- [ ] C — Today's Moves (moves.ts ranking, strategic-decision intake, /gtm page,
+      /api/gtm/resolve) — replaces Decisions/ActionQueue/Leverage/MorningActions cards
+- [ ] D — The Clock (clock.ts + clock-card.tsx) — replaces Meetings + Opportunities cards
+- [ ] E — Channels (channels.ts, 5 vehicle seeds in operations, /channels page,
+      /partnerships redirect, nav → Now/Sell/Machine/Planned, kanban → /bids + compact
+      bid list on Today)
+- [ ] F — Waiting On · Machine Room · collapsed Changes · ShapeCompact · delete daily-brief
+- [ ] G — Mobile (drawer nav, 44px targets, 2-per-row scoreboard) + Button primitive
+- [ ] Review section filled in; screenshots (desktop + 375px) shared as proof

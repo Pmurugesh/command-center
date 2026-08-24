@@ -27,6 +27,13 @@ function formatName(filename: string): string {
 
 // ── Bids ──
 
+// Deadline lives under two historical keys in .status.json (and some bids have no
+// sidecar at all). Normalize here so every consumer reads one field.
+function bidDeadline(status: BidStatusData | undefined): string | undefined {
+  const raw = status?.deadline ?? status?.deadlineProposalDue
+  return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined
+}
+
 export async function listBids(): Promise<Bid[]> {
   if (!(await exists(PATHS.bids))) return []
   const entries = await fs.readdir(PATHS.bids, { withFileTypes: true })
@@ -77,6 +84,7 @@ export async function listBids(): Promise<Bid[]> {
       entity: status?.entity,
       hasDocuments,
       updatedAt,
+      deadlineAt: bidDeadline(status),
     })
   }
 
