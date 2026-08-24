@@ -299,9 +299,50 @@ async function buildHealth(): Promise<HealthItem[]> {
   })
 
   const emailIntake = await emailIntakeFreshness()
-  if (emailIntake) items.push(emailIntake)
+  if (emailIntake) {
+    items.push(emailIntake)
+    const scribe = await scribeFreshness()
+    if (scribe) items.push(scribe)
+  }
 
   return items
+}
+
+/**
+ * Is the judgment agent keeping up? Scribe (an OpenClaw cron, 07:30/16:00)
+ * reads staged mail and writes proposals; its ledger's mtime is the heartbeat.
+ * The check is RELATIVE — staged mail newer than the ledger by more than a day
+ * — because "no new mail, no run needed" must not read as failure, and
+ * `openclaw agent` exiting 0 on a dead model call must not read as success.
+ * Only shown where the connector runs (guarded by the caller), so the dev
+ * laptop's stale staging copy never raises a false alarm.
+ */
+async function scribeFreshness(): Promise<HealthItem | null> {
+  try {
+    const names = await fs.readdir(PATHS.crmIntakeEmail)
+    const staged = names.filter(n => /^[0-9a-f]{16,}\.json$/.test(n))
+    if (!staged.length) return null
+    let newest = 0
+    for (const n of staged) {
+      const s = await fs.stat(`${PATHS.crmIntakeEmail}/${n}`)
+      if (s.mtimeMs > newest) newest = s.mtimeMs
+    }
+    let ledger = 0
+    try { ledger = (await fs.stat(`${PATHS.crmIntakeEmail}/.judgment-ledger`)).mtimeMs } catch { /* never ran */ }
+    if (ledger >= newest) {
+      return { label: 'Scribe (judgment)', status: 'ok', detail: 'all staged mail reviewed' }
+    }
+    const lagH = Math.floor((Date.now() - newest) / 3_600_000)
+    return {
+      label: 'Scribe (judgment)',
+      status: lagH < 24 ? 'ok' : 'bad',
+      detail: ledger === 0
+        ? `has never run; mail waiting ${lagH}h`
+        : `unreviewed mail waiting ${lagH}h`,
+    }
+  } catch {
+    return null
+  }
 }
 
 /**
