@@ -641,13 +641,15 @@ class, live: nothing noticed until a person tried the URL.
       `~/bin/email-sync.sh` + LaunchAgent `com.paladin.email-sync` (15 min). Deliberately
       inert (exits 0) until `~/.config/command-center/mail.env` exists, so installing it
       early is safe.
-- [ ] **The ONE remaining step — Pavan, on the mini:** create
-      `~/.config/command-center/mail.env` (mode 600) with `IMAP_HOST` / `IMAP_USER` /
-      `IMAP_PASSWORD` (use an app password, not the account password). Next timer tick
-      starts staging relevant mail into `operations/crm/intake/email/` — read-only against
-      the mailbox by protocol, gitignored staging. The mailbox is
-      `pavanm@4infinitesolutions.com` — confirmed by the 8/21–8/24 dry runs, which closes
-      M3.5's "which mailbox holds agency correspondence" gate.
+- [x] **DONE 2026-08-24 — email intake is autonomous.** Pavan created
+      `~/.config/command-center/mail.env` (600) on the mini; first attempt failed because
+      the host was assumed to be Google — `4infinitesolutions.com` mail is SELF-HOSTED
+      (MX → `mail.4infinitesolutions.com`, Namecheap-style, regular mailbox password, no
+      app-password concept). Host corrected; first live run: 55 INBOX messages since
+      25-Jul → **8 staged, 47 filtered, 0 dupes**. The timer now runs every 15 min with no
+      laptop involved. Mailbox `pavanm@4infinitesolutions.com` closes M3.5's "which
+      mailbox" gate. Staged items wait in `crm/intake/email/` for Scribe (Layer 2) —
+      the filing agent is now the next build.
 
 **CORRECTION (same day, ~2h later): the sleep diagnosis above was WRONG.** When the tunnel
 died a second time — ten minutes after the "fix" — ground truth said otherwise: the mini's
