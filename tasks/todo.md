@@ -663,6 +663,43 @@ detects path-down regardless of which side broke, and it caught the second outag
 unprompted at 11:21. Recovery levers, in order: `tailscale down && up` on the MacBook →
 same on the mini → then suspect the machine. Full pattern in `tasks/lessons.md`.
 
+## Phase 6 — Upcoming meetings on Today (calendar integration) — BUILT 2026-08-24
+
+- [x] `lib/calendar.ts` — Google Calendar private ICS feeds → upcoming meetings.
+      No OAuth: secret iCal URLs live in
+      `~/.openclaw/workspace/.credentials/calendar.json` (`{ "icsUrls": [...] }`),
+      `CALENDAR_ICS_URLS` env var overrides for dev. 10-min fetch cache.
+      Parses TZID/UTC/all-day dates, expands DAILY/WEEKLY/MONTHLY recurrence
+      (INTERVAL, BYDAY, UNTIL, COUNT, EXDATE, RECURRENCE-ID overrides).
+- [x] `components/today/upcoming-meetings-card.tsx` — 14-day agenda grouped by
+      day, demo/pilot/PoC titles flagged; honest states for not-connected,
+      empty, and feed-unreachable (expired secret URL is visible, not silent)
+- [x] Verify: 9/9 parser fixture assertions (tz conversion, folding, EXDATE,
+      cancelled override, COUNT); pnpm build clean; browser check of populated
+      + unconfigured states
+- [x] Multi-account (Pavan has 4-5 emails): `icsUrls` takes one entry per
+      calendar, plain URL or `{ url, name }` (name labels the card row);
+      webcal:// auto-rewritten for iCloud. No intermediary (Notion rejected —
+      adds a third-party sync hop) and no account passwords ever: secret ICS
+      URLs are read-only and revocable per calendar.
+- [ ] On the mini after merge: create `calendar.json` with one secret iCal
+      URL per account — Google: Settings → [calendar] → Integrate calendar →
+      "Secret address in iCal format"; Outlook: Settings → Calendar → Shared
+      calendars → Publish; iCloud: share → Public Calendar
+      (needs Pavan: they're secret URLs)
+
+## Phase 6b — caleprocure-scan: kill the legacy scraper (DECIDED, not yet done)
+
+Confirmed 2026-08-24: the cron is STILL the legacy browser-automation approach
+(logs into caleprocure.ca.gov, types 14 keywords into the search UI) and has
+produced nothing since 2026-07-14 — every weekday run burns the full 600s and
+times out. The API pipeline in qual_table_automations (suppliers.fiscal.ca.gov,
+no login, honest UA — see memory `cal-eprocure-discovery-exists`) is proven but
+NOT running anywhere: not on the mini, no deployed bid_discovery service.
+Pavan: one way only. Plan: disable the legacy cron, clone qual_table read-only
+on the mini, thin runner in operations emits the same markdown format
+`lib/procurements.ts` already parses, repoint the cron at it.
+
 ## Open gates
 
 1. ITN-37485: submitted-then-disqualified (`lost`) or pulled-out-first (`no-bid`)?
@@ -670,6 +707,9 @@ same on the mini → then suspect the machine. Full pattern in `tasks/lessons.md
 3. Private GitHub repo for operations: OK?
 4. Granola signup + MacBook app install.
 5. RFO site name.
+6. Calendar: both Google calendars (gmail + berkeley) are EMPTY for the next
+   4 weeks — if demos get scheduled somewhere else, that's the calendar to
+   wire in, or the card will be honestly useless.
 
 ## Review
 (to be filled in per milestone)
