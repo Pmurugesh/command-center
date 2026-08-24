@@ -44,7 +44,7 @@ const AGENT_OUTPUTS: Record<string, AgentOutput[]> = {
   sales: [
     { href: '/bids',         label: 'Bid Pipeline',  iconKey: 'FileText' },
     { href: '/agencies',     label: 'Agencies',      iconKey: 'Building2' },
-    { href: '/partnerships', label: 'Partnerships',  iconKey: 'Handshake' },
+    { href: '/channels',     label: 'Channels',      iconKey: 'Handshake' },
   ],
   main: [], // orchestrator — coordinates the others, no direct outputs
 }

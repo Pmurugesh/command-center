@@ -3,7 +3,6 @@ import {
   FileText,
   NotebookPen,
   Shield,
-  Radio,
   Settings,
   Clock,
   Building2,
@@ -91,6 +90,14 @@ export interface NavSection {
 //
 // Library is intentionally NOT in the sidebar: it's only useful from within a bid response,
 // where it'll live as a contextual tab. Reachable via /library directly until then.
+// Sidebar IA — one section per hat. "Now" is the daily home; "Sell" is the
+// founder's revenue surface (Channels absorbed Partnerships); "Machine" is
+// everything you click when something needs tending, not daily — agents, cron,
+// codebase scans, settings. Codebase Health deliberately lives there: the GTM
+// diagnosis is stop-shipping-features, and a nav that showcases scan reports
+// daily invites exactly the wrong work.
+// /intel and /gtm stay routable but out of the nav (the /library precedent):
+// they're deep-link targets from the Clock and Today's Moves.
 export const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Now',
@@ -100,32 +107,21 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: 'Work',
+    label: 'Sell',
     items: [
-      { href: '/bids', label: 'Bids', icon: FileText, section: 'Work' },
-      { href: '/agencies', label: 'Agencies', icon: Building2, section: 'Work' },
-      { href: '/meetings', label: 'Meetings', icon: NotebookPen, section: 'Work' },
-      { href: '/partnerships', label: 'Partnerships', icon: Handshake, section: 'Work' },
+      { href: '/bids', label: 'Bids', icon: FileText, section: 'Sell' },
+      { href: '/agencies', label: 'Agencies', icon: Building2, section: 'Sell' },
+      { href: '/channels', label: 'Channels', icon: Handshake, section: 'Sell' },
+      { href: '/meetings', label: 'Meetings', icon: NotebookPen, section: 'Sell' },
     ],
   },
   {
-    label: 'Workforce',
+    label: 'Machine',
     items: [
-      { href: '/system/agents', label: 'Agents', icon: Bot, section: 'Workforce' },
-    ],
-  },
-  {
-    label: 'Intel',
-    items: [
-      { href: '/intel', label: 'Intelligence', icon: Radio, section: 'Intel' },
-      { href: '/health', label: 'Codebase Health', icon: Shield, section: 'Intel' },
-    ],
-  },
-  {
-    label: 'System',
-    items: [
-      { href: '/system/cron', label: 'Cron Jobs', icon: Clock, section: 'System' },
-      { href: '/system', label: 'Settings', icon: Settings, section: 'System' },
+      { href: '/system/agents', label: 'Agents', icon: Bot, section: 'Machine' },
+      { href: '/system/cron', label: 'Cron Jobs', icon: Clock, section: 'Machine' },
+      { href: '/health', label: 'Codebase Health', icon: Shield, section: 'Machine' },
+      { href: '/system', label: 'Settings', icon: Settings, section: 'Machine' },
     ],
   },
   // "Not built yet" pages live behind a collapsed section — visible ambition,

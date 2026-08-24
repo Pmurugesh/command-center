@@ -4,6 +4,7 @@ import { StatusBadge } from '@/components/shared/status-badge'
 import { PageHeader } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/empty-state'
 import { NewBidForm } from './new-bid-form'
+import { ActiveBidsKanban } from '@/components/bids/active-bids-kanban'
 import { TimeAgo } from '@/components/shared/time-ago'
 import Link from 'next/link'
 import { FileText, ArrowRight, FolderOpen, Paperclip } from 'lucide-react'
@@ -62,6 +63,14 @@ export default async function BidsPage({ searchParams }: PageProps) {
       />
 
       <NewBidForm />
+
+      {/* Stage kanban with inline triage — re-homed from Today, where a
+          compact list now stands in for it */}
+      {allBids.length > 0 && (
+        <ActiveBidsKanban
+          bids={allBids.filter(b => !FILTER_GROUPS.closed.includes((b.status || '').toLowerCase()))}
+        />
+      )}
 
       {/* Filter tabs (URL-based, server-rendered, no client JS needed) */}
       {allBids.length > 0 && (

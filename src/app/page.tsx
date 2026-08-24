@@ -32,7 +32,8 @@ import { Scoreboard } from '@/components/today/scoreboard'
 import { MovesCard } from '@/components/today/moves-card'
 import { ClockCard } from '@/components/today/clock-card'
 import { AgentsSummaryCard } from '@/components/today/agents-summary'
-import { ActiveBidsKanban } from '@/components/today/active-bids-kanban'
+import { ActiveBidsList } from '@/components/today/active-bids-list'
+import { ChannelsHealthCard } from '@/components/today/channels-health-card'
 import { FreshnessCard } from '@/components/today/freshness-card'
 import { PipelineBuckets } from '@/components/today/pipeline-buckets'
 import { ShapeCard, HealthCard } from '@/components/today/daily-brief'
@@ -136,6 +137,13 @@ export default async function TodayPage() {
           outranks any report. */}
       <PipelineBuckets buckets={buckets} />
 
+      {/* Active bids — compact; the kanban lives on /bids */}
+      <ActiveBidsList bids={activeBids} />
+
+      {/* Channels going dark — renders only when a vehicle/partner is blocked
+          or cold (the SLP failure class) */}
+      <ChannelsHealthCard alerts={channelAlerts(channels)} />
+
       {/* Pipeline shape — stage funnel, owner load, product concentration */}
       {insights && <ShapeCard shape={insights.shape} />}
 
@@ -144,9 +152,6 @@ export default async function TodayPage() {
 
       {/* Agents — what your workforce did last 24h, including failures */}
       <AgentsSummaryCard summaries={agentSummaries} />
-
-      {/* Active bids kanban with inline triage */}
-      <ActiveBidsKanban bids={activeBids} />
 
       {/* Machine health rows (folding into the Machine Room next) */}
       {insights && <HealthCard health={insights.health} />}
