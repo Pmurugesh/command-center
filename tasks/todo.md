@@ -708,11 +708,16 @@ only. Done this session:
       6 due this week) after six weeks at zero
 - [x] `scripts/mini/install-caleprocure-scan.sh` — idempotent: rm's the
       agentTurn job, registers command-payload cron (weekdays 07:00 PT)
-- [ ] AFTER PR #21 MERGES, on the mini: `git pull &&
-      ./scripts/mini/install-dashboard-service.sh &&
-      ./scripts/mini/install-caleprocure-scan.sh` — installs the cron and
-      removes the legacy job. Until then the disabled legacy job remains and
-      no scan is scheduled (today's ran manually).
+- [x] DEPLOYED 2026-08-24 evening: PR #21 merged, mini pulled + rebuilt,
+      installer ran — legacy job REMOVED, command-payload cron live
+      (id cfb98dca, weekdays 07:00 PT). Two hiccups fixed en route:
+      (1) openclaw gateway was wedged (stale process, LaunchAgent "not
+      loaded") — `openclaw gateway start` kills the stale process and
+      recovers; (2) isolated crons REFUSE implicit "last"-channel delivery
+      and mark every run error even at exit 0 — delivery must be explicit
+      (`--announce --channel telegram --to telegram:8097059385`, now baked
+      into the installer). Verified end-to-end via `openclaw cron run <id>`:
+      status ok, delivered, report rewritten.
 
 ## Open gates
 
@@ -724,14 +729,9 @@ only. Done this session:
 6. Calendar: both Google calendars (gmail + berkeley) are EMPTY for the next
    4 weeks — if demos get scheduled somewhere else, that's the calendar to
    wire in, or the card will be honestly useless.
-7. qual_table deploy key: the mini's clone is a snapshot (relevance-rule
-   updates won't arrive) until Pavan runs, from the MacBook:
-   `gh repo deploy-key add /dev/stdin -R Pmurugesh/qual_table_automations
-   --title "mac-mini read-only (caleprocure scan)" <<< "ssh-ed25519
-   AAAAC3NzaC1lZDI1NTE5AAAAICvQ2dt7aXFsZYjJ/ISROL+ty8z0DOPbGguNJgYqAhkl
-   mini-qual-table-readonly"` (Claude's session was permission-blocked from
-   adding it). Then add a `github-qualtable` host block to the mini's
-   ~/.ssh/config, or set the clone's remote to use that key.
+7. ~~qual_table deploy key~~ DONE 2026-08-24: Pavan added the key;
+   `github-qualtable` host block + remote wired on the mini; `git pull
+   --ff-only` verified working (the installer pulls on every run).
 
 ## Review
 (to be filled in per milestone)
