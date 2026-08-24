@@ -735,10 +735,14 @@ Scribe is email-only). Chose full capture with CRM integration.
       quiet — now visible as going-cold) and jamie-burke-lci (technical
       counterpart on the LCI engagement). Unknowns flagged needs-detail.
 - [x] Verified live: 104 contacts, Pindi/Shafi in the pipeline buckets
-- [ ] OPEN: ongoing capture — Granola is a session connector, not on the mini;
-      new meetings need a periodic sync (scheduled task) or manual ask.
-      Uncaptured marginal tail: Euclidean series, interviews (Vedant), Paychex,
-      Salesforce Lorne, Google 4/21, Oracle 4/30 — fetch on demand if relevant.
+- [x] Ongoing capture: scheduled task `granola-crm-sync` (Claude Code desktop,
+      weekdays ~7:00 AM PT) syncs new business-relevant meetings into
+      crm/meetings + contact logs and pushes; janitors carry it to the mini.
+      Caveats: runs only while the desktop app is open (else on next launch);
+      first run should be triggered manually via "Run now" to pre-approve the
+      Granola connector tools. Uncaptured marginal tail: Euclidean series,
+      interviews (Vedant), Paychex, Salesforce Lorne, Google 4/21, Oracle
+      4/30 — fetch on demand if relevant.
 
 ## Open gates
 
