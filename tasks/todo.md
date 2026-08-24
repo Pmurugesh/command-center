@@ -697,6 +697,57 @@ detects path-down regardless of which side broke, and it caught the second outag
 unprompted at 11:21. Recovery levers, in order: `tailscale down && up` on the MacBook →
 same on the mini → then suspect the machine. Full pattern in `tasks/lessons.md`.
 
+## Phase 6 — Upcoming meetings on Today (calendar integration) — BUILT 2026-08-24
+
+- [x] `lib/calendar.ts` — Google Calendar private ICS feeds → upcoming meetings.
+      No OAuth: secret iCal URLs live in
+      `~/.openclaw/workspace/.credentials/calendar.json` (`{ "icsUrls": [...] }`),
+      `CALENDAR_ICS_URLS` env var overrides for dev. 10-min fetch cache.
+      Parses TZID/UTC/all-day dates, expands DAILY/WEEKLY/MONTHLY recurrence
+      (INTERVAL, BYDAY, UNTIL, COUNT, EXDATE, RECURRENCE-ID overrides).
+- [x] `components/today/upcoming-meetings-card.tsx` — 14-day agenda grouped by
+      day, demo/pilot/PoC titles flagged; honest states for not-connected,
+      empty, and feed-unreachable (expired secret URL is visible, not silent)
+- [x] Verify: 9/9 parser fixture assertions (tz conversion, folding, EXDATE,
+      cancelled override, COUNT); pnpm build clean; browser check of populated
+      + unconfigured states
+- [x] Multi-account (Pavan has 4-5 emails): `icsUrls` takes one entry per
+      calendar, plain URL or `{ url, name }` (name labels the card row);
+      webcal:// auto-rewritten for iCloud. No intermediary (Notion rejected —
+      adds a third-party sync hop) and no account passwords ever: secret ICS
+      URLs are read-only and revocable per calendar.
+- [ ] On the mini after merge: create `calendar.json` with one secret iCal
+      URL per account — Google: Settings → [calendar] → Integrate calendar →
+      "Secret address in iCal format"; Outlook: Settings → Calendar → Shared
+      calendars → Publish; iCloud: share → Public Calendar
+      (needs Pavan: they're secret URLs)
+
+## Phase 6b — caleprocure-scan: kill the legacy scraper — MOSTLY DONE 2026-08-24
+
+Confirmed: the cron was STILL the legacy browser-automation approach and had
+produced nothing since 2026-07-14 (600s timeout every weekday). Pavan: one way
+only. Done this session:
+
+- [x] Legacy cron DISABLED (job 41ace7a9, kept until replacement is installed)
+- [x] qual_table_automations synced read-only to mini `~/repos/qual_table_automations`
+      (rsync snapshot @ 60e411e — no deploy key yet, see Open gates)
+- [x] `scripts/caleprocure-scan.py` — consumes qual_table's client/parser/
+      relevance modules; ONE request per run (the site's own Excel export);
+      emits the exact markdown `lib/procurements.ts` parses; EPROCURE_ENABLED
+      gate honored; fixture mode for offline tests
+- [x] Verified offline against the captured 2026-08-04 export (14 high/2 med),
+      round-tripped through the dashboard's own parseOpportunities (16/16
+      fields parse); then REAL run on the mini: 11 high, 8 medium, 3 urgent of
+      373 open events → dashboard Opportunities card live again (19 open,
+      6 due this week) after six weeks at zero
+- [x] `scripts/mini/install-caleprocure-scan.sh` — idempotent: rm's the
+      agentTurn job, registers command-payload cron (weekdays 07:00 PT)
+- [ ] AFTER PR #21 MERGES, on the mini: `git pull &&
+      ./scripts/mini/install-dashboard-service.sh &&
+      ./scripts/mini/install-caleprocure-scan.sh` — installs the cron and
+      removes the legacy job. Until then the disabled legacy job remains and
+      no scan is scheduled (today's ran manually).
+
 ## Open gates
 
 1. ITN-37485: submitted-then-disqualified (`lost`) or pulled-out-first (`no-bid`)?
@@ -704,6 +755,17 @@ same on the mini → then suspect the machine. Full pattern in `tasks/lessons.md
 3. Private GitHub repo for operations: OK?
 4. Granola signup + MacBook app install.
 5. RFO site name.
+6. Calendar: both Google calendars (gmail + berkeley) are EMPTY for the next
+   4 weeks — if demos get scheduled somewhere else, that's the calendar to
+   wire in, or the card will be honestly useless.
+7. qual_table deploy key: the mini's clone is a snapshot (relevance-rule
+   updates won't arrive) until Pavan runs, from the MacBook:
+   `gh repo deploy-key add /dev/stdin -R Pmurugesh/qual_table_automations
+   --title "mac-mini read-only (caleprocure scan)" <<< "ssh-ed25519
+   AAAAC3NzaC1lZDI1NTE5AAAAICvQ2dt7aXFsZYjJ/ISROL+ty8z0DOPbGguNJgYqAhkl
+   mini-qual-table-readonly"` (Claude's session was permission-blocked from
+   adding it). Then add a `github-qualtable` host block to the mini's
+   ~/.ssh/config, or set the clone's remote to use that key.
 
 ## Review
 (to be filled in per milestone)

@@ -16,6 +16,9 @@ export const PATHS = {
   agencies: path.join(HOME, 'repos/operations/intelligence/agencies'),
   partnerships: path.join(HOME, 'repos/operations/intelligence/partnerships'),
   inbox: path.join(HOME, 'repos/operations/inbox'),
+  // Google Calendar secret iCal URLs — lives with the other credentials,
+  // outside every git repo (it's a bearer-style secret URL).
+  calendarConfig: path.join(HOME, '.openclaw/workspace/.credentials/calendar.json'),
   // CRM store (Phase 5 / M1). operationsRoot is the git repo root — crm.ts
   // commits relative to it, so every write lands in the same history as the
   // bids and intel it references.

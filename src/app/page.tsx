@@ -18,6 +18,7 @@ import { getInsights } from '@/lib/insights'
 import { getNormalizedCronJobs } from '@/lib/shell'
 import { isFailing } from '@/lib/cron'
 import { getOpenOpportunities } from '@/lib/procurements'
+import { getUpcomingMeetings } from '@/lib/calendar'
 import { getDecisionQueue } from '@/lib/decisions'
 import { getAgent24hSummary } from '@/lib/agents'
 import { PageHeader } from '@/components/shared/page-header'
@@ -31,6 +32,7 @@ import { MorningActionsCard } from '@/components/today/morning-actions-card'
 import { OpportunitiesCard } from '@/components/today/opportunities-card'
 import { FreshnessCard } from '@/components/today/freshness-card'
 import { PipelineBuckets } from '@/components/today/pipeline-buckets'
+import { UpcomingMeetingsCard } from '@/components/today/upcoming-meetings-card'
 import { DailyBrief } from '@/components/today/daily-brief'
 import { ChangesFeed } from '@/components/today/changes-feed'
 
@@ -52,7 +54,7 @@ function todayLabel(now = new Date()): string {
 export default async function TodayPage() {
   // Fetch everything in parallel — each data source is independent.
   const [bids, alerts, cronJobs, decisions, agentSummaries, actionQueue,
-         morningActions, opportunities, freshness, buckets, insights] = await Promise.all([
+         morningActions, opportunities, freshness, buckets, insights, calendar] = await Promise.all([
     listBids(),
     listIntelAlerts(),
     getNormalizedCronJobs().catch(() => []),
@@ -64,6 +66,7 @@ export default async function TodayPage() {
     getPipelineFreshness().catch(() => []),
     getBuckets().catch(() => ({ overdue: [], blocked: [], dueToday: [], goingCold: [], notStarted: [], sourcedCount: 0, total: 0 })),
     getInsights().catch(() => null),
+    getUpcomingMeetings().catch(() => ({ configured: true, meetings: [], errors: ['calendar lookup failed'] })),
   ])
 
   // Intel produced this week (alerts + procurements + briefings), not lifetime.
@@ -140,6 +143,9 @@ export default async function TodayPage() {
 
       {/* What changed since this browser last looked */}
       <ChangesFeed />
+
+      {/* Scheduled time — demos and meetings on the calendar, next two weeks */}
+      <UpcomingMeetingsCard result={calendar} />
 
       {/* Pipeline — who needs you, ranked. A blocked or overdue contact
           outranks any report. */}
