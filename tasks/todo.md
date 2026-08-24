@@ -688,17 +688,31 @@ same on the mini → then suspect the machine. Full pattern in `tasks/lessons.md
       calendars → Publish; iCloud: share → Public Calendar
       (needs Pavan: they're secret URLs)
 
-## Phase 6b — caleprocure-scan: kill the legacy scraper (DECIDED, not yet done)
+## Phase 6b — caleprocure-scan: kill the legacy scraper — MOSTLY DONE 2026-08-24
 
-Confirmed 2026-08-24: the cron is STILL the legacy browser-automation approach
-(logs into caleprocure.ca.gov, types 14 keywords into the search UI) and has
-produced nothing since 2026-07-14 — every weekday run burns the full 600s and
-times out. The API pipeline in qual_table_automations (suppliers.fiscal.ca.gov,
-no login, honest UA — see memory `cal-eprocure-discovery-exists`) is proven but
-NOT running anywhere: not on the mini, no deployed bid_discovery service.
-Pavan: one way only. Plan: disable the legacy cron, clone qual_table read-only
-on the mini, thin runner in operations emits the same markdown format
-`lib/procurements.ts` already parses, repoint the cron at it.
+Confirmed: the cron was STILL the legacy browser-automation approach and had
+produced nothing since 2026-07-14 (600s timeout every weekday). Pavan: one way
+only. Done this session:
+
+- [x] Legacy cron DISABLED (job 41ace7a9, kept until replacement is installed)
+- [x] qual_table_automations synced read-only to mini `~/repos/qual_table_automations`
+      (rsync snapshot @ 60e411e — no deploy key yet, see Open gates)
+- [x] `scripts/caleprocure-scan.py` — consumes qual_table's client/parser/
+      relevance modules; ONE request per run (the site's own Excel export);
+      emits the exact markdown `lib/procurements.ts` parses; EPROCURE_ENABLED
+      gate honored; fixture mode for offline tests
+- [x] Verified offline against the captured 2026-08-04 export (14 high/2 med),
+      round-tripped through the dashboard's own parseOpportunities (16/16
+      fields parse); then REAL run on the mini: 11 high, 8 medium, 3 urgent of
+      373 open events → dashboard Opportunities card live again (19 open,
+      6 due this week) after six weeks at zero
+- [x] `scripts/mini/install-caleprocure-scan.sh` — idempotent: rm's the
+      agentTurn job, registers command-payload cron (weekdays 07:00 PT)
+- [ ] AFTER PR #21 MERGES, on the mini: `git pull &&
+      ./scripts/mini/install-dashboard-service.sh &&
+      ./scripts/mini/install-caleprocure-scan.sh` — installs the cron and
+      removes the legacy job. Until then the disabled legacy job remains and
+      no scan is scheduled (today's ran manually).
 
 ## Open gates
 
@@ -710,6 +724,14 @@ on the mini, thin runner in operations emits the same markdown format
 6. Calendar: both Google calendars (gmail + berkeley) are EMPTY for the next
    4 weeks — if demos get scheduled somewhere else, that's the calendar to
    wire in, or the card will be honestly useless.
+7. qual_table deploy key: the mini's clone is a snapshot (relevance-rule
+   updates won't arrive) until Pavan runs, from the MacBook:
+   `gh repo deploy-key add /dev/stdin -R Pmurugesh/qual_table_automations
+   --title "mac-mini read-only (caleprocure scan)" <<< "ssh-ed25519
+   AAAAC3NzaC1lZDI1NTE5AAAAICvQ2dt7aXFsZYjJ/ISROL+ty8z0DOPbGguNJgYqAhkl
+   mini-qual-table-readonly"` (Claude's session was permission-blocked from
+   adding it). Then add a `github-qualtable` host block to the mini's
+   ~/.ssh/config, or set the clone's remote to use that key.
 
 ## Review
 (to be filled in per milestone)
