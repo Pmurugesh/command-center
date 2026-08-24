@@ -753,6 +753,42 @@ only. Done this session:
       into the installer). Verified end-to-end via `openclaw cron run <id>`:
       status ok, delivered, report rewritten.
 
+## Phase 6c — Granola meeting backfill — DONE 2026-08-24
+
+Pavan asked whether Granola was captured; it wasn't (crm/meetings was empty;
+Scribe is email-only). Chose full capture with CRM integration.
+
+- [x] Reviewed all 119 Granola meetings (Sept 2025 - Aug 2026); 49 business-
+      relevant fetched in full; Bedrock-venture, SIEN, and personal excluded
+- [x] 48 meeting archives in operations `crm/meetings/YYYY-MM-DD-slug.md`
+      (frontmatter: granola_id, category agency/partnership/gtm/product/
+      operations, agency, contact slugs) — the engagement-import had distilled
+      log lines for 6 contacts but never archived the meetings themselves
+- [x] Contact gaps filled: christine-lci +2 pre-engagement demos (9/4, 9/11);
+      NEW contacts pindi-oeis + shafi-oeis (demos given Sept 2025, both went
+      quiet — now visible as going-cold) and jamie-burke-lci (technical
+      counterpart on the LCI engagement). Unknowns flagged needs-detail.
+- [x] Verified live: 104 contacts, Pindi/Shafi in the pipeline buckets
+- [x] Ongoing capture: scheduled task `granola-crm-sync` (Claude Code desktop,
+      weekdays ~7:00 AM PT) syncs new business-relevant meetings into
+      crm/meetings + contact logs and pushes; janitors carry it to the mini.
+      Caveats: runs only while the desktop app is open (else on next launch);
+      first run should be triggered manually via "Run now" to pre-approve the
+      Granola connector tools. Uncaptured marginal tail: Euclidean series,
+      interviews (Vedant), Paychex, Salesforce Lorne, Google 4/21, Oracle
+      4/30 — fetch on demand if relevant.
+- [ ] ROADMAP (Pavan, 8/24): this becomes COMPANY-WIDE meeting intake, not
+      just Pavan's notes. The bottleneck is account access, not the scheduler:
+      the connector sees only Pavan's Granola. Plan when the team is ready:
+      (1) everyone (Ganapathy/Rani/Isaiah/new hires) on Granola sharing
+      business meetings into one shared Team Space — the governance boundary;
+      (2) widen the sync filter to workspace-visible meetings + stamp each
+      archive with who captured it (feeds the CRM's existing owner model, so
+      Rani's meetings log touches under Rani); (3) move the runner to an
+      always-on home — mini (needs one-time `claude login` there, then a
+      headless probe to confirm connectors surface non-interactively; CLI
+      currently NOT logged in) or a cloud routine pushing to GitHub.
+
 ## Open gates
 
 1. ITN-37485: submitted-then-disqualified (`lost`) or pulled-out-first (`no-bid`)?
