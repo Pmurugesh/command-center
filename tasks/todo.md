@@ -645,7 +645,21 @@ class, live: nothing noticed until a person tried the URL.
       `~/.config/command-center/mail.env` (mode 600) with `IMAP_HOST` / `IMAP_USER` /
       `IMAP_PASSWORD` (use an app password, not the account password). Next timer tick
       starts staging relevant mail into `operations/crm/intake/email/` — read-only against
-      the mailbox by protocol, gitignored staging.
+      the mailbox by protocol, gitignored staging. The mailbox is
+      `pavanm@4infinitesolutions.com` — confirmed by the 8/21–8/24 dry runs, which closes
+      M3.5's "which mailbox holds agency correspondence" gate.
+
+**CORRECTION (same day, ~2h later): the sleep diagnosis above was WRONG.** When the tunnel
+died a second time — ten minutes after the "fix" — ground truth said otherwise: the mini's
+`uptime` was **32 days** and `pmset -g log` contained **zero sleep events**. The machine
+never slept once. The one-commit-per-day pattern just meant nothing else changed on those
+days; the real fault was the **Tailscale data path**, and the proven cure was cycling
+Tailscale on the **MacBook** (`tailscale down && up` — the GUI quit/reopen is NOT enough,
+the network extension survives it). The mini needed nothing either time. The pmset change
+is kept (right for a server, irrelevant to the outage). Watchdog design unaffected — it
+detects path-down regardless of which side broke, and it caught the second outage
+unprompted at 11:21. Recovery levers, in order: `tailscale down && up` on the MacBook →
+same on the mini → then suspect the machine. Full pattern in `tasks/lessons.md`.
 
 ## Open gates
 
