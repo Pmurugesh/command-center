@@ -43,7 +43,10 @@ async function citationDrift(): Promise<string[]> {
   const findings: string[] = []
   for (const line of out.split('\n')) {
     const m = line.match(/^((?:bids|gtm|intelligence|workflows)\/\S+)\s+\((\d+) dead\)/)
-    if (m) findings.push(`- \`${m[1]}\` — ${m[2]} dead citation(s)`)
+    // Our own past reports quote script paths; a report reporting reports is noise.
+    if (m && !/-drift-report\.md$/.test(m[1])) {
+      findings.push(`- \`${m[1]}\` — ${m[2]} dead citation(s)`)
+    }
   }
   return findings
 }
