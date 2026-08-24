@@ -80,8 +80,12 @@ else
   # Delivery must be EXPLICIT: openclaw refuses the implicit "last" channel
   # for isolated crons (ambiguous target) and marks every run as error even
   # when the command exits 0. Same telegram target the legacy job used.
+  # --agent intel: attribution only (the payload is a command, not an agent
+  # turn) — keeps the job grouped under Scout on the dashboard's cron page,
+  # where the procurement scan has always lived.
   openclaw cron add "$JOB_NAME" \
     --cron "0 7 * * 1-5" --tz "America/Los_Angeles" \
+    --agent intel \
     --command "python3 $RUNNER" \
     --command-env "EPROCURE_ENABLED=true" \
     --command-env "QUAL_TABLE_BACKEND=$BACKEND" \
