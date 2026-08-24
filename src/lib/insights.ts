@@ -16,6 +16,7 @@
  * automated edits are excluded, so the number only moves when a human really
  * talks to someone.
  */
+import fs from 'fs/promises'
 import { PATHS } from './paths'
 import { runCommandArgs } from './shell'
 import { listContacts, today, addDays } from './crm'
@@ -25,7 +26,13 @@ import type { CrmContact } from '@/types'
 // Log entries written by machinery rather than by a person talking to someone.
 // Counting these as "touches" would let the momentum number rise while zero
 // selling happened, which is the exact failure this metric exists to catch.
-const NON_HUMAN_VIA = new Set(['seed', 'rederive', 'slug-reconcile', 'verify', 'roundtrip-test', 'api-test'])
+// This set had drifted from crm.ts's copy (missing pavan-correction, lead-sync,
+// baseline — so a lead sync could inflate momentum); now identical again.
+// 'email-in' = the contact emailing us: bumps last_touched, never momentum.
+// 'email-out' deliberately absent — a sent email is a human selling.
+const NON_HUMAN_VIA = new Set(['seed', 'rederive', 'slug-reconcile', 'verify',
+  'roundtrip-test', 'api-test', 'pavan-correction', 'lead-sync', 'baseline',
+  'email-in'])
 
 export interface MomentumMetric {
   label: string
@@ -291,7 +298,32 @@ async function buildHealth(): Promise<HealthItem[]> {
     detail: `${contacts.length} contacts`,
   })
 
+  const emailIntake = await emailIntakeFreshness()
+  if (emailIntake) items.push(emailIntake)
+
   return items
+}
+
+/**
+ * Is the email connector actually running? The M3.5 rule: a dead connector must
+ * be loud within a day. The connector logs on every 15-minute tick (even when
+ * nothing matches), so the log's mtime IS the heartbeat. On machines that do not
+ * run the connector (the log is absent) the row is omitted rather than shown
+ * red — a permanent false alarm on the dev laptop would train eyes to ignore
+ * the panel, which is the failure the panel exists to prevent.
+ */
+async function emailIntakeFreshness(): Promise<HealthItem | null> {
+  try {
+    const stat = await fs.stat(PATHS.emailSyncLog)
+    const ageH = Math.floor((Date.now() - stat.mtimeMs) / 3_600_000)
+    return {
+      label: 'Email intake',
+      status: ageH < 2 ? 'ok' : ageH < 24 ? 'warn' : 'bad',
+      detail: ageH < 2 ? 'connector ran within 2h' : `connector silent for ${ageH}h`,
+    }
+  } catch {
+    return null
+  }
 }
 
 /**

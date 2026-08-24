@@ -204,6 +204,14 @@ export interface CrmContact {
   name: string
   title?: string
   email?: string
+  /**
+   * Other addresses the same human writes from (personal gmail, a consultancy
+   * domain, an old agency address). The email filer matches these exactly like
+   * the primary, so linking an address once files every future message. Which
+   * addresses belong to the same person is a human/judgment call — nothing
+   * ever auto-populates this.
+   */
+  altEmails?: string[]
   phone?: string
   agency?: string         // agency slug, joins to intelligence/agencies/<slug>.md
   agencyName?: string
@@ -260,6 +268,7 @@ export interface CrmContactUpdate {
   name?: string
   title?: string
   email?: string
+  altEmails?: string[] | null
   phone?: string
   agency?: string
   agencyName?: string
@@ -274,4 +283,36 @@ export interface CrmContactUpdate {
   nextAction?: string | null
   nextActionDue?: string | null
   notes?: string
+}
+
+// ── Email intake review queue (M3.5 Scribe) ─────────────────────────────────
+
+export type IntakeReviewStatus = 'pending' | 'dismissed' | 'contact-created'
+
+export interface IntakeReviewItem {
+  /**
+   * The counterparty's lowercased email address. The queue is per PERSON, not
+   * per message — the question each row asks is "does this correspondent belong
+   * in the CRM", and a dismissed address stays dismissed when they write again.
+   */
+  id: string
+  /** Most recent message date, YYYY-MM-DD. */
+  date: string
+  /** Raw From header of the latest message, e.g. `"SLP@DGS" <SLP@dgs.ca.gov>`. */
+  from: string
+  /** Same as id; kept explicit for display. */
+  email: string
+  /** Display name parsed from the From header, when present. */
+  fromName?: string
+  /** Latest message's subject. */
+  subject: string
+  /** Why the connector staged it (its `matched` reason). */
+  matched: string
+  /** 'in' = they wrote to us; 'out' = we wrote to someone not in the CRM. */
+  direction: 'in' | 'out'
+  /** Staged messages involving this address so far. */
+  count: number
+  status: IntakeReviewStatus
+  notedAt: string
+  resolvedAt?: string
 }

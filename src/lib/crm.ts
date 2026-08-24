@@ -129,6 +129,7 @@ function serialize(c: CrmContact): string {
     name: c.name,
     title: c.title,
     email: c.email,
+    alt_emails: c.altEmails?.length ? c.altEmails : undefined,
     phone: c.phone,
     agency: c.agency,
     agency_name: c.agencyName,
@@ -175,6 +176,9 @@ function hydrate(slug: string, raw: string): CrmContact {
     name: String(data.name ?? slug),
     title: data.title ? String(data.title) : undefined,
     email: data.email ? String(data.email) : undefined,
+    altEmails: Array.isArray(data.alt_emails) && data.alt_emails.length
+      ? data.alt_emails.map(String)
+      : undefined,
     phone: data.phone ? String(data.phone) : undefined,
     agency: data.agency ? String(data.agency) : undefined,
     agencyName: data.agency_name ? String(data.agency_name) : undefined,
@@ -316,9 +320,13 @@ function hasBeenWorked(c: CrmContact): boolean {
 }
 
 // Kept in sync with insights.ts: writes made by machinery rather than by a person
-// talking to someone.
+// talking to someone. 'email-in' is here because an inbound email is the CONTACT
+// touching US — evidence of a live thread (it bumps last_touched), but not proof
+// anyone here worked them. 'email-out' is deliberately absent: a sent email is a
+// human selling, whichever machine recorded it.
 const NON_HUMAN_VIA = new Set(['seed', 'rederive', 'slug-reconcile', 'verify',
-  'roundtrip-test', 'api-test', 'pavan-correction', 'lead-sync', 'baseline'])
+  'roundtrip-test', 'api-test', 'pavan-correction', 'lead-sync', 'baseline',
+  'email-in'])
 
 /**
  * The morning view. Buckets are mutually exclusive and ordered by urgency, so a
@@ -417,6 +425,7 @@ export async function createContact(
       name: input.name,
       title: input.title,
       email: input.email,
+      altEmails: input.altEmails,
       phone: input.phone,
       agency: input.agency,
       agencyName: input.agencyName,
@@ -470,6 +479,16 @@ export async function updateContact(
     setStr('name', 'name', 'name')
     setStr('title', 'title', 'title')
     setStr('email', 'email', 'email')
+    if ('altEmails' in patch && patch.altEmails !== undefined) {
+      const cleaned = patch.altEmails === null
+        ? undefined
+        : Array.from(new Set(patch.altEmails.map(e => e.toLowerCase().trim()).filter(Boolean)))
+      const resolved = cleaned?.length ? cleaned : undefined
+      if (JSON.stringify(resolved) !== JSON.stringify(current.altEmails)) {
+        next.altEmails = resolved
+        changed.push(resolved ? `alt_emails=${resolved.join(',')}` : 'cleared alt_emails')
+      }
+    }
     setStr('phone', 'phone', 'phone')
     setStr('agency', 'agency', 'agency')
     setStr('agencyName', 'agencyName', 'agency_name')
@@ -526,7 +545,7 @@ export async function updateContact(
 export async function appendLog(
   slug: string,
   text: string,
-  opts: { via?: string; date?: string; clearNextAction?: boolean } = {},
+  opts: { via?: string; date?: string; clearNextAction?: boolean; advanceStage?: boolean } = {},
 ): Promise<CrmContact | null> {
   const via = opts.via ?? 'dashboard'
   const release = await acquireLock()
@@ -535,12 +554,19 @@ export async function appendLog(
     if (!current) return null
 
     const date = opts.date ?? today()
+    // Backfilled history (an email synced from last year) must never rewind
+    // recency: last_touched only moves forward.
+    const lastTouched = current.lastTouched && current.lastTouched > date
+      ? current.lastTouched
+      : date
     const next: CrmContact = {
       ...current,
-      lastTouched: date,
+      lastTouched,
       log: [...current.log, { date, text, via }],
     }
-    if (current.stage === 'identified') next.stage = 'contacted'
+    // advanceStage=false lets observers (inbound email filing) record evidence
+    // without claiming WE contacted them — observation vs commitment.
+    if (current.stage === 'identified' && (opts.advanceStage ?? true)) next.stage = 'contacted'
     if (opts.clearNextAction) {
       next.nextAction = undefined
       next.nextActionDue = undefined
