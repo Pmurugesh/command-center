@@ -38,3 +38,19 @@
   than discovering it three corrections later. A board that shows research as though it were
   owed work is both false and demotivating, and it is the fastest way to make someone stop
   opening the tool.
+- **[2026-08-24]** Reported "your mini is down" from `ping` failing. The machine was up —
+  Tailscale's coordinator showed `Online: True`; only the peer-to-peer path was dead
+  (`Active: False`, last handshake the previous morning). This is the fourth instance of one
+  error this session: reporting a PROXY as the thing itself. A truncated grep became "no
+  pricing exists"; a records check became "zero outbound touches"; a `last_touched` date became
+  "88 days cold"; unreachability became "down". **State what the evidence shows, not what it
+  suggests** — "I can't reach it from here" is both true and more useful than "it's down", and
+  it points at the right fix instead of the wrong one.
+- **[2026-08-24]** Twice this session, work was pushed to a branch whose PR had ALREADY merged
+  (leads → PR #12, email connector → PR #14). Commits pushed to a merged branch have no path to
+  `main`, and nothing surfaces it: `git status` is clean, the push succeeds, and the branch
+  looks healthy. Both were found by accident — an import failing because `store.ts` was absent
+  from a fresh branch, and a check for `sync-email.py` on main. **After a PR merges, start the
+  next branch from `origin/main`** rather than continuing on the merged one. The
+  "Deployed build" health row catches the deploy half of this; the branch half has no detector
+  yet, so the habit is the control.
