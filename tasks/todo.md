@@ -631,16 +631,21 @@ class, live: nothing noticed until a person tried the URL.
 - [x] **Janitor infra adopted into git** — `scripts/macbook/` now versions both MacBook
       launchd jobs (script + plist), which previously existed only in `~/bin` and
       `~/Library/LaunchAgents`. Unversioned plumbing was its own silent-failure risk.
-- [ ] **BLOCKED on Pavan — 2 minutes at the mini:** run `sudo pmset -a sleep 0 autorestart 1`
-      (the deploy script has been printing "Skipped — needs sudo" for this since 8/21), then
-      toggle Tailscale off/on if the URL still doesn't answer. The watchdog will notify
-      "Mini is back" when it works.
-- [ ] **BLOCKED on Pavan — 2 clicks:** merge PR #14 (email connector; gates moving intake to
-      the mini) and PR #15 (lessons). Both mergeable, no failing checks; the merge action was
-      permission-denied for the agent in this session.
-- [ ] After the mini is back: deploy latest `main` there, put mail credentials in
-      `~/.config/command-center/mail.env`, add the sync-email launchd timer (same shape as
-      the janitor) — the three steps that move email intake off the MacBook.
+- [x] **Pavan ran the fix at the mini (same day):** `pmset -g` now shows `sleep 0` +
+      `autorestart 1` — this outage class is closed. Verified over SSH.
+- [x] **PRs #14 / #15 / #16 merged by Pavan** (agent's merge was permission-denied).
+- [x] **Mini redeployed to `main`** via `install-dashboard-service.sh`: build clean, service
+      restarted, HTTP 200 locally and through the permanent URL, 0 commits behind. The
+      watchdog observed the recovery and sent "Mini is back" — full down→up cycle proven.
+- [x] **Email-sync timer staged on the mini** — `scripts/mini/install-email-sync.sh` writes
+      `~/bin/email-sync.sh` + LaunchAgent `com.paladin.email-sync` (15 min). Deliberately
+      inert (exits 0) until `~/.config/command-center/mail.env` exists, so installing it
+      early is safe.
+- [ ] **The ONE remaining step — Pavan, on the mini:** create
+      `~/.config/command-center/mail.env` (mode 600) with `IMAP_HOST` / `IMAP_USER` /
+      `IMAP_PASSWORD` (use an app password, not the account password). Next timer tick
+      starts staging relevant mail into `operations/crm/intake/email/` — read-only against
+      the mailbox by protocol, gitignored staging.
 
 ## Open gates
 
