@@ -29,18 +29,36 @@ import type { Agent, AgentOutput, AgentStatus } from '@/types'
 
 const HOME = process.env.HOME || '/Users/paladin'
 
-// Where an agent's workspace can live, in priority order. `~/agents/<id>` is
-// the symlink farm; the operations repo is what those symlinks point at, and
-// holds agents that were never linked (scribe). Probed at runtime rather than
-// hardcoded per-agent so a newly-added agent is discovered, not silently
-// rendered blank — see CLAUDE.md "auto-discover it. No manual wiring."
+// Fallback roots for an agent workspace, used only when the CLI doesn't report
+// one. `~/agents/<id>` is the symlink farm; the operations repo is what those
+// symlinks point at and also holds agents that were never linked (scribe).
 const WORKSPACE_ROOTS = [
   path.join(HOME, 'agents'),
   path.join(HOME, 'repos/operations/agents'),
 ]
 
-async function findWorkspace(agentId: string): Promise<string> {
-  // The orchestrator lives outside the agent roots.
+function expandHome(p: string): string {
+  return p.startsWith('~/') ? path.join(HOME, p.slice(2)) : p
+}
+
+/**
+ * Resolve an agent's workspace.
+ *
+ * `openclaw agents list` reports `Workspace:` per agent, and that is the
+ * authoritative answer — it tracks agents wherever they actually live
+ * (voice under ~/agents, scribe straight out of the operations repo) with no
+ * guessing here. The probe is only a fallback for a CLI that doesn't print it.
+ * Either way nothing is hardcoded per-agent, so a newly-added agent is
+ * discovered rather than silently rendered blank — CLAUDE.md, "auto-discover
+ * it. No manual wiring."
+ */
+async function findWorkspace(agentId: string, reported: string): Promise<string> {
+  if (reported) {
+    const abs = expandHome(reported)
+    try {
+      if ((await fs.stat(abs)).isDirectory()) return abs
+    } catch { /* CLI pointed somewhere gone — fall through to the probe */ }
+  }
   if (agentId === 'main') return path.join(HOME, '.openclaw/workspace')
   for (const root of WORKSPACE_ROOTS) {
     const candidate = path.join(root, agentId)
@@ -75,6 +93,7 @@ interface ParsedAgent {
   name: string
   emoji: string
   model: string
+  workspace: string   // as reported by the CLI; '' when it didn't say
 }
 
 // Parse `openclaw agents list` output. Each agent block starts with "- <id>"
@@ -87,7 +106,7 @@ function parseAgentsList(output: string): ParsedAgent[] {
     const agentMatch = line.match(/^- (\w+)/)
     if (agentMatch) {
       if (current) agents.push(current)
-      current = { id: agentMatch[1], name: '', emoji: '', model: '' }
+      current = { id: agentMatch[1], name: '', emoji: '', model: '', workspace: '' }
       continue
     }
     if (!current) continue
@@ -101,6 +120,12 @@ function parseAgentsList(output: string): ParsedAgent[] {
     const modelMatch = line.match(/Model:\s*(.+)/)
     if (modelMatch) {
       current.model = modelMatch[1].trim()
+    }
+
+    // "Workspace: ~/agents/voice" — note this must not match "Agent dir:".
+    const workspaceMatch = line.match(/^\s*Workspace:\s*(.+)/)
+    if (workspaceMatch) {
+      current.workspace = workspaceMatch[1].trim()
     }
   }
   if (current) agents.push(current)
@@ -425,7 +450,7 @@ export async function getAgents(): Promise<Agent[]> {
 
   return Promise.all(
     parsed.map(async (agent) => {
-      const workspace = await findWorkspace(agent.id)
+      const workspace = await findWorkspace(agent.id, agent.workspace)
       const { role, owns } = workspace ? await readSoulMd(workspace) : { role: '', owns: [] }
       const lastMs = await getLastActivityMs(agent.id)
       const status = deriveStatus(lastMs, agent.id)
