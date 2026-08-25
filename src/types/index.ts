@@ -97,6 +97,9 @@ export interface SystemStatus {
 
 export interface SystemHealth {
   overall: 'green' | 'yellow' | 'red'
+  // false = openclaw couldn't be reached, so cron state is UNKNOWN. Never
+  // report unknown as healthy: `overall` goes red and the UI says why.
+  cronReachable: boolean
   cronOk: boolean
   cronFailed: number
   criticalFindings: number
@@ -167,7 +170,9 @@ export interface Partnership {
 }
 
 // Agents (the AI workforce)
-export type AgentStatus = 'running' | 'ok' | 'warning' | 'idle'
+// 'unknown' = the dashboard tracks no output for this agent, so its freshness
+// is unmeasured. Distinct from 'warning', which is a measured staleness.
+export type AgentStatus = 'running' | 'ok' | 'warning' | 'idle' | 'unknown'
 
 // An output an agent produces — a dashboard route. iconKey is a string so the
 // shape stays JSON-serializable; the rendering side maps key → LucideIcon.

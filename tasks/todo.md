@@ -852,3 +852,47 @@ and a single ranked queue whose top item is the actual highest-leverage action o
 Monitoring collapsed to two one-line rows that only open when red. Remaining for Pavan:
 the two [DECISION] flags (Candor price, targets confirm), and editing gtm/targets.md
 flips the scoreboard live — no deploy needed for target changes.
+
+
+---
+
+# Fix: absence of data must not render as a definitive status
+
+Two live symptoms, one root cause. When a data source is unreachable or untracked,
+the dashboard renders a *confident* status instead of admitting it doesn't know.
+
+- cron unreachable  → renders GREEN "System Healthy"   (false green)
+- agent untracked   → renders WARNING                  (false warning)
+
+## A. Cron reachability (false green)
+- [ ] `shell.ts`: add `runCommandResult()` → `{ ok, stdout }` so failure is distinguishable from empty output
+- [ ] `getCronJobs()` / `getNormalizedCronJobs()` → return `{ reachable, jobs }`, not a bare array
+- [ ] `types`: add `SystemHealth.cronReachable`
+- [ ] `api/system/health`: unreachable → `overall:'red'`, `cronOk:false` (never green on unknown)
+- [ ] `app/page.tsx`: unreachable → red dot + "Automation unreachable"
+- [ ] `layout/top-bar.tsx`: label unreachable distinctly from Critical
+- [ ] `system/cron/page.tsx`: "Can't reach openclaw" empty state ≠ "No cron jobs scheduled / Add a task"
+- [ ] `api/system/route.ts` + `lib/agents.ts`: update to new shape
+
+## B. Agents (false warning + auto-discovery)
+Root cause: `AGENT_WORKSPACES` / `AGENT_OUTPUTS` / `getLastActivityMs` hardcode 4 agents
+(main, product, sales, intel). `voice` and `scribe` fall through → no activity source →
+`deriveStatus(undefined)` → 'warning'. Violates CLAUDE.md "auto-discover, no manual wiring".
+
+- [ ] Auto-discover workspace: `~/agents/<id>` → fallback `~/repos/operations/agents/<id>`
+- [ ] Wire `scribe` activity → `crm/intake/review` (it files staged mail there; touched today)
+- [ ] `types`: add `'unknown'` to `AgentStatus`
+- [ ] `deriveStatus`: no tracked source → `'unknown'`, not `'warning'`
+- [ ] `StatusBadge`: render `unknown` as neutral "Not tracked", not amber
+
+## C. Production config (mini)
+- [ ] `scribe-filing` cron: `delivery.channel:"last"` with no target on an *isolated* session
+      → announce fails every run, job reads error, consec=2 drives the dot red.
+      Work itself succeeds (77s). Set an explicit target like `caleprocure-scan` has.
+
+## D. Needs Pavan (sudo — cannot run)
+- [ ] Flush mini DNS: stuck negative-cache entry for `suppliers.fiscal.ca.gov` only
+      (`dig` resolves it, `getaddrinfo` doesn't; every other host fine)
+
+## Review
+_pending_

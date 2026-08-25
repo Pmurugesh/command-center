@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 type StatusKey =
   // System / operational states
   | 'ok' | 'success' | 'error' | 'failed' | 'warning' | 'running'
-  | 'idle' | 'pending' | 'disabled'
+  | 'idle' | 'pending' | 'disabled' | 'unknown'
   // Bid workflow stages
   | 'discovered' | 'analyzing' | 'draft ready' | 'under review'
   | 'submitted' | 'won' | 'lost' | 'no-bid'
@@ -25,6 +25,9 @@ const STATUS_CONFIG: Record<StatusKey, BadgeConfig> = {
   idle:     { label: 'Idle',     dotClass: 'bg-slate-400',                bgClass: 'bg-slate-400/10 text-slate-400 border-slate-400/20' },
   pending:  { label: 'Pending',  dotClass: 'bg-slate-400',                bgClass: 'bg-slate-400/10 text-slate-400 border-slate-400/20' },
   disabled: { label: 'Disabled', dotClass: 'bg-slate-600',                bgClass: 'bg-slate-600/10 text-slate-500 border-slate-600/20' },
+  // Deliberately neutral, not amber: "we don't track this agent's output" is an
+  // absence of information, not a problem the operator can go fix.
+  unknown:  { label: 'Not tracked', dotClass: 'bg-slate-600',              bgClass: 'bg-slate-600/10 text-slate-500 border-slate-600/20' },
   // Bid workflow — each stage has its own color so the pipeline is visible at a glance
   'discovered':    { label: 'Discovered',    dotClass: 'bg-bid-discovered', bgClass: 'bg-bid-discovered/10 text-bid-discovered border-bid-discovered/30' },
   'analyzing':     { label: 'Analyzing',     dotClass: 'bg-bid-analyzing animate-pulse', bgClass: 'bg-bid-analyzing/10 text-bid-analyzing border-bid-analyzing/30' },

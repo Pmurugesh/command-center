@@ -58,11 +58,11 @@ function todayLabel(now = new Date()): string {
 
 export default async function TodayPage() {
   // Fetch everything in parallel — each data source is independent.
-  const [bids, score, cronJobs, decisions, agentSummaries, strategic,
+  const [bids, score, cron, decisions, agentSummaries, strategic,
          channels, opportunities, freshness, buckets, insights, calendar, leads, contacts] = await Promise.all([
     listBids(),
     getCampaignScore().catch(() => ({ targets: null, meetingsHeld: 0, demosGiven: 0, daysLeft: null })),
-    getNormalizedCronJobs().catch(() => []),
+    getNormalizedCronJobs().catch(() => ({ reachable: false, jobs: [] })),
     getDecisionQueue().catch(() => []),
     getAgent24hSummary().catch(() => []),
     getStrategicDecisions().catch(() => []),
@@ -92,18 +92,23 @@ export default async function TodayPage() {
   // Delegation: live next-actions owned by people other than Pavan.
   const waiting = buildWaitingOn(contacts)
 
-  const failingJobs = cronJobs.filter(isFailing)
+  const failingJobs = cron.jobs.filter(isFailing)
   const persistentFailure = failingJobs.some(j => j.consecutiveErrors >= 2)
 
   // The health dot answers "is the automation running?" — codebase findings and
   // open decisions have their own cards and shouldn't keep the dot red forever.
+  // Unreachable openclaw means the automation state is UNKNOWN. Reporting that
+  // as green is the worst possible failure for a monitoring dashboard: it goes
+  // reassuring at the exact moment it stops being able to see anything.
   const overallHealth: 'green' | 'yellow' | 'red' =
+    !cron.reachable ? 'red' :
     persistentFailure || failingJobs.length >= 2 ? 'red' :
     failingJobs.length > 0 ? 'yellow' :
     'green'
 
   const healthLabel =
-    overallHealth === 'green' ? 'Automation healthy' :
+    !cron.reachable ? "Can't reach openclaw" :
+    failingJobs.length === 0 ? 'Automation healthy' :
     failingJobs.length === 1 ? `1 job failing: ${failingJobs[0].name}` :
     `${failingJobs.length} jobs failing`
 

@@ -8,7 +8,11 @@
  * Status is derived from the most-recent mtime across the agent's owned outputs:
  *   ok      — output touched in the last 24h
  *   idle    — output touched in the last 1–7 days
- *   warning — no output touched in 7+ days (or no outputs configured)
+ *   warning — the agent HAS a tracked output and it has gone 7+ days untouched
+ *   unknown — the dashboard tracks no output for this agent, so freshness is
+ *             unmeasured. This is deliberately NOT 'warning': "I don't watch
+ *             this" and "this is stale" are different claims, and collapsing
+ *             them is what made voice/scribe look broken when they were fine.
  *
  * This file replaces the inline logic that used to live in
  * src/app/api/system/agents/route.ts so the page can call it directly without
@@ -25,11 +29,28 @@ import type { Agent, AgentOutput, AgentStatus } from '@/types'
 
 const HOME = process.env.HOME || '/Users/paladin'
 
-const AGENT_WORKSPACES: Record<string, string> = {
-  main: path.join(HOME, '.openclaw/workspace'),
-  product: path.join(HOME, 'agents/product'),
-  sales: path.join(HOME, 'agents/sales'),
-  intel: path.join(HOME, 'agents/intel'),
+// Where an agent's workspace can live, in priority order. `~/agents/<id>` is
+// the symlink farm; the operations repo is what those symlinks point at, and
+// holds agents that were never linked (scribe). Probed at runtime rather than
+// hardcoded per-agent so a newly-added agent is discovered, not silently
+// rendered blank — see CLAUDE.md "auto-discover it. No manual wiring."
+const WORKSPACE_ROOTS = [
+  path.join(HOME, 'agents'),
+  path.join(HOME, 'repos/operations/agents'),
+]
+
+async function findWorkspace(agentId: string): Promise<string> {
+  // The orchestrator lives outside the agent roots.
+  if (agentId === 'main') return path.join(HOME, '.openclaw/workspace')
+  for (const root of WORKSPACE_ROOTS) {
+    const candidate = path.join(root, agentId)
+    try {
+      // stat() follows symlinks, which is what we want: ~/agents/<id> is a link.
+      const st = await fs.stat(candidate)
+      if (st.isDirectory()) return candidate
+    } catch { /* try the next root */ }
+  }
+  return ''
 }
 
 // Agent → dashboard outputs. iconKey is a string the rendering side maps to a
@@ -148,6 +169,20 @@ async function getLastActivityMs(agentId: string): Promise<number | undefined> {
     }
   }
 
+  if (agentId === 'scribe') {
+    // Scribe's job is one filing pass over staged mail — its product is the
+    // review queue, so that directory's freshness IS its activity.
+    try {
+      const files = await fs.readdir(PATHS.crmIntakeReview)
+      for (const f of files) {
+        try {
+          const stat = await fs.stat(path.join(PATHS.crmIntakeReview, f))
+          mtimes.push(stat.mtimeMs)
+        } catch { /* skip unreadable */ }
+      }
+    } catch { /* intake dir may not exist on this machine */ }
+  }
+
   if (agentId === 'sales') {
     const bids = await listBids()
     for (const b of bids) {
@@ -166,12 +201,21 @@ async function getLastActivityMs(agentId: string): Promise<number | undefined> {
   return Math.max(...mtimes)
 }
 
+// Agents whose freshness getLastActivityMs() actually knows how to measure.
+// An agent outside this set isn't unhealthy — it's unwatched, and the UI must
+// say so rather than flying an amber flag the operator can never clear.
+const TRACKED_AGENTS = new Set(['product', 'intel', 'sales', 'scribe'])
+
 function deriveStatus(lastActivityMs: number | undefined, agentId: string): AgentStatus {
   // Main agent is the orchestrator — no direct outputs, treat as ok if it's
   // configured at all (we always parsed it from `openclaw agents list`).
   if (agentId === 'main') return 'ok'
 
-  if (lastActivityMs === undefined) return 'warning'  // configured but no outputs found
+  // No tracked output → unmeasured, not stale.
+  if (!TRACKED_AGENTS.has(agentId)) return 'unknown'
+
+  // Tracked, but its output directory turned up empty — that IS worth a flag.
+  if (lastActivityMs === undefined) return 'warning'
 
   const hoursAgo = (Date.now() - lastActivityMs) / (1000 * 60 * 60)
   if (hoursAgo < 24) return 'ok'
@@ -226,10 +270,11 @@ export interface AgentSummary {
 export async function getAgent24hSummary(): Promise<AgentSummary[]> {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000
 
-  const [agents, cronJobs] = await Promise.all([
+  const [agents, cron] = await Promise.all([
     getAgents().catch(() => [] as Agent[]),
-    getNormalizedCronJobs().catch(() => []),
+    getNormalizedCronJobs().catch(() => ({ reachable: false, jobs: [] })),
   ])
+  const cronJobs = cron.jobs
 
   // Index cron jobs by agent id for quick aggregation.
   const cronByAgent: Record<string, {
@@ -340,6 +385,19 @@ async function countOutputsSince(agentId: string, sinceMs: number): Promise<numb
       }
     } catch { /* dir may not exist */ }
   }
+  if (agentId === 'scribe') {
+    // Same output as getLastActivityMs(), counted rather than max'd.
+    try {
+      const files = await fs.readdir(PATHS.crmIntakeReview)
+      for (const f of files) {
+        try {
+          const stat = await fs.stat(path.join(PATHS.crmIntakeReview, f))
+          if (stat.mtimeMs >= sinceMs) count += 1
+        } catch { /* skip unreadable */ }
+      }
+    } catch { /* intake dir may not exist on this machine */ }
+  }
+
   if (agentId === 'sales') {
     const bids = await listBids()
     for (const b of bids) {
@@ -367,7 +425,7 @@ export async function getAgents(): Promise<Agent[]> {
 
   return Promise.all(
     parsed.map(async (agent) => {
-      const workspace = AGENT_WORKSPACES[agent.id] || ''
+      const workspace = await findWorkspace(agent.id)
       const { role, owns } = workspace ? await readSoulMd(workspace) : { role: '', owns: [] }
       const lastMs = await getLastActivityMs(agent.id)
       const status = deriveStatus(lastMs, agent.id)
