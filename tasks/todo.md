@@ -865,25 +865,25 @@ the dashboard renders a *confident* status instead of admitting it doesn't know.
 - agent untracked   → renders WARNING                  (false warning)
 
 ## A. Cron reachability (false green)
-- [ ] `shell.ts`: add `runCommandResult()` → `{ ok, stdout }` so failure is distinguishable from empty output
-- [ ] `getCronJobs()` / `getNormalizedCronJobs()` → return `{ reachable, jobs }`, not a bare array
-- [ ] `types`: add `SystemHealth.cronReachable`
-- [ ] `api/system/health`: unreachable → `overall:'red'`, `cronOk:false` (never green on unknown)
-- [ ] `app/page.tsx`: unreachable → red dot + "Automation unreachable"
-- [ ] `layout/top-bar.tsx`: label unreachable distinctly from Critical
-- [ ] `system/cron/page.tsx`: "Can't reach openclaw" empty state ≠ "No cron jobs scheduled / Add a task"
-- [ ] `api/system/route.ts` + `lib/agents.ts`: update to new shape
+- [x] `shell.ts`: add `runCommandResult()` → `{ ok, stdout }` so failure is distinguishable from empty output
+- [x] `getCronJobs()` / `getNormalizedCronJobs()` → return `{ reachable, jobs }`, not a bare array
+- [x] `types`: add `SystemHealth.cronReachable`
+- [x] `api/system/health`: unreachable → `overall:'red'`, `cronOk:false` (never green on unknown)
+- [x] `app/page.tsx`: unreachable → red dot + "Automation unreachable"
+- [x] `layout/top-bar.tsx`: label unreachable distinctly from Critical
+- [x] `system/cron/page.tsx`: "Can't reach openclaw" empty state ≠ "No cron jobs scheduled / Add a task"
+- [x] `api/system/route.ts` + `lib/agents.ts`: update to new shape
 
 ## B. Agents (false warning + auto-discovery)
 Root cause: `AGENT_WORKSPACES` / `AGENT_OUTPUTS` / `getLastActivityMs` hardcode 4 agents
 (main, product, sales, intel). `voice` and `scribe` fall through → no activity source →
 `deriveStatus(undefined)` → 'warning'. Violates CLAUDE.md "auto-discover, no manual wiring".
 
-- [ ] Auto-discover workspace: `~/agents/<id>` → fallback `~/repos/operations/agents/<id>`
-- [ ] Wire `scribe` activity → `crm/intake/review` (it files staged mail there; touched today)
-- [ ] `types`: add `'unknown'` to `AgentStatus`
-- [ ] `deriveStatus`: no tracked source → `'unknown'`, not `'warning'`
-- [ ] `StatusBadge`: render `unknown` as neutral "Not tracked", not amber
+- [x] Auto-discover workspace: `~/agents/<id>` → fallback `~/repos/operations/agents/<id>`
+- [x] Wire `scribe` activity → `crm/intake/review` (it files staged mail there; touched today)
+- [x] `types`: add `'unknown'` to `AgentStatus`
+- [x] `deriveStatus`: no tracked source → `'unknown'`, not `'warning'`
+- [x] `StatusBadge`: render `unknown` as neutral "Not tracked", not amber
 
 ## C. Production config (mini)
 - [ ] `scribe-filing` cron: `delivery.channel:"last"` with no target on an *isolated* session
@@ -895,4 +895,37 @@ Root cause: `AGENT_WORKSPACES` / `AGENT_OUTPUTS` / `getLastActivityMs` hardcode 
       (`dig` resolves it, `getaddrinfo` doesn't; every other host fine)
 
 ## Review
-_pending_
+
+**Done (commits `e2cf6ce`, `b6115f1` on `claude/command-center-status-5e571c`).**
+
+Both symptoms were the same disease: *absence of data rendered as a definitive
+status*. The cron path turned "couldn't look" into green; the agent path turned
+"not watched" into amber. Fixing the shared shape — make unknown representable,
+then let the compiler find every caller — was cheaper and safer than patching the
+two symptoms separately.
+
+Turning `getNormalizedCronJobs()` into `{ reachable, jobs }` broke all five call
+sites at compile time, which is the point: each one had to state what unreachable
+means for it, and none could go on quietly inheriting green.
+
+On workspaces, the first cut probed the filesystem for `~/agents/<id>`. That
+worked, but `openclaw agents list` already prints `Workspace:` per agent — so the
+second commit takes the CLI's answer and keeps the probe only as a fallback. Less
+guessing, and it tracks an agent that moves.
+
+**Verified**
+- typecheck / lint / `next build` clean
+- openclaw absent locally: health API went `overall:green, cronOk:true`
+  → `overall:red, cronReachable:false`; top bar "System Healthy" → "Automation
+  unreachable"; /system/cron "No cron jobs scheduled / Add a task" → "Can't reach
+  openclaw", stating explicitly that it is not the same as having no jobs
+- ran `getAgents()` against the mini's real filesystem (throwaway clone, running
+  app untouched): voice `warning`→`unknown` with its workspace now resolved,
+  scribe `warning`→`ok` with activity 2026-08-25T17:10. Scribe was never
+  unhealthy — the dashboard wasn't looking at what it produces.
+
+**Not fixed here — both need Pavan's hands on the mini**
+- DNS flush (sudo). Until then `caleprocure-scan` stays red for a real reason.
+- `scribe-filing` delivery. The openclaw CLI refuses over ssh
+  (`GatewaySecretRefUnavailableError`); its gateway token only resolves in a GUI
+  login session, and extracting a credential to work around that is off-limits.

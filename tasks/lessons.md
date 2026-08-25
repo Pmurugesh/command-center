@@ -75,3 +75,21 @@
   component you can test AND fix without the peer's cooperation, and here it was the culprit.
   Corollary: a fix applied right before recovery (waking the machine, the pmset command) gets
   credited by narrative, not evidence — the second outage 10 minutes later disproved both.
+- **[2026-08-25]** Traced the cron false-green correctly in the CODE (unreachable openclaw →
+  `''` → `[]` → "0 failing" → green) and then asserted it was live on the mini, having
+  reproduced the `GatewaySecretRefUnavailableError` over ssh. The live instance disproved it in
+  one curl: `/api/system/health` was already returning `overall:red, cronFailed:2`. The
+  dashboard runs in a GUI login session where the secret ref resolves; my ssh session is a
+  *different environment*, and I had generalized from it. Same family as the mini-sleep entry
+  above, one layer in: **reproducing a failure in your own shell does not establish that the
+  service fails — ask the running service.** Any long-lived process has an environment
+  (PATH, keychain, session) that ssh does not share, so when one is up and exposes its own
+  state, query THAT before describing production. The code defect was real and worth fixing;
+  the claim about its live impact was not.
+- **[2026-08-25]** Wrote the session plan with `cat > tasks/todo.md <<'MD'` and silently
+  destroyed 854 lines of Phase-5 history. `git diff --cached --stat` caught it — "890
+  deletions" on a file I thought I was creating — and `git show HEAD:` restored it. A
+  heredoc `>` is a delete plus a write, and on a path that already exists the delete is the
+  part you did not intend. **Append (`>>`) to living project files, and read the target before
+  any `>` redirect to a path you did not just create.** Reviewing `--stat` before committing is
+  the backstop that turned this into a non-event; the habit is not to need it.
