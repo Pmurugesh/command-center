@@ -9,16 +9,18 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const [cronJobs, bids, reports, alerts] = await Promise.all([
+    const [cron, bids, reports, alerts] = await Promise.all([
       getNormalizedCronJobs(),
       listBids(),
       listScanReports(),
       listIntelAlerts(),
     ])
 
-    const failing = cronJobs.filter(isFailing)
+    const failing = cron.jobs.filter(isFailing)
     const cronFailed = failing.length
-    const cronOk = cronFailed === 0
+    // Unreachable openclaw is NOT "zero jobs failing" — we simply cannot see
+    // the automation, so we must not claim it is fine.
+    const cronOk = cron.reachable && cronFailed === 0
     const persistentFailure = failing.some(j => j.consecutiveErrors >= 2)
 
     // Critical findings from the latest run of each scan only — informational,
@@ -34,9 +36,13 @@ export async function GET() {
     let overall: SystemHealth['overall'] = 'green'
     if (cronFailed > 0) overall = 'yellow'
     if (persistentFailure || cronFailed >= 2) overall = 'red'
+    // Blind beats optimistic: if we couldn't reach openclaw, say so loudly
+    // rather than inheriting the green that "no failures found" would give.
+    if (!cron.reachable) overall = 'red'
 
     const health: SystemHealth = {
       overall,
+      cronReachable: cron.reachable,
       cronOk,
       cronFailed,
       criticalFindings,
@@ -48,7 +54,7 @@ export async function GET() {
   } catch (error) {
     console.error('GET /api/system/health error:', error)
     return NextResponse.json(
-      { overall: 'red', cronOk: false, cronFailed: 0, criticalFindings: 0, activeBids: 0, recentAlerts: 0 },
+      { overall: 'red', cronReachable: false, cronOk: false, cronFailed: 0, criticalFindings: 0, activeBids: 0, recentAlerts: 0 },
       { status: 500 }
     )
   }

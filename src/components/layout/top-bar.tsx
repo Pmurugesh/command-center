@@ -32,7 +32,11 @@ export function TopBar() {
         {health && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <HealthDot status={health.overall} />
-            <span>System {health.overall === 'green' ? 'Healthy' : health.overall === 'yellow' ? 'Warning' : 'Critical'}</span>
+            <span>
+              {health.cronReachable === false
+                ? 'Automation unreachable'
+                : `System ${health.overall === 'green' ? 'Healthy' : health.overall === 'yellow' ? 'Warning' : 'Critical'}`}
+            </span>
           </div>
         )}
       </div>
