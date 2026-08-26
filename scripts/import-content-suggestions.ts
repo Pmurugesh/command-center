@@ -19,7 +19,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { PATHS } from '../src/lib/paths'
-import { serialize } from '../src/lib/content'
+import { serialize, refreshDigest } from '../src/lib/content'
 import type { ContentSuggestion } from '../src/types'
 
 function flag(name: string): string {
@@ -115,6 +115,13 @@ for (const block of blocks) {
     await fs.writeFile(dest, serialize(s), 'utf-8')
   }
   written.push(path.basename(dest))
+}
+
+if (!dry && written.length) {
+  // Keep the digest in step with what was just imported — otherwise Voice
+  // reads a digest that predates the suggestions it describes.
+  await refreshDigest()
+  console.log('digest refreshed')
 }
 
 console.log(`\n${dry ? 'DRY RUN — ' : ''}${written.length} suggestion(s) for week ${weekArg}`)

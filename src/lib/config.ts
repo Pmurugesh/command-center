@@ -113,6 +113,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: '/agencies', label: 'Agencies', icon: Building2, section: 'Sell' },
       { href: '/channels', label: 'Channels', icon: Handshake, section: 'Sell' },
       { href: '/meetings', label: 'Meetings', icon: NotebookPen, section: 'Sell' },
+      { href: '/content', label: 'Content', icon: PenTool, section: 'Sell' },
     ],
   },
   {
@@ -130,7 +131,6 @@ export const NAV_SECTIONS: NavSection[] = [
     label: 'Planned',
     collapsedByDefault: true,
     items: [
-      { href: '/content', label: 'Content', icon: PenTool, section: 'Planned' },
       { href: '/finance', label: 'Finance', icon: DollarSign, section: 'Planned' },
       { href: '/fundraise', label: 'Fundraise', icon: TrendingUp, section: 'Planned' },
     ],

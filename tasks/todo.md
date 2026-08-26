@@ -1002,6 +1002,13 @@ discard. Only a picked post gets drafted.
 - [ ] The `voice-monday-content-ideas` prompt still only announces. It must write
       these files directly — parsing prose is acceptable for backfill, not as the
       steady state. Gateway-side edit, same class as the scribe-filing delivery fix.
-- [ ] Nothing yet feeds last week's picks and feedback back into the Monday prompt,
-      so the loop informs but does not yet compound.
+- [x] Feed picks and feedback back into Monday — `content/_feedback-digest.md`,
+      DERIVED state rebuilt on every decision and committed in the SAME commit as
+      the decision that caused it, so history never shows one without the other.
+      Chose derived-on-write over "Voice scans the directory": a growing directory
+      costs more tokens every week and still has to be told what to look at, and a
+      digest regenerated on a schedule could disagree with the files it describes.
+      Verified in a scratch HOME with its own git repo — pick + skip + note produced
+      the right hit-rate table, surfaced the note verbatim, listed the undecided so
+      Voice won't re-suggest, and the digest rode along in the decision's commit.
 
