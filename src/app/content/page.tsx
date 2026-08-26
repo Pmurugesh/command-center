@@ -9,6 +9,7 @@ import { listSuggestions, byWeek } from '@/lib/content'
 import { PageHeader } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/empty-state'
 import { SuggestionList } from './suggestion-list'
+import { NewPostForm } from './new-post-form'
 import { PenTool } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -27,6 +28,7 @@ export default async function ContentPage() {
 
   const undecided = all.filter(s => s.status === 'suggested').length
   const picked = all.filter(s => s.status === 'picked').length
+  const published = all.filter(s => s.status === 'published').length
 
   return (
     <div className="space-y-6">
@@ -35,15 +37,17 @@ export default async function ContentPage() {
         description={
           all.length === 0
             ? 'Weekly post suggestions from Voice'
-            : `${all.length} suggestion${all.length === 1 ? '' : 's'} · ${undecided} undecided · ${picked} picked`
+            : `${all.length} suggestion${all.length === 1 ? '' : 's'} · ${undecided} undecided · ${picked} picked` +
+              (published > 0 ? ` · ${published} published` : '')
         }
+        actions={<NewPostForm />}
       />
 
       {all.length === 0 ? (
         <EmptyState
           icon={PenTool}
           title="No suggestions yet"
-          description="Voice generates content ideas every Monday at 08:00 PT and writes them to operations/content/suggestions/. Nothing has been written there yet — the next run will populate this page."
+          description="Voice generates content ideas every Monday at 08:00 PT and writes them to operations/content/suggestions/. Nothing has been written there yet — the next run will populate this page, or add one yourself with New post."
         />
       ) : (
         <div className="space-y-8">

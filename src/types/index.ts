@@ -200,7 +200,12 @@ export interface Agent {
 // Voice writes the hook and angle; the dashboard writes status and feedback back
 // to the same file, so `git log` over the directory IS the decision history.
 
-export type ContentStatus = 'suggested' | 'picked' | 'skipped' | 'drafted'
+export type ContentStatus = 'suggested' | 'picked' | 'skipped' | 'drafted' | 'published'
+
+// Where a suggestion came from. A 'manual' post is the strongest signal in the
+// system: Pavan bypassed the weekly queue to write it, which says more about
+// what he actually wants to publish than any pick.
+export type ContentSource = 'voice' | 'manual'
 
 export interface ContentSuggestion {
   id: string              // filename without .md — stable, used in URLs
@@ -215,10 +220,28 @@ export interface ContentSuggestion {
   angle: string
   status: ContentStatus
   optional: boolean       // Voice's "OPTIONAL / BACKLOG" posts
+  source: ContentSource
   feedback?: string       // your note back to Voice
   decidedAt?: string      // ISO; when you picked or skipped
   draft?: string          // full post body, generated on pick
   generatedAt?: string
+  // Outcome, typed in from LinkedIn's own screen a week after publishing.
+  // Deliberately manual: LinkedIn's analytics APIs cover organization pages
+  // behind partner approval and don't reach a personal profile at all, which
+  // is where the best-performing posts live.
+  publishedUrl?: string
+  publishedAt?: string    // ISO date the post went live
+  impressions?: number
+  engagementRate?: number // percent, e.g. 7.2
+}
+
+/** One row of pre-existing LinkedIn performance, read from content-engine. */
+export interface ContentBaselineRow {
+  date: string
+  author: string
+  impressions: number
+  engagementRate: number
+  topic: string
 }
 
 // ── CRM (Phase 5 / M1) ──────────────────────────────────────────────────────

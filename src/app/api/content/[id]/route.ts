@@ -30,11 +30,31 @@ export async function PATCH(
     if (body.feedback !== undefined && typeof body.feedback !== 'string') {
       return NextResponse.json({ error: 'feedback must be a string' }, { status: 400 })
     }
+    // Outcome numbers come from a text field, so guard the shape here rather
+    // than letting NaN reach the frontmatter and read back as a real value.
+    for (const k of ['impressions', 'engagementRate'] as const) {
+      const v = body[k]
+      if (v !== undefined && (typeof v !== 'number' || !Number.isFinite(v) || v < 0)) {
+        return NextResponse.json({ error: `${k} must be a non-negative number` }, { status: 400 })
+      }
+    }
+    if (body.publishedUrl !== undefined) {
+      if (typeof body.publishedUrl !== 'string') {
+        return NextResponse.json({ error: 'publishedUrl must be a string' }, { status: 400 })
+      }
+      if (body.publishedUrl && !/^https?:\/\//i.test(body.publishedUrl)) {
+        return NextResponse.json({ error: 'publishedUrl must start with http:// or https://' }, { status: 400 })
+      }
+    }
 
     const updated = await decideSuggestion(params.id, {
       status: body.status,
       feedback: body.feedback,
       draft: typeof body.draft === 'string' ? body.draft : undefined,
+      publishedUrl: body.publishedUrl,
+      publishedAt: typeof body.publishedAt === 'string' ? body.publishedAt : undefined,
+      impressions: body.impressions,
+      engagementRate: body.engagementRate,
     })
     if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json(updated)
