@@ -37,5 +37,13 @@ export const PATHS = {
   crmIntakeEmail: path.join(HOME, 'repos/operations/crm/intake/email'),
   crmIntakeReview: path.join(HOME, 'repos/operations/crm/intake/review'),
   emailSyncLog: path.join(HOME, '.openclaw/logs/email-sync.log'),
+  // Content loop (Phase 9). Voice writes one file per weekly suggestion here;
+  // the dashboard reads them and writes your pick/feedback back to the same
+  // file. Lives in operations (not content-engine) so it sits with the bids and
+  // intel it is generated from, and the janitor commits it like everything else.
+  content: path.join(HOME, 'repos/operations/content'),
+  contentSuggestions: path.join(HOME, 'repos/operations/content/suggestions'),
+  // READ-ONLY inputs Voice reasons against — voice guides and the calendar.
+  contentEngine: path.join(HOME, 'repos/content-engine'),
 } as const
 export const OUTREACH_PATH = path.join(HOME, 'repos/operations/intelligence/priority-outreach.md')

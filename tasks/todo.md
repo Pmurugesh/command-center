@@ -937,3 +937,33 @@ had prevented.
 - `scribe-filing` delivery. The openclaw CLI refuses over ssh
   (`GatewaySecretRefUnavailableError`); its gateway token only resolves in a GUI
   login session, and extracting a credential to work around that is off-limits.
+
+
+---
+
+# Phase 9 — Close the content loop (suggestions → pick → draft)
+
+Voice generates 3–5 grounded content ideas every Monday 08:00 PT and announces them
+to Telegram, where they evaporate. `content-engine` has ONE commit ever (Mar 26);
+every drafts/ dir in it is empty; the calendar it reasons against stopped being
+updated in July, and the Aug 21 run said so itself. The generation half works — the
+loop after it was never built.
+
+Decisions (Pavan, 2026-08-25): suggestions live in `operations/content/` (keeps the
+two-repo rule, makes the /content stub's declared path correct, janitor commits it);
+content-engine stays READ-ONLY as the source of voice guides + calendar. Voice writes
+a hook + angle per suggestion; the full draft is generated only for a post you pick.
+
+- [ ] `paths.ts`: `content`, `contentSuggestions`
+- [ ] `types`: `ContentSuggestion`, `ContentStatus` (suggested|picked|skipped|drafted)
+- [ ] `lib/content.ts`: list/get/write + semantic git commit (mirror `crm.ts`)
+- [ ] `scripts/import-content-suggestions.ts`: parse a Voice run into suggestion files
+- [ ] Backfill week of 2026-08-24 (5 posts) from the session transcript, so there's
+      something real on screen today
+- [ ] `/content`: replace the ComingSoon stub with the real page
+- [ ] `api/content/[id]`: PATCH status + feedback
+- [ ] Update the `voice-monday-content-ideas` prompt to write files, not just announce
+- [ ] Wire `voice` into `TRACKED_AGENTS` so its badge stops reading "Not tracked"
+
+## Review
+_pending_

@@ -6,7 +6,7 @@ import { TimeAgo } from '@/components/shared/time-ago'
 import { Card, CardContent } from '@/components/ui/card'
 import { getAgents } from '@/lib/agents'
 import {
-  ArrowRight, Bot, Building2, FileText, Handshake, Radio, Shield, type LucideIcon,
+  ArrowRight, Bot, Building2, FileText, Handshake, PenTool, Radio, Shield, type LucideIcon,
 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -19,6 +19,7 @@ const OUTPUT_ICONS: Record<string, LucideIcon> = {
   FileText,
   Building2,
   Handshake,
+  PenTool,
 }
 
 export default async function AgentsPage() {
