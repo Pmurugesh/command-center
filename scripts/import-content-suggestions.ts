@@ -44,17 +44,26 @@ function slug(s: string, max = 40): string {
     .replace(/-+$/, '')   // slicing can land mid-word; don't leave a dangling dash
 }
 
+/**
+ * Trailing `---` horizontal rules separate Voice's post blocks, so the LAST
+ * field in each block runs straight into one. Strip them, or every
+ * strategic_value ends with a stray rule in its frontmatter.
+ */
+function clean(v: string): string {
+  return v.replace(/\n\s*-{3,}\s*$/, '').trim()
+}
+
 /** `**Field:** value` up to the next bold field or heading. */
 function field(block: string, name: string): string {
   const re = new RegExp(`\\*\\*${name}:\\*\\*\\s*([\\s\\S]*?)(?=\\n\\*\\*[A-Z]|\\n## |$)`, 'i')
   const m = block.match(re)
-  return m ? m[1].trim() : ''
+  return m ? clean(m[1]) : ''
 }
 
 /** `**Hook:**` sits on its own line with the quoted text beneath it. */
 function hookOf(block: string): string {
   const m = block.match(/\*\*Hook:\*\*\s*\n?([\s\S]*?)(?=\n\*\*[A-Z]|\n## |$)/i)
-  return m ? m[1].trim().replace(/^"|"$/g, '').trim() : ''
+  return m ? clean(m[1]).replace(/^"|"$/g, '').trim() : ''
 }
 
 const raw = await fs.readFile(path.resolve(srcArg), 'utf-8')
