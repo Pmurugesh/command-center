@@ -1012,3 +1012,66 @@ discard. Only a picked post gets drafted.
       the right hit-rate table, surfaced the note verbatim, listed the undecided so
       Voice won't re-suggest, and the digest rode along in the decision's commit.
 
+
+
+---
+
+# Phase 10 — Outcomes and ad-hoc posts
+
+Two gaps found by Pavan, one of them mine:
+
+1. The loop only knew what he PICKED, never what actually happened after he
+   posted. Voice was optimising against clicks, not results.
+2. Nothing could create a post outside the Monday run. The timeliest content —
+   an event you just left — is exactly what a weekly batch cannot produce.
+
+He also asked about wiring LinkedIn directly. Answer: not yet, and not because
+it's hard. His most recent tracked post is 06/06/2026, ~11 weeks ago — analytics
+on a stream of zero teaches nothing. LinkedIn's analytics APIs are built around
+ORGANISATION pages (partner approval, page admin) and third-party access to a
+PERSONAL profile's post analytics is effectively closed — and his two highest-reach
+posts are both personal. So the API route costs weeks of approval, covers 3 of 4
+entities, and misses the best-performing one. Scraping is ToS-violating and risks
+the account. Manual capture is two numbers off LinkedIn's own screen, works for all
+four entities today, and builds the schema+habit that would justify an API later.
+
+- [x] `ContentStatus` gains `published`; `ContentSource` = voice | manual
+- [x] Outcome fields: published_url, published_at, impressions, engagement_rate
+- [x] `createSuggestion()` — ad-hoc post any day, status `picked`, source `manual`,
+      grouped into the current week via `weekOf()`
+- [x] Duplicate guard: same week + entity + topic returns the existing row
+- [x] `POST /api/content` (create) + outcome validation on PATCH
+- [x] UI: "New post" in the header; "Log results" per card; results + post link
+      rendered inline; `yours` marker on manual posts
+- [x] Digest: Published/measured table, "Written by Pavan directly", and the
+      8-row historical baseline read from content-engine (read-only)
+- [x] Logging a URL implies published — outcome data can't attach to a `picked` row
+
+## Review
+
+**Done (branch `claude/content-outcomes-5e571c`).**
+
+The digest had a bug I introduced and caught in testing: hit rate counted
+`picked|drafted` but not `published`, so a post with 2,178 impressions showed as
+a zero for its entity — the single worst thing this table could get wrong, since
+it's the number Voice weights most. Fixed with `isChosen()` and renamed the column
+Chosen, because "picked" stopped being the whole story once publishing existed.
+
+`>5 ideas per week` needed no code — nothing ever capped it; the 3-5 lives only in
+the prompt, and the file-per-idea model renders whatever Voice writes.
+
+**Verified** (scratch HOME with its own git repo, so nothing real was touched):
+- baseline parser: all 8 rows off the real content-engine table, including the
+  comma-separated `2,178`; returns [] and does not throw when the repo is absent
+- full flow: Voice suggestion → picked → URL logged → status auto-flips to
+  published → numbers logged → digest shows it under measured results
+- ad-hoc create: lands in the current week with the next post number, status
+  `picked`, source `manual`, surfaced in its own digest section
+- dedupe: same entity+topic with different case/whitespace returns the existing
+  row rather than a second file
+- `weekOf()` resolves to Monday
+- typecheck / lint / build clean
+
+**Still open**
+- [ ] Revisit LinkedIn org-page API once posts are actually flowing and there are
+      results worth automating the collection of.

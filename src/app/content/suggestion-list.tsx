@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/shared/status-badge'
-import { Check, X, MessageSquare, ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
+import { Check, X, MessageSquare, ChevronDown, ChevronRight, Loader2, BarChart3, ExternalLink, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ContentSuggestion, ContentStatus } from '@/types'
 
@@ -21,6 +21,7 @@ const DECIDED: Record<string, string> = {
   picked: 'ok',
   skipped: 'disabled',
   drafted: 'running',
+  published: 'success',
 }
 
 export function SuggestionList({ initial }: { initial: ContentSuggestion[] }) {
@@ -28,6 +29,7 @@ export function SuggestionList({ initial }: { initial: ContentSuggestion[] }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [open, setOpen] = useState<string | null>(null)
   const [drafting, setDrafting] = useState<string | null>(null)
+  const [logging, setLogging] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   async function patch(id: string, body: Record<string, unknown>) {
@@ -77,6 +79,11 @@ export function SuggestionList({ initial }: { initial: ContentSuggestion[] }) {
                   <span className="text-xs text-muted-foreground">{s.day}</span>
                   {s.optional && (
                     <span className="text-xs text-muted-foreground/70 italic">backlog</span>
+                  )}
+                  {s.source === 'manual' && (
+                    <span className="inline-flex items-center gap-1 text-xs text-status-accent">
+                      <Sparkles className="h-3 w-3" /> yours
+                    </span>
                   )}
                 </div>
                 {decided && <StatusBadge status={DECIDED[s.status] ?? 'idle'} label={s.status} />}
@@ -135,6 +142,33 @@ export function SuggestionList({ initial }: { initial: ContentSuggestion[] }) {
                 </p>
               )}
 
+              {(s.publishedUrl || typeof s.impressions === 'number') && (
+                <div className="flex items-center gap-3 flex-wrap text-xs">
+                  {typeof s.impressions === 'number' && (
+                    <span className="text-foreground">
+                      <span className="font-semibold tabular-nums">{s.impressions.toLocaleString('en-US')}</span>
+                      <span className="text-muted-foreground"> impressions</span>
+                    </span>
+                  )}
+                  {typeof s.engagementRate === 'number' && (
+                    <span className="text-foreground">
+                      <span className="font-semibold tabular-nums">{s.engagementRate}%</span>
+                      <span className="text-muted-foreground"> engagement</span>
+                    </span>
+                  )}
+                  {s.publishedUrl && (
+                    <a
+                      href={s.publishedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-muted-foreground hover:text-status-accent transition-colors"
+                    >
+                      <ExternalLink className="h-3 w-3" /> view post
+                    </a>
+                  )}
+                </div>
+              )}
+
               {/* Actions */}
               <div className="flex items-center gap-2 pt-1 flex-wrap">
                 <Button
@@ -163,7 +197,29 @@ export function SuggestionList({ initial }: { initial: ContentSuggestion[] }) {
                   <MessageSquare className="h-3.5 w-3.5" />
                   <span className="ml-1.5">{s.feedback ? 'Edit note' : 'Feedback'}</span>
                 </Button>
+                <Button
+                  size="touch"
+                  variant="ghost"
+                  onClick={() => setLogging(logging === s.id ? null : s.id)}
+                >
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  <span className="ml-1.5">
+                    {typeof s.impressions === 'number' ? 'Edit results' : 'Log results'}
+                  </span>
+                </Button>
               </div>
+
+              {logging === s.id && (
+                <ResultsBox
+                  suggestion={s}
+                  busy={busy === s.id}
+                  onCancel={() => setLogging(null)}
+                  onSave={async (payload) => {
+                    await patch(s.id, payload)
+                    setLogging(null)
+                  }}
+                />
+              )}
 
               {drafting === s.id && (
                 <FeedbackBox
@@ -204,6 +260,88 @@ function FeedbackBox({ initial, busy, onSave, onCancel }: {
       <div className="flex items-center gap-2">
         <Button size="touch" disabled={busy} onClick={() => onSave(text.trim())}>
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save note'}
+        </Button>
+        <Button size="touch" variant="ghost" onClick={onCancel}>Cancel</Button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Outcome capture. Deliberately manual: LinkedIn's analytics APIs cover
+ * organization pages behind partner approval and don't reach a personal
+ * profile at all — which is where the best-performing posts live. Two numbers
+ * off LinkedIn's own screen beats an integration that can't see half the work.
+ */
+function ResultsBox({ suggestion, busy, onSave, onCancel }: {
+  suggestion: ContentSuggestion
+  busy: boolean
+  onSave: (payload: Record<string, unknown>) => void
+  onCancel: () => void
+}) {
+  const [url, setUrl] = useState(suggestion.publishedUrl ?? '')
+  const [impressions, setImpressions] = useState(
+    typeof suggestion.impressions === 'number' ? String(suggestion.impressions) : ''
+  )
+  const [rate, setRate] = useState(
+    typeof suggestion.engagementRate === 'number' ? String(suggestion.engagementRate) : ''
+  )
+  const [err, setErr] = useState<string | null>(null)
+
+  function save() {
+    const payload: Record<string, unknown> = {}
+    if (url.trim()) payload.publishedUrl = url.trim()
+
+    // Accept "2,178" and "2.1K" the way LinkedIn shows them.
+    const parse = (v: string): number | undefined => {
+      const t = v.trim().replace(/,/g, '')
+      if (!t) return undefined
+      const k = /^([\d.]+)k$/i.exec(t)
+      const n = k ? parseFloat(k[1]) * 1000 : parseFloat(t)
+      return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : NaN
+    }
+    const imp = parse(impressions)
+    const er = parse(rate.replace(/%/g, ''))
+    if (Number.isNaN(imp) || Number.isNaN(er)) { setErr('Numbers only (2,178 or 2.1K).'); return }
+    if (imp !== undefined) payload.impressions = Math.round(imp)
+    if (er !== undefined) payload.engagementRate = er
+    if (Object.keys(payload).length === 0) { setErr('Add a URL or a number.'); return }
+    setErr(null)
+    onSave(payload)
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border border-border bg-card/50 p-3">
+      <p className="text-xs text-muted-foreground">
+        Paste the post URL when it goes live; come back in a week for the numbers.
+        Adding a URL marks it published.
+      </p>
+      <input
+        value={url}
+        onChange={e => setUrl(e.target.value)}
+        placeholder="https://www.linkedin.com/posts/..."
+        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:border-status-accent/50"
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <input
+          value={impressions}
+          onChange={e => setImpressions(e.target.value)}
+          placeholder="Impressions"
+          inputMode="decimal"
+          className="rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:border-status-accent/50"
+        />
+        <input
+          value={rate}
+          onChange={e => setRate(e.target.value)}
+          placeholder="Engagement %"
+          inputMode="decimal"
+          className="rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:border-status-accent/50"
+        />
+      </div>
+      {err && <p className="text-xs text-status-danger">{err}</p>}
+      <div className="flex items-center gap-2">
+        <Button size="touch" disabled={busy} onClick={save}>
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save results'}
         </Button>
         <Button size="touch" variant="ghost" onClick={onCancel}>Cancel</Button>
       </div>
