@@ -924,6 +924,14 @@ guessing, and it tracks an agent that moves.
   scribe `warning`→`ok` with activity 2026-08-25T17:10. Scribe was never
   unhealthy — the dashboard wasn't looking at what it produces.
 
+**Deployed 2026-08-25.** PR #28 merged; mini pulled `3da9092` (it was two commits
+behind), rebuilt, and `com.paladin.commandcenter` kickstarted — back up in 2s.
+Live check: `cronReachable:true` with `cronFailed:2`, so the working path is
+intact and red means the two real failures, not the new unreachable branch.
+`/system/cron` reads "10 scheduled · 2 failing"; voice renders "Not tracked" and
+scribe "OK". Both agents now also resolve their SOUL.md, which a blank workspace
+had prevented.
+
 **Not fixed here — both need Pavan's hands on the mini**
 - DNS flush (sudo). Until then `caleprocure-scan` stays red for a real reason.
 - `scribe-filing` delivery. The openclaw CLI refuses over ssh
