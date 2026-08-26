@@ -13,11 +13,12 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Zap, ArrowRight, Loader2, Check } from 'lucide-react'
+import { Zap, ArrowRight, Loader2, Check, PenLine } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { Move } from '@/lib/moves'
+import { FollowupDraft } from './followup-draft'
 
 function daysUntil(due: string): number {
   const [y, m, d] = due.split('-').map(Number)
@@ -40,11 +41,13 @@ function DueChip({ due }: { due: string }) {
   )
 }
 
-function MoveRow({ move, working, onLogTouch, onResolve }: {
+function MoveRow({ move, working, drafting, onLogTouch, onResolve, onDraft }: {
   move: Move
   working: boolean
+  drafting: boolean
   onLogTouch: (slug: string) => void
   onResolve: (file: string, lineNumber: number) => void
+  onDraft: (slug: string) => void
 }) {
   return (
     // Meta stacks under the action on phones — chips must never eat the verb.
@@ -66,9 +69,20 @@ function MoveRow({ move, working, onLogTouch, onResolve }: {
         {move.due && <DueChip due={move.due} />}
         <Badge variant="outline" className="text-[10px]">{move.source}</Badge>
         {move.kind === 'crm-due' && move.contactSlug && (
-          <Button size="touch" onClick={() => onLogTouch(move.contactSlug!)} disabled={working}>
-            {working ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Log touch'}
-          </Button>
+          <>
+            <Button
+              size="touch"
+              variant="outline"
+              onClick={() => onDraft(move.contactSlug!)}
+              title="Draft a follow-up from this contact's log and next action"
+            >
+              <PenLine className="h-3 w-3" />
+              <span className="ml-1">Draft</span>
+            </Button>
+            <Button size="touch" onClick={() => onLogTouch(move.contactSlug!)} disabled={working}>
+              {working ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Log touch'}
+            </Button>
+          </>
         )}
         {move.kind === 'strategic' && move.file && move.lineNumber !== undefined && (
           <Button
@@ -81,6 +95,11 @@ function MoveRow({ move, working, onLogTouch, onResolve }: {
           </Button>
         )}
       </div>
+      {drafting && move.contactSlug && (
+        <div className="basis-full">
+          <FollowupDraft slug={move.contactSlug} onClose={() => onDraft(move.contactSlug!)} />
+        </div>
+      )}
     </li>
   )
 }
@@ -88,7 +107,12 @@ function MoveRow({ move, working, onLogTouch, onResolve }: {
 export function MovesCard({ moves, limit = 7 }: { moves: Move[]; limit?: number }) {
   const router = useRouter()
   const [workingId, setWorkingId] = useState<string | null>(null)
+  const [draftingSlug, setDraftingSlug] = useState<string | null>(null)
   const [, start] = useTransition()
+
+  // Toggle: the same button opens and closes, and only one draft is open at a
+  // time so the queue stays readable.
+  const onDraft = (slug: string) => setDraftingSlug(prev => (prev === slug ? null : slug))
 
   const act = async (id: string, fn: () => Promise<Response>) => {
     setWorkingId(id)
@@ -143,7 +167,7 @@ export function MovesCard({ moves, limit = 7 }: { moves: Move[]; limit?: number 
           <>
             <ul className="divide-y divide-border">
               {visible.map(m => (
-                <MoveRow key={m.id} move={m} working={isWorking(m)} onLogTouch={onLogTouch} onResolve={onResolve} />
+                <MoveRow key={m.id} move={m} working={isWorking(m)} drafting={draftingSlug === m.contactSlug} onLogTouch={onLogTouch} onResolve={onResolve} onDraft={onDraft} />
               ))}
             </ul>
             {overflow.length > 0 && (
@@ -153,7 +177,7 @@ export function MovesCard({ moves, limit = 7 }: { moves: Move[]; limit?: number 
                 </summary>
                 <ul className="divide-y divide-border">
                   {overflow.map(m => (
-                    <MoveRow key={m.id} move={m} working={isWorking(m)} onLogTouch={onLogTouch} onResolve={onResolve} />
+                    <MoveRow key={m.id} move={m} working={isWorking(m)} drafting={draftingSlug === m.contactSlug} onLogTouch={onLogTouch} onResolve={onResolve} onDraft={onDraft} />
                   ))}
                 </ul>
               </details>

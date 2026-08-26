@@ -93,3 +93,23 @@
   part you did not intend. **Append (`>>`) to living project files, and read the target before
   any `>` redirect to a path you did not just create.** Reviewing `--stat` before committing is
   the backstop that turned this into a non-event; the habit is not to need it.
+- **[2026-08-25]** The email connector had logged `touches in 0 / out 0` for 124 consecutive
+  runs and every surface agreed: 11 of 104 contacts had a `last_touched`, and Today told Pavan
+  to chase Robert Payne as "27d overdue". A 180-day dry sweep found **76 real messages** — six
+  CDT demo-prep threads, Caltrans, DMV, 32 of them SENT by him — and the CRM was simply wrong.
+  Cause: `IMAP_SINCE_DAYS` defaults to 30, the connector went live ~Aug 24, and the most recent
+  business thread was Jul 22, **34 days old**. It had been faithfully reporting zero against an
+  empty window. The script's own docstring said "use a large number once for a backlog sweep";
+  that one-time sweep was never run. **A steady stream of zeros from a filter is not evidence of
+  absence — widen the window and re-run before believing it.** From the log alone a filtered
+  message and a nonexistent one are identical, and the number that proved it (34 days) was
+  visible on the dashboard the whole time, one line from the "0 touches" it contradicted.
+- **[2026-08-25]** Built follow-up drafts from CRM log entries and the first output for Wesley
+  Namikawa read: "Where we left off: Reporting tool demo delivered to Caltrans (date approximate
+  — Pavan noted 2026-08-21 that this demo happened but was never recorded). Demo queries are
+  documented in the Nexus repo at docs/reporting/caltrans_demo_reference.md." That was one click
+  from being emailed to a Caltrans official. Log entries are written FOR US and carry internal
+  bookkeeping, repo paths, and candid asides. **Anything assembled from internal notes and
+  pointed outward needs an explicit external-safe pass** — strip parentheticals, take the first
+  sentence, and return NOTHING rather than something questionable. "The user edits before
+  sending" is not a safety argument; the default has to be safe on its own.
