@@ -937,3 +937,71 @@ had prevented.
 - `scribe-filing` delivery. The openclaw CLI refuses over ssh
   (`GatewaySecretRefUnavailableError`); its gateway token only resolves in a GUI
   login session, and extracting a credential to work around that is off-limits.
+
+
+---
+
+# Phase 9 — Close the content loop (suggestions → pick → draft)
+
+Voice generates 3–5 grounded content ideas every Monday 08:00 PT and announces them
+to Telegram, where they evaporate. `content-engine` has ONE commit ever (Mar 26);
+every drafts/ dir in it is empty; the calendar it reasons against stopped being
+updated in July, and the Aug 21 run said so itself. The generation half works — the
+loop after it was never built.
+
+Decisions (Pavan, 2026-08-25): suggestions live in `operations/content/` (keeps the
+two-repo rule, makes the /content stub's declared path correct, janitor commits it);
+content-engine stays READ-ONLY as the source of voice guides + calendar. Voice writes
+a hook + angle per suggestion; the full draft is generated only for a post you pick.
+
+- [x] `paths.ts`: `content`, `contentSuggestions`
+- [x] `types`: `ContentSuggestion`, `ContentStatus` (suggested|picked|skipped|drafted)
+- [x] `lib/content.ts`: list/get/write + semantic git commit (mirror `crm.ts`)
+- [x] `scripts/import-content-suggestions.ts`: parse a Voice run into suggestion files
+- [x] Backfill week of 2026-08-24 (5 posts) from the session transcript, so there's
+      something real on screen today
+- [x] `/content`: replace the ComingSoon stub with the real page
+- [x] `api/content/[id]`: PATCH status + feedback
+- [ ] Update the `voice-monday-content-ideas` prompt to write files, not just announce
+- [x] Wire `voice` into `TRACKED_AGENTS` so its badge stops reading "Not tracked"
+
+## Review
+**Done (PR #30, branch `claude/content-suggestions-5e571c`).**
+
+The generation half had worked since March; everything downstream was missing, and
+the absence was invisible because the ideas *were* arriving — just into Telegram.
+The tell was structural, not behavioural: content-engine's one commit, its empty
+drafts/ dirs, and Voice's own Aug 21 remark that the calendar was five weeks stale.
+
+Suggestions live in `operations/content/suggestions/` rather than content-engine, so
+the two-repo rule holds and the /content stub's declared data source is finally
+correct. Writes reuse crm.ts's file-then-semantic-commit contract instead of a new
+one — `git log` over the directory is the decision history, and the janitor pushes it.
+
+Hook-now/draft-on-pick was the other call: a hook plus an angle is enough to choose
+between, and drafting all five each week would spend ~4–5x tokens on four posts you
+discard. Only a picked post gets drafted.
+
+**Verified**
+- typecheck / lint / `next build` clean; /content went static stub → dynamic route,
+  /api/content/[id] resolves
+- parser dry-run: all 5 posts, correct entities/days/hooks, post 5 correctly flagged
+  `optional`. First cut captured the trailing `---` block separator into
+  strategic_value; fixed and re-imported
+- backfilled week of 2026-08-24 from agent session 930ce63a (the cron log's own
+  `summary` truncates at 2000 chars, so the transcript was the only complete source)
+- rendered against real data: 5 suggestions, grouped by week, entity colours, hooks
+- clicked Pick end-to-end → file written + commit
+  `content: picked — InfiniteAI: ...`. That was MY click, not Pavan's, so it was
+  reverted surgically (unpushed, single file); the three in-flight bid files dirty in
+  that tree were byte-identical before and after
+- API guards: invalid status 400, non-string feedback 400, traversal 404, unknown 404,
+  file untouched by every rejected call
+
+**Still open**
+- [ ] The `voice-monday-content-ideas` prompt still only announces. It must write
+      these files directly — parsing prose is acceptable for backfill, not as the
+      steady state. Gateway-side edit, same class as the scribe-filing delivery fix.
+- [ ] Nothing yet feeds last week's picks and feedback back into the Monday prompt,
+      so the loop informs but does not yet compound.
+

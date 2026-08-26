@@ -85,6 +85,9 @@ const AGENT_OUTPUTS: Record<string, AgentOutput[]> = {
     { href: '/agencies',     label: 'Agencies',      iconKey: 'Building2' },
     { href: '/channels',     label: 'Channels',      iconKey: 'Handshake' },
   ],
+  voice: [
+    { href: '/content', label: 'Content', iconKey: 'PenTool' },
+  ],
   main: [], // orchestrator — coordinates the others, no direct outputs
 }
 
@@ -208,6 +211,21 @@ async function getLastActivityMs(agentId: string): Promise<number | undefined> {
     } catch { /* intake dir may not exist on this machine */ }
   }
 
+  if (agentId === 'voice') {
+    // Voice's product is the weekly suggestion queue (Phase 9). Before that
+    // existed it had no tracked output at all and read as 'unknown'.
+    try {
+      const files = await fs.readdir(PATHS.contentSuggestions)
+      for (const f of files) {
+        if (!f.endsWith('.md')) continue
+        try {
+          const stat = await fs.stat(path.join(PATHS.contentSuggestions, f))
+          mtimes.push(stat.mtimeMs)
+        } catch { /* skip unreadable */ }
+      }
+    } catch { /* suggestions dir may not exist yet */ }
+  }
+
   if (agentId === 'sales') {
     const bids = await listBids()
     for (const b of bids) {
@@ -229,7 +247,7 @@ async function getLastActivityMs(agentId: string): Promise<number | undefined> {
 // Agents whose freshness getLastActivityMs() actually knows how to measure.
 // An agent outside this set isn't unhealthy — it's unwatched, and the UI must
 // say so rather than flying an amber flag the operator can never clear.
-const TRACKED_AGENTS = new Set(['product', 'intel', 'sales', 'scribe'])
+const TRACKED_AGENTS = new Set(['product', 'intel', 'sales', 'scribe', 'voice'])
 
 function deriveStatus(lastActivityMs: number | undefined, agentId: string): AgentStatus {
   // Main agent is the orchestrator — no direct outputs, treat as ok if it's
@@ -421,6 +439,19 @@ async function countOutputsSince(agentId: string, sinceMs: number): Promise<numb
         } catch { /* skip unreadable */ }
       }
     } catch { /* intake dir may not exist on this machine */ }
+  }
+
+  if (agentId === 'voice') {
+    try {
+      const files = await fs.readdir(PATHS.contentSuggestions)
+      for (const f of files) {
+        if (!f.endsWith('.md')) continue
+        try {
+          const stat = await fs.stat(path.join(PATHS.contentSuggestions, f))
+          if (stat.mtimeMs >= sinceMs) count += 1
+        } catch { /* skip unreadable */ }
+      }
+    } catch { /* suggestions dir may not exist yet */ }
   }
 
   if (agentId === 'sales') {

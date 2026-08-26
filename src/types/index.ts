@@ -195,6 +195,32 @@ export interface Agent {
   lastActivityAt?: string // ISO; max mtime across owned outputs
 }
 
+// ── Content loop (Phase 9) ──────────────────────────────────────────────────
+// One file per weekly suggestion at `operations/content/suggestions/<file>.md`.
+// Voice writes the hook and angle; the dashboard writes status and feedback back
+// to the same file, so `git log` over the directory IS the decision history.
+
+export type ContentStatus = 'suggested' | 'picked' | 'skipped' | 'drafted'
+
+export interface ContentSuggestion {
+  id: string              // filename without .md — stable, used in URLs
+  week: string            // ISO date of the Monday this batch was generated for
+  postNumber: number
+  entity: string
+  day: string             // human phrase as Voice wrote it ("Tuesday, August 26")
+  topic: string
+  signalSource: string
+  strategicValue: string
+  hook: string
+  angle: string
+  status: ContentStatus
+  optional: boolean       // Voice's "OPTIONAL / BACKLOG" posts
+  feedback?: string       // your note back to Voice
+  decidedAt?: string      // ISO; when you picked or skipped
+  draft?: string          // full post body, generated on pick
+  generatedAt?: string
+}
+
 // ── CRM (Phase 5 / M1) ──────────────────────────────────────────────────────
 // One file per human at `operations/crm/contacts/<slug>.md`: frontmatter carries
 // the structured record, the body carries notes + an append-only `## Log`.
