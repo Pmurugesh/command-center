@@ -12,6 +12,7 @@ import {
   PenTool,
   Bot,
   Inbox,
+  Send,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -113,6 +114,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: '/agencies', label: 'Agencies', icon: Building2, section: 'Sell' },
       { href: '/channels', label: 'Channels', icon: Handshake, section: 'Sell' },
       { href: '/meetings', label: 'Meetings', icon: NotebookPen, section: 'Sell' },
+      { href: '/outreach', label: 'Outreach', icon: Send, section: 'Sell' },
       { href: '/content', label: 'Content', icon: PenTool, section: 'Sell' },
     ],
   },
