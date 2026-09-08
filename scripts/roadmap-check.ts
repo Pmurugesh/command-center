@@ -177,7 +177,7 @@ async function readAuthored(): Promise<Authored[]> {
   const names = await fs.readdir(PATHS.roadmap).catch(() => [] as string[])
   const out: Authored[] = []
   for (const n of names) {
-    if (!n.endsWith('.md') || n.startsWith('_') || n.startsWith('.')) continue
+    if (!n.endsWith('.md') || n.startsWith('_') || n.startsWith('.') || n === 'README.md') continue
     const raw = await fs.readFile(path.join(PATHS.roadmap, n), 'utf-8')
     const { data } = matter(raw)
     const h = (data.handoff ?? {}) as Record<string, string>

@@ -264,7 +264,10 @@ export async function listRoadmap(now = new Date()): Promise<RoadmapItem[]> {
   } catch {
     return []
   }
-  const files = names.filter(n => n.endsWith('.md') && !n.startsWith('_') && !n.startsWith('.'))
+  // `_`-prefixed is derived, README.md is documentation — neither is a
+  // commitment. (channels.ts excludes tracker.md for the same reason.)
+  const files = names.filter(n =>
+    n.endsWith('.md') && !n.startsWith('_') && !n.startsWith('.') && n !== 'README.md')
   const status = await readStatus()
 
   const items = await Promise.all(files.map(async (filename): Promise<RoadmapItem | null> => {
