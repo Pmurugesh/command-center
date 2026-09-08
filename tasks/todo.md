@@ -1129,19 +1129,18 @@ connector, leads on a schedule, and the outreach trigger cron.
 Modeled on `scripts/sync-leads.ts`; same env, same auth, same store pattern as
 `src/lib/leads.ts`. One-way, read-only against the workbench, idempotent.
 
-- [ ] **Extract the client.** Move `getConfig()` and `signIn()` out of `sync-leads.ts` into
-      `src/lib/qual-table.ts` and add `fetchJson(path, token, { timeoutMs })` that wraps
-      `fetch` with `signal: AbortSignal.timeout(20_000)`. `sync-leads.ts` switches to it in
-      the same change (this is the fix for its missing timeout, not a new feature).
-- [ ] **One call per run:** `GET /api/v1/bids/summary` (later `?updated_since=` once the
-      workbench adds it). Never the Brief from a cron; never any POST.
-- [ ] **Identity = `source.bid_id`.** Before writing, scan every `bids/*/.status.json` for
+- [x] **Extract the client.** *Built 2026-09-08: `src/lib/qual-table.ts` (config, signIn,
+      fetchJson, 20 s timeout on both calls, 401/403 named). `sync-leads.ts` uses it.*
+- [x] **One call per run:** `GET /api/v1/bids/summary`. *`scripts/sync-bids.ts`, 2026-09-08.*
+      (later `?updated_since=` once the workbench adds it). Never the Brief from a cron; never
+      any POST.
+- [x] **Identity = `source.bid_id`.** *Built: `src/lib/bid-sync.ts`; slug capped at 60 chars.* Before writing, scan every `bids/*/.status.json` for
       `source.system === 'qual-table' && source.bid_id === row.bid_id`. Found: update in
       place. Not found: create `bids/<slug(display_name)>/` (collision → append `-qt<bid_id>`)
       with only a `.status.json`. A folder is created once and never renamed; the display
       name may change, the id may not.
-- [ ] **Status file shape** (extend `BidStatusData` in `src/types/index.ts`; no `engine`
-      field, `plan.sections` is what says what kind of bid it is):
+- [x] **Status file shape** *(landed in `src/types/index.ts` as written, plus `BidStage`;
+      `source` also carries the workbench `status` so a move is detectable)*:
       ```ts
       interface BidStatusData {
         status: BidStatus              // Discovered | Analyzing | Draft Ready | Under Review | Submitted | Won | Lost | No-Bid
@@ -1165,29 +1164,31 @@ Modeled on `scripts/sync-leads.ts`; same env, same auth, same store pattern as
         updatedAt: string
       }
       ```
-- [ ] **Mapping** (the table in the handoff, "How we map your fields to our three"). Stage
+- [x] **Mapping** *(`mapRemote()`, 9 mapping checks pass)* (the table in the handoff, "How we map your fields to our three"). Stage
       ladder ranks: intake 0 · scanned 1 · planned 2 · team-confirmed 3 · tailoring 4 ·
       drafted 4 · gated 5 · ready-to-submit 5 · lapsed 6 · submitted 6 · awarded 7 · closed 7.
-- [ ] **Never overwrite richer with coarser.** Write `stage` only when
+- [x] **Never overwrite richer with coarser.** *(`nextStatus()`; tested both ways)* Write `stage` only when
       `rank(new) >= rank(existing)` **or** the workbench `status` differs from the stored
       `source.status` (a reopen is real and must show). Preserve `entity`, a hand-written
       `reason` on a non-connector bid, `archived`, and any key the connector does not own.
-- [ ] **Change detection like leads:** rewrite only when a mapped field differs; `syncedAt`
+- [x] **Change detection like leads:** *(`connectorView()`; identical rows → no write, no commit)* rewrite only when a mapped field differs; `syncedAt`
       alone is never a reason to write. One commit per batch, `bids: N new, M updated`, body
       `via: qual-table`, through `acquireLock(PATHS.bids)` + `atomicWrite`.
-- [ ] **Failure renders unknown.** Timeout, non-200, or unparseable body: write nothing to
+- [x] **Failure renders unknown.** *(`PATHS.bidSyncLog`, `lastBidSyncSuccess()`, "Bid sync" row amber 1.1 d / red 3 d)* Timeout, non-200, or unparseable body: write nothing to
       git, append one line to `~/.openclaw/logs/bid-sync.log` (new `PATHS.bidSyncLog`,
       same precedent as `emailSyncLog`), exit 1. Success appends one line too. A "Bid sync"
       row in `getPipelineFreshness()` (`src/lib/files.ts:484`) reads the log's last success;
       older than 26 h → unknown, never green on silence.
-- [ ] **Schedule:** OpenClaw cron on the mini, weekdays hourly 07:00–18:00 PT, command
+- [x] **Schedule:** *(`scripts/mini/install-bid-sync.sh`, registers `bid-sync` hourly + `lead-sync`
+      daily, sources the env file at run time; NOT YET RUN on the mini)* OpenClaw cron on the mini, weekdays hourly 07:00–18:00 PT, command
       payload like `caleprocure-scan` (`scripts/mini/install-caleprocure-scan.sh` is the
       installer to copy), with an **explicit delivery target** (isolated crons without one
       read as errors every run; see memory). Same installer registers `sync-leads` daily —
       that is the "leads on a schedule" freeze exception and shares the client.
 - [x] ~~Link existing folders by hand, once.~~ *Not needed: none of the five folders exist in
       the workbench (gate 7, 2026-09-08). All five stay archive-only.*
-- [ ] **Test** in a scratch `HOME` with its own git repo (the content-outcomes precedent):
+- [x] **Test** *(26 checks in a scratch HOME, all pass 2026-09-08; typecheck, lint, build clean)*
+      in a scratch `HOME` with its own git repo (the content-outcomes precedent):
       new bid → folder + commit; unchanged summary → no write; workbench moved
       `open→submitted` → stage advances; stored `ready-to-submit` with workbench
       `scanned` and unchanged status → stage kept; reopen → stage lowered with reason;

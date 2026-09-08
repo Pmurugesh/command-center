@@ -37,6 +37,9 @@ export const PATHS = {
   crmIntakeEmail: path.join(HOME, 'repos/operations/crm/intake/email'),
   crmIntakeReview: path.join(HOME, 'repos/operations/crm/intake/review'),
   emailSyncLog: path.join(HOME, '.openclaw/logs/email-sync.log'),
+  // Bid connector (Phase 11). One line per run, success or failure; the Today
+  // freshness row reads the last success. An event log, never in git.
+  bidSyncLog: path.join(HOME, '.openclaw/logs/bid-sync.log'),
   // Content loop (Phase 9). Voice writes one file per weekly suggestion here;
   // the dashboard reads them and writes your pick/feedback back to the same
   // file. Lives in operations (not content-engine) so it sits with the bids and

@@ -27,48 +27,10 @@
  */
 import { syncLeads } from '../src/lib/leads.ts'
 import { scoreEvents } from '../src/lib/lead-scoring.ts'
+import { getQualTableConfig, signIn, fetchJson, QUAL_TABLE_CONFIG_HELP } from '../src/lib/qual-table.ts'
+import type { QualTableConfig } from '../src/lib/qual-table.ts'
 
 const DRY = process.argv.includes('--dry')
-
-interface Config {
-  apiUrl: string
-  supabaseUrl: string
-  supabaseAnonKey: string
-  email: string
-  password: string
-}
-
-/**
- * Read from the environment only. Mirrors their own `is_enabled` gate: an
- * unconfigured deploy exits cleanly rather than half-working.
- */
-function getConfig(): Config | null {
-  const c = {
-    apiUrl: (process.env.QUAL_TABLE_API_URL ?? '').replace(/\/+$/, ''),
-    supabaseUrl: (process.env.QUAL_TABLE_SUPABASE_URL ?? '').replace(/\/+$/, ''),
-    supabaseAnonKey: process.env.QUAL_TABLE_SUPABASE_ANON_KEY ?? '',
-    email: process.env.QUAL_TABLE_EMAIL ?? '',
-    password: process.env.QUAL_TABLE_PASSWORD ?? '',
-  }
-  return Object.values(c).every(Boolean) ? c : null
-}
-
-/**
- * Exchange the service-account credentials for a short-lived access token.
- * Done per run because Supabase access tokens expire in about an hour, so a
- * stored token would break a scheduled sync by the next day.
- */
-async function signIn(c: Config): Promise<string> {
-  const res = await fetch(`${c.supabaseUrl}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: c.supabaseAnonKey },
-    body: JSON.stringify({ email: c.email, password: c.password }),
-  })
-  if (!res.ok) throw new Error(`sign-in failed: HTTP ${res.status} ${(await res.text()).slice(0, 160)}`)
-  const body = await res.json() as { access_token?: string }
-  if (!body.access_token) throw new Error('sign-in returned no access_token')
-  return body.access_token
-}
 
 interface RemoteEvent {
   business_unit: string
@@ -83,14 +45,13 @@ interface RemoteEvent {
   triage_status?: string
 }
 
-async function fetchEvents(c: Config, token: string): Promise<RemoteEvent[]> {
+async function fetchEvents(c: QualTableConfig, token: string): Promise<RemoteEvent[]> {
   // scope=all, NOT scope=shortlist: their shortlist is the staffing lens, and
   // filtering by it would hide exactly the product opportunities we exist to find.
-  const url = `${c.apiUrl}/api/v1/discovery/events?scope=all&limit=1000`
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  if (res.status === 401) throw new Error('401 — the service account is not authorised')
-  if (!res.ok) throw new Error(`fetch failed: HTTP ${res.status} ${(await res.text()).slice(0, 160)}`)
-  const body = await res.json() as { events?: RemoteEvent[]; total?: number }
+  // The shared client carries the 20 s timeout; before 2026-09-08 this call had none.
+  const body = await fetchJson<{ events?: RemoteEvent[]; total?: number }>(
+    c, token, '/api/v1/discovery/events?scope=all&limit=1000',
+  )
   const events = body.events ?? []
   // Their list is capped at the server's 1000-row maximum; say so rather than
   // silently reporting a truncated set as complete.
@@ -101,14 +62,9 @@ async function fetchEvents(c: Config, token: string): Promise<RemoteEvent[]> {
 }
 
 async function main() {
-  const config = getConfig()
+  const config = getQualTableConfig()
   if (!config) {
-    console.error('Not configured. Set on the mini:')
-    console.error('  QUAL_TABLE_API_URL           the qual-table Render URL')
-    console.error('  QUAL_TABLE_SUPABASE_URL      its Supabase project URL')
-    console.error('  QUAL_TABLE_SUPABASE_ANON_KEY its anon key (not secret)')
-    console.error('  QUAL_TABLE_EMAIL             the Paladin service account')
-    console.error('  QUAL_TABLE_PASSWORD          its password')
+    for (const line of QUAL_TABLE_CONFIG_HELP) console.error(line)
     process.exit(2)
   }
 
