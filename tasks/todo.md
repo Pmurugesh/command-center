@@ -1590,3 +1590,25 @@ committed daily → timestamps + fingerprint + run log. `/roadmap` is live on th
 3. **Targets — the one thing still entirely open.** Seeding was mechanical; the dates are not.
    All ten shipped with no target, so the board currently measures activity and nothing else.
    It starts answering "are we on time?" the moment the first date is set.
+
+## Nexus clone freshness for the health scans (2026-09-08)
+
+**Question that started it:** does Paladin's codebase health scan read main or the local copy?
+**Answer:** the local clone at `~/repos/Nexus` on the mini, which *is* on main but was only
+pulled when a human remembered (last by hand 2026-08-28). Only one scan is live —
+`product-weekly-code-scan` (Forge, Mon 03:00 PT); the 12 topic scans (vulnerability, tech-debt,
+compliance, rbac…) are `enabled: false`. The live job's prompt never fetches. The old wrapper
+`run-nexus-task.sh` did `git pull`, but the live job bypasses it. On 09-08 the clone was 5
+commits behind and the 5 were the security fixes (#889–#891) closing Paladin's own C1–C3, C6,
+H1, H4–H6, M23/M24/M33/M34 — the 09-14 scan would have re-reported them all as UNCHANGED.
+
+- [x] `scripts/mini/install-nexus-sync.sh` — writes `~/bin/nexus-sync.sh` (ff-only, refuses off
+      main or over modified tracked files, never touches the untracked bids/ intel/ drops) and
+      LaunchAgent `com.paladin.nexus-sync`, daily 02:30 PT, log `~/.openclaw/logs/nexus-sync.log`.
+- [x] Deployed on the mini over ssh 2026-09-08: first run `6708b24a -> 1b454622 (5 commits)`;
+      launchd kickstart confirmed `up to date`, exit 0, log written. Clone now 0/0 vs origin/main.
+- [ ] **Forge prompt patch (mini's on-screen Terminal, needs the Keychain token):** re-run the
+      installer there. It prepends "FIRST, run ~/bin/nexus-sync.sh …" to the cron message so the
+      scan itself syncs each time, independent of launchd. Idempotent (skips if already patched).
+- [ ] Optional, when any topic scan is re-enabled: point `run-nexus-task.sh`'s pull at
+      `~/bin/nexus-sync.sh` so its `|| true` stops hiding fetch failures.
