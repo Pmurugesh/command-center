@@ -32,6 +32,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { execFile } from 'child_process'
+import crypto from 'crypto'
 import matter from 'gray-matter'
 import { PATHS, REPO_CANDIDATES } from '../src/lib/paths.ts'
 import { runCommandArgs } from '../src/lib/shell.ts'
@@ -55,6 +56,14 @@ const AUTHOR_ALIASES: Record<string, string> = { 'AntarikshRamesh': 'Antariksh R
 const canonAuthor = (a: string) => AUTHOR_ALIASES[a] ?? a
 
 const days = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
+
+/**
+ * A repo this machine simply does not have — distinct from one that failed to
+ * fetch. The first is a fact about the MACHINE and makes the whole run partial;
+ * the second is a fact about the WORLD and is worth recording as `unknown`.
+ * Only the first blocks the write (see main).
+ */
+const NOT_CLONED = 'not cloned on this machine'
 
 async function exists(p: string): Promise<boolean> {
   try { await fs.access(p); return true } catch { return false }
@@ -165,7 +174,17 @@ interface Checked {
   last_evidence_author?: string | null
   handoff_state?: HandoffState
   handoff_age_days?: number | null
+  handoff_at?: string | null
   error?: string
+}
+
+/** One line per run, outside git — the page reads the last `ok` for freshness. */
+async function logRun(line: string): Promise<void> {
+  if (DRY) return
+  try {
+    await fs.mkdir(path.dirname(PATHS.roadmapCheckLog), { recursive: true })
+    await fs.appendFile(PATHS.roadmapCheckLog, `${new Date().toISOString()} ${line}\n`)
+  } catch { /* a logging failure must not fail a check */ }
 }
 
 function ymd(v: unknown): string | undefined {
@@ -212,7 +231,7 @@ async function checkBuild(a: Authored): Promise<Checked> {
   const errors: string[] = []
   for (const [repoName, paths] of byRepo) {
     const repo = await resolveRepo(repoName)
-    if (!repo) { errors.push(`${repoName} not cloned on this machine`); continue }
+    if (!repo) { errors.push(`${repoName} ${NOT_CLONED}`); continue }
     if (!await fetchOnce(repo)) { errors.push(`${repoName} could not fetch origin`); continue }
     const ref = await originRef(repo)
     // A path that matches nothing at the ref is a stale evidence pointer, which
@@ -258,7 +277,7 @@ async function checkHandoff(a: Authored): Promise<Checked> {
       }
     }
     const repo = await resolveRepo(repoName)
-    if (!repo) return { slug: a.slug, error: `${repoName} not cloned on this machine` }
+    if (!repo) return { slug: a.slug, error: `${repoName} ${NOT_CLONED}` }
     if (!await fetchOnce(repo)) return { slug: a.slug, error: `${repoName} could not fetch origin` }
     const ref = await originRef(repo)
     if (await grepAtRef(repo, ref, landed) > 0) {
@@ -267,6 +286,7 @@ async function checkHandoff(a: Authored): Promise<Checked> {
         slug: a.slug,
         handoff_state: 'merged',
         handoff_age_days: at ? days(at) : null,
+        handoff_at: at,
       }
     }
   }
@@ -279,7 +299,7 @@ async function checkHandoff(a: Authored): Promise<Checked> {
       const at = (await git(PATHS.operationsRoot, [
         'log', '-1', '--format=%aI', 'HEAD', '--', path.relative(PATHS.operationsRoot, abs),
       ])).trim()
-      return { slug: a.slug, handoff_state: 'spec-sent', handoff_age_days: at ? days(at) : null }
+      return { slug: a.slug, handoff_state: 'spec-sent', handoff_age_days: at ? days(at) : null, handoff_at: at || null }
     }
     return { slug: a.slug, error: `Spec ${spec} not found` }
   }
@@ -329,9 +349,22 @@ async function main() {
     x.a.name.localeCompare(y.a.name)
   )
 
+  // What counts as a change: a fact, not a day. The page recomputes ages from
+  // the stored timestamps, so this file only needs rewriting when a human
+  // commit landed, a handoff moved, a repo stopped resolving, a target was
+  // edited, or a state crossed a threshold. Without this, a daily cron commits
+  // every day as every age ticks — and the Telegram announce becomes noise.
+  const fingerprint = crypto.createHash('sha1').update(JSON.stringify(
+    [...rows].sort((x, y) => x.a.slug.localeCompare(y.a.slug)).map(r => [
+      r.a.slug, r.a.target ?? null, r.a.done ?? null, r.state,
+      r.d.last_evidence_at ?? null, r.d.handoff_state ?? null, r.d.handoff_at ?? null, r.d.error ?? null,
+    ])
+  )).digest('hex').slice(0, 12)
+
   const fm = [
     '---',
     `generated_at: '${new Date().toISOString()}'`,
+    `fingerprint: ${fingerprint}`,
     'checked:',
     ...checked.flatMap(c => [
       `  - slug: ${c.slug}`,
@@ -340,6 +373,7 @@ async function main() {
       ...(c.last_evidence_author ? [`    last_evidence_author: ${JSON.stringify(c.last_evidence_author)}`] : []),
       ...(c.handoff_state ? [`    handoff_state: ${c.handoff_state}`] : []),
       ...(c.handoff_age_days != null ? [`    handoff_age_days: ${c.handoff_age_days}`] : []),
+      ...(c.handoff_at ? [`    handoff_at: '${c.handoff_at}'`] : []),
       ...(c.error ? [`    error: ${JSON.stringify(c.error)}`] : []),
     ]),
     '---',
@@ -368,11 +402,36 @@ async function main() {
   const next = `${fm}\n${body}`
   const prev = await fs.readFile(PATHS.roadmapStatus, 'utf-8').catch(() => '')
 
-  // Compare on the body only: generated_at changes every run and would make
-  // every run a commit (the registry's rule).
-  const strip = (s: string) => s.replace(/generated_at:.*\n/, '')
-  if (strip(prev) === strip(next)) {
+  /**
+   * A machine that cannot see every repo must not publish a board.
+   *
+   * `_status.md` is one file written by two machines. The mini holds all the
+   * clones; the MacBook is missing contract-management and both websites, so a
+   * run there resolves them to `unknown` and — via the janitor's `git add -A` —
+   * quietly replaces the mini's correct board with a degraded one. That already
+   * happened once on 2026-09-08 during development.
+   *
+   * A partial board is worse than a stale board: it renders as current health.
+   * So refuse, name the repos, and leave what is there alone. `--dry` still
+   * prints, which is all a developer on the wrong machine actually needs.
+   */
+  const missing = checked.filter(c => c.error?.includes(NOT_CLONED))
+  if (missing.length > 0 && !DRY) {
+    console.error(
+      `roadmap-check: refusing to write — ${missing.length} of ${checked.length} initiatives ` +
+      `reference repos this machine does not have:`
+    )
+    for (const m of missing) console.error(`  ${m.slug}: ${m.error}`)
+    console.error('Run this on the mini, which holds every clone. (--dry prints anyway.)')
+    await logRun(`refused missing=${missing.length}`)
+    process.exit(2)
+  }
+
+  // A file without a fingerprint is the pre-fingerprint format: rewrite once.
+  const prevFingerprint = /^fingerprint: (\w+)$/m.exec(prev)?.[1]
+  if (prevFingerprint === fingerprint) {
     console.log('roadmap-check: no change')
+    await logRun('ok unchanged')
     return
   }
 
@@ -382,8 +441,13 @@ async function main() {
   }
   await fs.mkdir(PATHS.roadmap, { recursive: true })
   await fs.writeFile(PATHS.roadmapStatus, next, 'utf-8')
+  await logRun(`ok changed rows=${rows.length}`)
   console.log(`roadmap-check: wrote ${rows.length} rows`)
   for (const r of rows) console.log(`  ${STATE_MARK[r.state]} ${r.a.name}: ${r.state} — ${r.reason}`)
 }
 
-await main()
+await main().catch(async (e: unknown) => {
+  await logRun(`fail ${String(e).replace(/\s+/g, ' ').slice(0, 160)}`)
+  console.error(e)
+  process.exit(1)
+})

@@ -1489,14 +1489,45 @@ tree; header says DERIVED / DO NOT HAND-EDIT; commit only when content changed.
       The map exists and roadmap-check uses it, so the third copy was never created; removing
       the two existing ones touches scripts that gate bid claims, and doing that in the same
       change as a new feature is how a gate quietly breaks. Separate change.
-- [ ] **Register the weekly cron ON THE MINI** — `openclaw cron` changes need the mini's
-      on-screen Terminal (the Keychain is empty over ssh), so this is Pavan's to run:
-      ```
-      cd ~/repos/command-center && node --experimental-strip-types --no-warnings \
-        scripts/run-ts.mjs scripts/roadmap-check.ts
-      ```
-      Until it runs there, contract-management and both websites read `unknown` — correctly,
-      since the MacBook has no clone of them.
+- [x] **First mini run — the system proven end-to-end.** *2026-09-08, after PR #39 merged.
+      All 10 rows resolved, zero unknowns: **Contract Management `stranded` — "Merged 98d ago,
+      still not consumed here"**, derived independently rather than from the manual check, and
+      Web presence `idle` at 63d — which resolves to 2026-07-07, infiniteai-website's last
+      HUMAN commit, so the bot filter correctly skipped the Paladin commits above it.*
+- [x] **Guard partial runs (found by that same run).** *`_status.md` is one file written by two
+      machines and only the mini can see every repo — a MacBook run resolved two initiatives to
+      `unknown` and the janitor committed the degraded board over the mini's correct one.
+      roadmap-check now refuses to write when any referenced repo is absent from the machine,
+      names them, and exits 2; `--dry` still prints. Verified: exit 2, file byte-identical
+      after the refusal, 10 rows still printed under --dry.*
+- [ ] **Register the cron ON THE MINI — installer written, Pavan runs it.**
+      `scripts/mini/install-roadmap-check.sh` (2026-09-08), modeled on install-bid-sync.sh:
+      dry-run sanity check, Keychain token, `openclaw cron add roadmap-check` weekdays 06:00
+      PT, `--agent product`, explicit Telegram delivery. **Daily, not weekly** — the at-risk
+      window is 14 days and a weekly check could miss most of it. Cheap because of the
+      fingerprint (next item). Needs the mini's on-screen Terminal for the Keychain.
+- [x] **Daily cron without daily commits.** *2026-09-08. First design stored AGES in
+      `_status.md`, so every daily run would have rewritten the file (every number ticks) and
+      the janitor would have committed it — and the Telegram announce would have been ten
+      lines of noise every morning. Now: the file stores TIMESTAMPS (`last_evidence_at`,
+      `handoff_at`), `withLiveAges` in roadmap.ts recomputes ages at read time, and the script
+      rewrites only when a `fingerprint` of facts changes (human commit, handoff state, error,
+      target/done edit, or a state crossing a threshold). Freshness comes from
+      `~/.openclaw/logs/roadmap-check.log` (the bidSyncLog contract — one line per run, last
+      `ok` wins), so a quiet fortnight is not a stale board. Verified: fingerprint emitted,
+      MacBook run logs `refused missing=2` and leaves the file byte-identical, local page
+      shows web-presence 63d computed from 2026-07-07.*
+- [x] **`/roadmap` was 404 on the live dashboard for hours after the merge — deployed, and the
+      gap closed for good.** *Found 2026-09-08 by the recheck: PR #39 was on the mini's `main`
+      but `next start` serves `.next/`, built 11:51, before the merge. Nothing rebuilds on
+      pull; data syncs in 2 min (janitor, StartInterval 120), code waited for a human.
+      Deployed via `install-dashboard-service.sh` over ssh → HTTP 200 on `/`, `/roadmap`,
+      `/api/roadmap`, 10 rows, stranded/idle correct. Then wrote the missing automation:
+      `scripts/mini/deploy-on-merge.sh` + `install-deploy-on-merge.sh` — a launchd job every
+      5 min: fetch, skip unless origin/main moved AND on main AND tree clean, pull --ff-only,
+      install, build, kickstart the service, one log line per deploy in
+      `~/.openclaw/logs/command-center-deploy.log`. Failed build keeps the old process serving.
+      Pavan installs it on the mini (same session as the cron installer).*
 - [ ] **Why did `com.pavan.weekly-sync` miss 2026-09-07?** Filed, not fixed. `_registry.md`
       and `drift-check.json` both stamp 2026-08-31 while Nexus's origin moved 09-07. A weekly
       watcher that silently skips is the disease drift-check exists to catch, in the watcher.
@@ -1538,6 +1569,14 @@ clean; page renders with no console errors.
 
 **Not done:** the two retrofits and the mini cron above. The board is live and correct on this
 machine; it is not yet complete on the machine that will run it weekly.
+
+**Addendum, same day, after the recheck:** the mini's first run proved every claim live
+(Contract Management `stranded` 98d, Web presence `idle` 63d, zero unknowns). The recheck
+then found three gaps in what "automatic" actually meant: (1) a MacBook run could overwrite
+the mini's correct board → the partial-run guard; (2) `/roadmap` was 404 on the live URL
+because code deploys were manual → deploy-on-merge; (3) my own daily cron would have
+committed daily → timestamps + fingerprint + run log. `/roadmap` is live on the mini as of
+20:3x PT. Two installers remain for Pavan to run on the mini's screen.
 
 ### Open gates (Pavan)
 

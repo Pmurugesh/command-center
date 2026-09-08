@@ -80,6 +80,8 @@ export interface RoadmapItem {
 
 export interface RoadmapStatus {
   generatedAt?: string
+  /** Last successful run from the log — set even when the run changed nothing. */
+  lastRunAt?: string
   stale: boolean
   ran: boolean
   items: Record<string, DerivedEntry>
@@ -91,8 +93,43 @@ export interface DerivedEntry {
   lastEvidenceAt?: string | null
   handoffState?: HandoffState
   handoffAgeDays?: number | null
+  handoffAt?: string | null
   /** Set when the repo could not be fetched or read — forces `unknown`. */
   error?: string
+}
+
+/**
+ * Ages are computed from the stored timestamps at read time, so a status file
+ * written on Monday still says the right number on Thursday — and the check
+ * only has to rewrite the file when a FACT changes, not when a day passes.
+ * The stored `*_age_days` are a fallback for entries with no timestamp.
+ */
+export function withLiveAges(d: DerivedEntry, now = new Date()): DerivedEntry {
+  const age = (iso?: string | null) => {
+    if (!iso) return undefined
+    const t = new Date(iso).getTime()
+    return isNaN(t) ? undefined : Math.floor((now.getTime() - t) / 86_400_000)
+  }
+  return {
+    ...d,
+    evidenceAgeDays: age(d.lastEvidenceAt) ?? d.evidenceAgeDays,
+    handoffAgeDays: age(d.handoffAt) ?? d.handoffAgeDays,
+  }
+}
+
+/** ISO time of the last successful roadmap-check run, from its log. Null when
+ *  there is none — normal on the MacBook, where the check refuses to run. */
+export async function lastRoadmapCheck(): Promise<string | null> {
+  try {
+    const lines = (await fs.readFile(PATHS.roadmapCheckLog, 'utf-8')).trim().split('\n')
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const m = /^(\S+) ok\b/.exec(lines[i])
+      if (m) return m[1]
+    }
+    return null
+  } catch {
+    return null
+  }
 }
 
 export function daysBetween(from: Date, toDate: string): number {
@@ -221,8 +258,12 @@ export async function readStatus(): Promise<RoadmapStatus> {
   try {
     const { data } = matter(raw)
     const generatedAt = str(data.generated_at)
-    const ageDays = generatedAt
-      ? (Date.now() - new Date(generatedAt).getTime()) / 86_400_000
+    // Freshness is "when did the check last RUN", not "when did the file last
+    // change" — a quiet fortnight with no new commits is not a stale board.
+    const lastRunAt = (await lastRoadmapCheck()) ?? undefined
+    const freshAt = lastRunAt && (!generatedAt || lastRunAt > generatedAt) ? lastRunAt : generatedAt
+    const ageDays = freshAt
+      ? (Date.now() - new Date(freshAt).getTime()) / 86_400_000
       : Infinity
     const items: Record<string, DerivedEntry> = {}
     for (const e of Array.isArray(data.checked) ? data.checked : []) {
@@ -236,11 +277,13 @@ export async function readStatus(): Promise<RoadmapStatus> {
         lastEvidenceAt: str(r.last_evidence_at) ?? null,
         handoffState: str(r.handoff_state) as HandoffState | undefined,
         handoffAgeDays: typeof r.handoff_age_days === 'number' ? r.handoff_age_days : null,
+        handoffAt: str(r.handoff_at) ?? null,
         error: str(r.error),
       }
     }
     return {
       generatedAt,
+      lastRunAt,
       ran: true,
       // A check that has not run in over a week is not evidence of health.
       stale: !isFinite(ageDays) || ageDays > STATUS_STALE_DAYS,
@@ -288,8 +331,9 @@ export async function listRoadmap(now = new Date()): Promise<RoadmapItem[]> {
         target: ymd(data.target),
         done: ymd(data.done),
       }
-      const { state, reason, daysToTarget } = deriveState(base, status.items[slug], status.ran, now)
-      const derived = status.items[slug]
+      const stored = status.items[slug]
+      const derived = stored ? withLiveAges(stored, now) : undefined
+      const { state, reason, daysToTarget } = deriveState(base, derived, status.ran, now)
       return {
         slug,
         name: str(data.name) ?? slug,

@@ -40,6 +40,10 @@ export const PATHS = {
   // Bid connector (Phase 11). One line per run, success or failure; the Today
   // freshness row reads the last success. An event log, never in git.
   bidSyncLog: path.join(HOME, '.openclaw/logs/bid-sync.log'),
+  // Roadmap check (Phase 12). Same contract: one line per run, the page reads
+  // the last success for freshness — so a check that found nothing to change
+  // (and therefore wrote nothing to git) still counts as having run.
+  roadmapCheckLog: path.join(HOME, '.openclaw/logs/roadmap-check.log'),
   // Content loop (Phase 9). Voice writes one file per weekly suggestion here;
   // the dashboard reads them and writes your pick/feedback back to the same
   // file. Lives in operations (not content-engine) so it sits with the bids and
