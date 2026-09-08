@@ -28,6 +28,7 @@ import { getDecisionQueue } from '@/lib/decisions'
 import { getAgent24hSummary } from '@/lib/agents'
 import { listLeads } from '@/lib/leads'
 import { buildClock } from '@/lib/clock'
+import { listRoadmap, roadmapAlerts } from '@/lib/roadmap'
 import { PageHeader } from '@/components/shared/page-header'
 import { HealthDot } from '@/components/shared/status-badge'
 import { Scoreboard } from '@/components/today/scoreboard'
@@ -59,7 +60,8 @@ function todayLabel(now = new Date()): string {
 export default async function TodayPage() {
   // Fetch everything in parallel — each data source is independent.
   const [bids, score, cron, decisions, agentSummaries, strategic,
-         channels, opportunities, freshness, buckets, insights, calendar, leads, contacts] = await Promise.all([
+         channels, opportunities, freshness, buckets, insights, calendar, leads, contacts,
+         roadmap] = await Promise.all([
     listBids(),
     getCampaignScore().catch(() => ({ targets: null, meetingsHeld: 0, demosGiven: 0, daysLeft: null })),
     getNormalizedCronJobs().catch(() => ({ reachable: false, jobs: [] })),
@@ -74,6 +76,7 @@ export default async function TodayPage() {
     getUpcomingMeetings().catch(() => ({ configured: true, meetings: [], errors: ['calendar lookup failed'] })),
     listLeads().catch(() => []),
     listContacts().catch(() => []),
+    listRoadmap().catch(() => []),
   ])
 
   // The merge that used to happen in Pavan's head: one ranked queue.
@@ -84,10 +87,11 @@ export default async function TodayPage() {
     buckets,
     opportunities,
     channels: channelAlerts(channels),
+    roadmap: roadmapAlerts(roadmap),
   })
 
   // Everything dated in the next 14 days — meetings and deadlines, one agenda.
-  const clock = buildClock({ meetings: calendar.meetings, bids, opportunities, leads })
+  const clock = buildClock({ meetings: calendar.meetings, bids, opportunities, leads, roadmap })
 
   // Delegation: live next-actions owned by people other than Pavan.
   const waiting = buildWaitingOn(contacts)

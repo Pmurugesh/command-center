@@ -1301,3 +1301,253 @@ lies. This is rendering the connector's output, not a feature.
    3569/3572/3576/3868 ids 2/3/4/10, NG 9-1-1 id 76, EASE id 104, DXP retest id 117); (b) `name` is the solicitation number for
    hand-made bids and the eProcure event id for adopted ones (`0000039912`), which is the
    `discoveryEvent` link for adopted bids until the team serves it explicitly.
+
+---
+
+## Phase 12 — Roadmap tracking (commitments layer)
+
+**Written 2026-09-08.** Origin: Pavan — "I am managing a lot of projects and initiatives/repos
+for both internal automation and our actual products… keep track of the product roadmaps and
+make sure we are on time." Shape agreed same session: **Nexus as one initiative with its
+solution products underneath, each internal repo with its own next steps.** Surveyed this
+session against all 12 repos on the mini (`origin` after fetch, read-only), `~/.local/state`,
+and the loaded launchd jobs on this MacBook.
+
+**The gap, precisely.** Everything *derivable* is already derived: `generate-registry.ts`
+regenerates `products/_registry.md` weekly from Nexus's own module manifests; `verify-claims.ts`
+resolves cited code paths; `drift-check.ts` watches facts drifting from evidence; `clock.ts`
+merges everything dated in 14 days; `moves.ts` ranks everything demanding attention. What
+nothing holds is a **date you committed to**. `grep -riE 'roadmap|milestone|target_date'` over
+`src/` and `scripts/` returns only bid deadlines and lead scoring. This phase adds ~10 dated
+commitments — not a work tracker.
+
+### What the survey found that this plan has to obey, not work around
+
+- **Working clones lie. Read `origin`.** The mini's local clones are stale by up to three
+  months: `contract-management` local HEAD is 2026-06-02 while its `origin` moved 2026-09-08;
+  `Nexus` local 2026-08-26 vs origin 2026-09-07; `qual_table_automations` local 2026-08-21 vs
+  origin 2026-09-08. A check against working trees would have declared two live initiatives
+  dead. `generate-registry.ts:47` already fetches then reads `origin/main`; do the same.
+- **`operations` commit velocity measures machines, not progress.** 247 commits/90d, but the
+  authors are `Pavan (macbook)` 130 / `Paladin (mac mini)` 117, and the top subjects are
+  `outreach: regenerate view` (23), `auto: intelligence/procurements/<date>-caleprocure` (13),
+  `crm: log touch — …`, `auto(macbook): …`, `auto: codebase-reports/product-health-<date>`.
+  Directories touched: crm 440, intelligence 196, bids 174, agents 151 — against gtm 32,
+  workflows 18, content 17, products 16, scripts 5. **An evidence path under a janitor-written
+  directory is permanently green regardless of whether anyone is working.**
+- **Bots are in the human repos too.** `contract-management` 180d: `AntarikshRamesh` 88 +
+  `Antariksh Ramesh` 63 (same person, two spellings — normalize) + `renovate[bot]` 20 +
+  `Pmurugesh` 4. Dependency bumps are not progress.
+- **The weekly job that would host this is one run behind.** `~/.local/state/drift-check.json`
+  mtime and `_registry.md`'s `generated_at` both stamp **2026-08-31**; no 2026-09-07 run landed,
+  though Nexus's origin moved that day. `com.pavan.weekly-sync` is loaded on this MacBook —
+  which sleeps. **Schedule roadmap-check on the mini instead** (always-on since the 2026-08-24
+  pmset fix, holds all 12 repos, already runs the openclaw crons).
+- **Dashboard features are frozen until 2026-09-22** (Phase 11 standing rule, `targets.md`
+  phase-1 window) and the exception list is finance wiring / bid connector / leads on a
+  schedule / outreach trigger cron. **A `/roadmap` page is not on it.** Data layer + cron ship
+  now; the page waits for 09-22 or an explicit exception (open gate 1).
+- **`PATHS` has no platform entry** — `verify-claims.ts:29` and `generate-registry.ts:26` each
+  re-derive `~/infiniteai_platform` (already noted in Phase 11). roadmap-check must not become
+  the third. Add a repo map to `paths.ts` and retrofit both.
+
+### The board — 10 initiatives
+
+**Group `nexus` — one umbrella, six product roadmaps.** Rows already exist in `_registry.md`;
+this only attaches dates. Nexus is genuinely human-built (180d: `Pmurugesh` 1095,
+`Antariksh Ramesh` 555), so commit evidence is meaningful here.
+
+| Product | Slug | Standing (from `_registry.md` + product cards) |
+|---|---|---|
+| Candor | `prr` | Lead product. 117 UI files / 136 tests |
+| Reporting | `ad-hoc-reporting` | Largest frontend (227 files), **0 tests**, `close-to-ready` |
+| GovHire | `recruitment` | 54 files / 28 tests |
+| Steward | `assistants` | `shipped-needs-demo-data`; San Jose RFP spine, awaiting award since Dec 2025 |
+| Proc | `procurement` | `needs-frontend` — 4KB / 3 files |
+| Milestone | `delivery-management` | Shipped + launchpad-surfaced, zero sales presence — the only open product gap in `_overview.md` |
+
+**Group `internal` — three.**
+
+| Initiative | Repos | `kind` | Note |
+|---|---|---|---|
+| Command Center | `command-center` | `build` | The only one where the work is yours. 134 `Pmurugesh` / 10 `Paladin` in 180d |
+| BidPro | `qual_table_automations` | `handoff` | Never written to (rule of 2026-08-21). Track handoff state |
+| Contract Management | `contract-management` | `handoff` | Antariksh's active repo; track handoff state |
+
+**Group `web` — one.** `infiniteai-website` + `is-website` as a single initiative: same job
+(collateral / web presence), two repos. Honest baseline — 180d authorship is
+`Paladin` 3 / `Pmurugesh` 1 and `Pmurugesh` 2 / `Paladin` 2 respectively, origins last moved
+2026-07-07 and 2026-06-01. **This entry is red on day one, and that is the point**: the Aug-20
+gap analysis named collateral a bottleneck and nothing has moved since.
+
+### Not tracked — the parking lot (write once, no target, no check)
+
+`operations` — **substrate, not an initiative.** No ship date, no definition of done, and a
+commit rate dominated by machine writes (above). Its genuinely authored parts are already
+tracked elsewhere: `gtm/` drives `targets.md` and the scoreboard, `products/` drives the
+registry, `content/` drives the content loop. Command Center is the initiative; operations is
+where its output lands.
+
+`plan-review` (Attest), `web-intelligence`, `data-intelligence` — deliberately outside the
+public narrative per `_overview.md`; recorded decisions, not oversights. `echo` — retained,
+partner-based, deprioritized until a demand signal. `content-engine`, `finance-system`,
+`fundraising`, `opportunity-generator` — **no git remote at all**, local HEAD 2026-03-26 for
+all four (note `/finance` and `/fundraise` routes exist against dormant repos). `branding` —
+not a git repo.
+
+### 12.1 Authored layer — `operations/roadmap/<slug>.md`
+
+- [x] **One file per initiative, ten files.** *Built 2026-09-08 in `operations/roadmap/`,
+      plus a `README.md` carrying the schema and the not-tracked list.* Frontmatter is the whole contract:
+      ```yaml
+      slug: milestone-sales-presence
+      group: nexus | internal | web
+      product: delivery-management     # group nexus only → products/<slug>.md
+      kind: build | handoff
+      waiting_on: "qual-table team"    # kind: handoff only — who holds the ball
+      target: 2026-09-30               # omit when genuinely undecided
+      done: 2026-09-28                 # a one-time fact, never a maintained status
+      evidence:                        # kind: build
+        - repo: Nexus
+          path: packages/ui/components/modules/delivery-management/
+      handoff:                         # kind: handoff
+        spec: operations/workflows/contract-mgmt-integration-spec.md
+        landed: "GET /api/alerts/summary"
+        consumed_by: src/app/finance   # grep target proving we actually use it
+      ```
+      Body = definition of done, two lines. **There is no `status:` field** — a hand-maintained
+      status column is the exact thing that goes stale and lies. `done:` is a fact you record
+      once; everything before it is derived.
+- [x] **Seed the real commitments, not placeholders.** *Done 2026-09-08 — and as predicted
+      all ten seeded with NO target date. That is the finding.* Most will have **no `target:` on day
+      one** — that is the finding, not a bug (same shape as "no product has a price"). Known
+      live ones: Milestone sales presence; Steward demo seed (`demo_seed=None`); Reporting
+      sample DB + 4-6 demo reports; Proc frontend; Contract Management `/finance` consumption
+      (stranded since 2026-06-02); Command Center Phase 11.
+
+### 12.2 Derived layer — `scripts/roadmap-check.ts` → `operations/roadmap/_status.md`
+
+Same shape and doctrine as `generate-registry.ts`: fetch, read `origin/main`, never a working
+tree; header says DERIVED / DO NOT HAND-EDIT; commit only when content changed.
+
+- [x] **Add the repo map to `src/lib/paths.ts`** *Built 2026-09-08: `REPO_CANDIDATES`, seven
+      repos, two candidate paths each where the machines disagree.* Retrofit of
+      `verify-claims.ts:29` / `generate-registry.ts:26` still open — see 12.5. and retrofit `verify-claims.ts:29` and
+      `generate-registry.ts:26` off their private `~/infiniteai_platform` constants.
+- [x] **Bot/janitor author exclusion, global — not per-file config.** *Built: `BOT_AUTHORS`
+      + `BOT_SUBJECTS` + `AUTHOR_ALIASES` in roadmap-check.ts.* Drop `renovate[bot]`,
+      `Paladin`, `Paladin (mac mini)`, and any `auto:`/`auto(macbook):` subject prefix before
+      computing freshness. Normalize `AntarikshRamesh` ≡ `Antariksh Ramesh`.
+- [x] **`kind: build` → two numbers per initiative:** *Built; `deriveState` in
+      `src/lib/roadmap.ts` is the single definition, imported by BOTH the script and the
+      page so the board and the generated report cannot disagree. 10/10 state cases
+      verified 2026-09-08.* days to `target`, and days since the last
+      *human* commit touching any `evidence` path on `origin/main`. Derived state:
+      `done` (has `done:`) · `slipped` (past target) · `at-risk` (target ≤14d, evidence cold
+      ≥14d) · `on-track` (target ≤14d, evidence warm) · `idle` (evidence cold ≥30d) ·
+      `no-target` · `active`.
+- [x] **`kind: handoff` → state machine, not commit counts:** *Built. Contract Management
+      verified live 2026-09-08: `app/api/alerts/summary/route.ts` first landed
+      2026-06-02T03:31 on their `origin/main`, and command-center references it nowhere —
+      98 days stranded, confirmed by grep, not asserted.* `spec-sent` → `pr-opened` →
+      `merged` → `consumed`. `consumed` is proved by grepping `consumed_by` for `landed` —
+      the `verify-claims.ts` mechanic. Contract Management is the worked example: merged
+      2026-06-02, never consumed, **97 days stranded**.
+- [x] **Fail loud, render unknown.** *Built and proven by accident: run from the MacBook,
+      contract-management and both websites are not cloned, and all three render `unknown`
+      rather than green. `git grep`'s exit-1-means-no-match is handled separately so a zero
+      count returns quietly instead of logging as a failure.* A repo that will not fetch renders `unknown`, never green
+      (standing rule).
+
+### 12.3 Surfaces
+
+- [x] **Feed the queues that already exist.** *Built and verified end-to-end 2026-09-08 with
+      a temporary target on Milestone: Today rendered the Move ("Decide: Milestone — Due in
+      7d, no commits on the evidence path in 24d") AND the Clock row, both deep-linking to
+      `/roadmap#milestone`. Target reverted after the test.* `target` inside 14 days → a `ClockItem`
+      (`clock.ts`); `slipped`/`at-risk` → a `Move` (`moves.ts`, new kind `roadmap`,
+      action-phrased: `Decide: Milestone sales presence missed 09-30 — re-target or drop`).
+      **Today gets no sixth competing card.**
+- [x] **`/roadmap` page** — freeze exception granted by Pavan 2026-09-08. *Built:
+      `src/app/roadmap/`, `src/app/api/roadmap/`, nav section `Build`. Renders a loud stale
+      banner when `_status.md` is missing or older than 10 days.* Grouped by Grouped by
+      `nexus` / `internal` / `web`, one row per initiative, target + derived state + evidence
+      age.
+
+### 12.4 Schedule
+
+- [ ] **Weekly `roadmap-check` cron on the mini**, not the MacBook's `com.pavan.weekly-sync`
+      (one run behind; see findings). `openclaw cron` changes need the mini's on-screen
+      Terminal — the Keychain is empty over ssh.
+- [ ] **Separately: why did weekly-sync miss 2026-09-07?** Not this phase's job to fix, but
+      `_registry.md` being 8 days stale silently is the same disease `drift-check.ts` exists to
+      catch. File it or fix it; do not let it ride.
+
+### 12.5 Left open, deliberately
+
+- [ ] **Retrofit `verify-claims.ts:29` and `generate-registry.ts:26`** onto `REPO_CANDIDATES`.
+      The map exists and roadmap-check uses it, so the third copy was never created; removing
+      the two existing ones touches scripts that gate bid claims, and doing that in the same
+      change as a new feature is how a gate quietly breaks. Separate change.
+- [ ] **Register the weekly cron ON THE MINI** — `openclaw cron` changes need the mini's
+      on-screen Terminal (the Keychain is empty over ssh), so this is Pavan's to run:
+      ```
+      cd ~/repos/command-center && node --experimental-strip-types --no-warnings \
+        scripts/run-ts.mjs scripts/roadmap-check.ts
+      ```
+      Until it runs there, contract-management and both websites read `unknown` — correctly,
+      since the MacBook has no clone of them.
+- [ ] **Why did `com.pavan.weekly-sync` miss 2026-09-07?** Filed, not fixed. `_registry.md`
+      and `drift-check.json` both stamp 2026-08-31 while Nexus's origin moved 09-07. A weekly
+      watcher that silently skips is the disease drift-check exists to catch, in the watcher.
+
+## Phase 12 review (2026-09-08)
+
+**Built:** `src/lib/roadmap.ts` (schema + `deriveState`), `scripts/roadmap-check.ts` (the
+deriver), `src/app/roadmap/` + `src/app/api/roadmap/`, `REPO_CANDIDATES` in `paths.ts`, nav
+section `Build`, Clock and Moves wiring, and ten seed files plus a schema README in
+`operations/roadmap/`.
+
+**What the first run actually says** — all ten initiatives, zero target dates:
+
+| state | initiatives |
+|---|---|
+| `unknown` | Contract Management, Web presence (not cloned on the MacBook — correct, not a bug) |
+| `no-target` | Candor, Command Center, GovHire, Milestone, Proc, Reporting, Steward |
+| `active` | BidPro (PR #116 open) |
+
+That is the honest day-one board and it was the predicted outcome: **nothing here has ever
+had a date**. The same shape as "no product has a price" — the tracker's first job was to make
+that visible rather than to look busy.
+
+**Three things the survey changed about the design**, each caught before it shipped:
+
+1. Reading working trees would have declared contract-management (98 days behind its own
+   origin) and Nexus (12 days) dead. Everything fetches and reads `origin`.
+2. Pointing evidence at `operations` would have made every initiative permanently green —
+   ~250 commits/90d there are overwhelmingly janitor and cron writes. This is why operations
+   is the substrate and not an initiative, and why the author/subject exclusion is global.
+3. `git grep` exits 1 on no-match, so the single most valuable signal in the whole check
+   (contract-management's endpoint being unreferenced) was printing as a command failure.
+
+**Verified, not assumed:** 10/10 `deriveState` cases pass including `stranded` and the two
+`unknown` paths; contract-management's endpoint confirmed by pickaxe at
+2026-06-02T03:31 and by grep returning zero in command-center; the Today wiring proven with a
+temporary target that produced both a Move and a Clock row, then reverted; `tsc --noEmit`
+clean; page renders with no console errors.
+
+**Not done:** the two retrofits and the mini cron above. The board is live and correct on this
+machine; it is not yet complete on the machine that will run it weekly.
+
+### Open gates (Pavan)
+
+1. ~~Is `/roadmap` inside the freeze exception?~~ **Answered 2026-09-08: exception granted**
+   by Pavan. The page ships now rather than waiting for 09-22.
+2. ~~Owners?~~ **Answered 2026-09-08: Pavan owns every roadmap.** Consequence for the schema:
+   `owner:` is constant and therefore noise — dropped. Replaced by `waiting_on:` on `handoff`
+   initiatives, which carries the fact that actually varies (who holds the ball: the qual-table
+   team, Antariksh). Roadmap ownership and execution are different things and only the second
+   one moves.
+3. **Targets — the one thing still entirely open.** Seeding was mechanical; the dates are not.
+   All ten shipped with no target, so the board currently measures activity and nothing else.
+   It starts answering "are we on time?" the moment the first date is set.

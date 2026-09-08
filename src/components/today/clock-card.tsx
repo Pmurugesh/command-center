@@ -30,6 +30,7 @@ const KIND_CHIP: Record<Exclude<ClockItem['kind'], 'meeting'>, string> = {
   bid: 'bid',
   opportunity: 'scan',
   lead: 'lead',
+  roadmap: 'roadmap',
 }
 
 function Row({ item }: { item: ClockItem }) {

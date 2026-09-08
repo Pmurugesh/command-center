@@ -9,9 +9,10 @@
 import type { Meeting } from './calendar'
 import type { Opportunity } from './procurements'
 import type { Lead } from './leads'
+import type { RoadmapItem } from './roadmap'
 import type { Bid } from '@/types'
 
-export type ClockKind = 'meeting' | 'bid' | 'opportunity' | 'lead'
+export type ClockKind = 'meeting' | 'bid' | 'opportunity' | 'lead' | 'roadmap'
 
 export interface ClockItem {
   id: string
@@ -41,6 +42,7 @@ export function buildClock(
     bids: Bid[]
     opportunities: Opportunity[]
     leads: Lead[]
+    roadmap?: RoadmapItem[]
   },
   now = new Date()
 ): ClockItem[] {
@@ -116,6 +118,24 @@ export function buildClock(
       subtitle: l.department,
       href: '/intel',
       score: undefined,
+    })
+  }
+
+  // Roadmap targets you set yourself. A commitment inside the window belongs on
+  // the same list as everything else with a date — that is the whole point of
+  // the Clock, and a roadmap that lives only on its own page gets read never.
+  for (const r of inputs.roadmap ?? []) {
+    if (!r.target || r.done) continue
+    const at = endOfBusiness(r.target)
+    if (!inWindow(at)) continue
+    items.push({
+      id: `roadmap:${r.slug}`,
+      kind: 'roadmap',
+      at,
+      allDay: false,
+      title: `${r.name} — target`,
+      subtitle: r.reason,
+      href: `/roadmap#${r.slug}`,
     })
   }
 
