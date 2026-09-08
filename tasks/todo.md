@@ -1110,10 +1110,16 @@ connector, leads on a schedule, and the outreach trigger cron.
 
 ### 11.0 Gate — before any code
 
-- [ ] **Confirm the service account still authenticates.** On the mini:
-      `node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/sync-leads.ts --dry`.
-      A `403` means no org membership; the fix is on the qual-table side (viewer role), asked
-      for in the handoff's last section. Do not build the connector against a 403.
+- [ ] **Store the five `QUAL_TABLE_*` values on the mini, then run the dry test.** Checked
+      2026-09-08 over ssh: they are in no file, launch agent, shell profile, or cron env on the
+      mini; the only `QUAL_TABLE` string there is `QUAL_TABLE_BACKEND` (the caleprocure-scan
+      folder path). So `sync-leads.ts` has never run on the mini and the service account
+      `paladin-scout@4infinitesolutions.com` has never been exercised. Whether it exists and
+      belongs to an organization is a question for the qual-table team (handoff, last section).
+      Put the values in `~/.openclaw/workspace/.credentials/qual-table.env` (the calendar
+      credential precedent) and have the cron installer source it; never in git. Then:
+      `set -a; source ~/.openclaw/workspace/.credentials/qual-table.env; set +a; node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/sync-leads.ts --dry`.
+      A `403` means no org membership; do not build the connector against it.
 - [ ] **Pavan answers the questions in "Open gates" below** that change the shape
       (entity = organization; freeze scope of the minimal rendering).
 
@@ -1257,8 +1263,10 @@ lies. This is rendering the connector's output, not a feature.
 
 ### Open gates (Pavan)
 
-1. Is the Paladin account a member of an organization in the workbench after the
-   2026-09-07 multitenancy merge? (`sync-leads --dry` on the mini answers it.)
+1. ~~Is the Paladin account still authorised?~~ **Answered 2026-09-08: unknown, and it cannot be
+   tested yet** because the credentials were never stored on the mini (see 11.0). Two follow-ups:
+   Pavan puts the five values on the mini; the qual-table team confirms the account exists and
+   has viewer membership.
 2. Which GitHub credential, if any, may the workbench hold to read `NovaEraSolutions/Nexus`
    from Render for the gate's phase 2 (fine-grained read-only PAT vs GitHub App), and who
    issues it? Phase 1 needs none.
@@ -1273,4 +1281,6 @@ lies. This is rendering the connector's output, not a feature.
 6. ~~Past-due open bids?~~ **Decided 2026-09-08: auto-mark No-Bid**, `stage: lapsed`,
    generated reason. A later `submitted` from the workbench still overrides it (status moved).
 7. Which of the five existing folders correspond to workbench bids today, so `source` can
-   be set by hand once?
+   be set by hand once? Could not be read from the mini (no credentials); answer from BidPro's
+   Bids page: FTB-RFI-2526, ITN-37485, calhhs-otsi-okr-rfi, caltrans-adhoc-reporting,
+   sanjose-genai-chatbot.
