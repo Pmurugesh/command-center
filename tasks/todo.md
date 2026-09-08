@@ -1181,7 +1181,12 @@ Modeled on `scripts/sync-leads.ts`; same env, same auth, same store pattern as
       row in `getPipelineFreshness()` (`src/lib/files.ts:484`) reads the log's last success;
       older than 26 h → unknown, never green on silence.
 - [x] **Schedule:** *(`scripts/mini/install-bid-sync.sh`, registers `bid-sync` hourly + `lead-sync`
-      daily, sources the env file at run time; NOT YET RUN on the mini)* OpenClaw cron on the mini, weekdays hourly 07:00–18:00 PT, command
+      daily, sources the env file at run time. Deployed 2026-09-08: the dry run passed on
+      the mini and the FIRST SYNC RAN BY HAND — 17 bids, one commit `05b91e4` in operations,
+      dashboard rebuilt, "Bid sync" row green. The cron REGISTRATION step did not run:
+      `openclaw cron` reads its gateway token from the macOS Keychain, which is locked to ssh
+      sessions. Run `./scripts/mini/install-bid-sync.sh` once from a Terminal on the mini's
+      own screen; it is idempotent and skips the dry run's side effects.)* OpenClaw cron on the mini, weekdays hourly 07:00–18:00 PT, command
       payload like `caleprocure-scan` (`scripts/mini/install-caleprocure-scan.sh` is the
       installer to copy), with an **explicit delivery target** (isolated crons without one
       read as errors every run; see memory). Same installer registers `sync-leads` daily —
