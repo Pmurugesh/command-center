@@ -1110,7 +1110,8 @@ connector, leads on a schedule, and the outreach trigger cron.
 
 ### 11.0 Gate — before any code
 
-- [ ] **Store the five `QUAL_TABLE_*` values on the mini, then run the dry test.** Checked
+- [x] **Store the five `QUAL_TABLE_*` values on the mini, then run the dry test.** *Done
+      2026-09-08 by Pavan over ssh; dry run: 370 events, 6 surface.* Earlier check
       2026-09-08 over ssh: they are in no file, launch agent, shell profile, or cron env on the
       mini; the only `QUAL_TABLE` string there is `QUAL_TABLE_BACKEND` (the caleprocure-scan
       folder path). So `sync-leads.ts` has never run on the mini and the service account
@@ -1263,10 +1264,10 @@ lies. This is rendering the connector's output, not a feature.
 
 ### Open gates (Pavan)
 
-1. ~~Is the Paladin account still authorised?~~ **Answered 2026-09-08: unknown, and it cannot be
-   tested yet** because the credentials were never stored on the mini (see 11.0). Two follow-ups:
-   Pavan puts the five values on the mini; the qual-table team confirms the account exists and
-   has viewer membership.
+1. ~~Is the Paladin account still authorised?~~ **Answered 2026-09-08: yes.** Pavan stored the
+   five values in `~/.openclaw/workspace/.credentials/qual-table.env` on the mini (mode 600) and
+   the dry run signed in and fetched 370 events, 6 surfacing. The account is an organization
+   member; nothing to ask the qual-table team on this point.
 2. Which GitHub credential, if any, may the workbench hold to read `NovaEraSolutions/Nexus`
    from Render for the gate's phase 2 (fine-grained read-only PAT vs GitHub App), and who
    issues it? Phase 1 needs none.
