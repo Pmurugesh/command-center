@@ -1590,3 +1590,32 @@ committed daily → timestamps + fingerprint + run log. `/roadmap` is live on th
 3. **Targets — the one thing still entirely open.** Seeding was mechanical; the dates are not.
    All ten shipped with no target, so the board currently measures activity and nothing else.
    It starts answering "are we on time?" the moment the first date is set.
+
+## Nexus clone freshness for the health scans (2026-09-08)
+
+**Question that started it:** does Paladin's codebase health scan read main or the local copy?
+**Answer:** the local clone at `~/repos/Nexus` on the mini, which *is* on main but was only
+pulled when a human remembered (last by hand 2026-08-28). Only one scan is live —
+`product-weekly-code-scan` (Forge, Mon 03:00 PT); the 12 topic scans (vulnerability, tech-debt,
+compliance, rbac…) are `enabled: false`. The live job's prompt never fetches. The old wrapper
+`run-nexus-task.sh` did `git pull`, but the live job bypasses it. On 09-08 the clone was 5
+commits behind and the 5 were the security fixes (#889–#891) closing Paladin's own C1–C3, C6,
+H1, H4–H6, M23/M24/M33/M34 — the 09-14 scan would have re-reported them all as UNCHANGED.
+
+- [x] `scripts/mini/install-nexus-sync.sh` — writes `~/bin/nexus-sync.sh` (ff-only, refuses off
+      main or over modified tracked files, never touches the untracked bids/ intel/ drops) and
+      LaunchAgent `com.paladin.nexus-sync`, daily 02:30 PT, log `~/.openclaw/logs/nexus-sync.log`.
+- [x] Deployed on the mini over ssh 2026-09-08: first run `6708b24a -> 1b454622 (5 commits)`;
+      launchd kickstart confirmed `up to date`, exit 0, log written. Clone now 0/0 vs origin/main.
+- [x] **No hands on the mini, ever, for this class of change.** Pavan's rule (2026-09-08): one
+      synced system. `scripts/mini/post-deploy.sh` lists idempotent mini-side installers, and
+      `deploy-on-merge.sh` (the 5-min launchd job that already pulls main and rebuilds) now runs
+      it after every pull. Merging *is* deploying, for crons and LaunchAgents as well as code.
+      Tested on the mini from a temp copy: installer re-applied, exit 0.
+- [ ] Forge prompt patch (second belt: the scan runs `~/bin/nexus-sync.sh` itself). Applied by
+      the same hook *if* the Keychain gateway token resolves under launchd; otherwise it logs
+      "skipped" and the 02:30 sync alone carries it. Check `command-center-deploy.log` after this
+      merge lands to learn which — that answers the standing "can launchd read the Keychain"
+      question for every future cron installer too.
+- [ ] Optional, when any topic scan is re-enabled: point `run-nexus-task.sh`'s pull at
+      `~/bin/nexus-sync.sh` so its `|| true` stops hiding fetch failures.
