@@ -27,6 +27,26 @@ echo "==> Runner sanity check (dry run against the workbench)"
 ( set -a; . "$ENV_FILE"; set +a
   cd "$REPO_DIR" && "$NODE" --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/sync-bids.ts --dry | tail -3 )
 
+# Since OpenClaw 2026.6.x the cron store lives behind the gateway, and the CLI
+# needs the gateway token for every `openclaw cron` call. The token is a
+# Keychain secret reference (service openclaw-gateway-token, account openclaw)
+# that the CLI cannot resolve on its own in this command path, so resolve it
+# here and hand it over through the env var its own error message names.
+# Never printed. Over ssh the Keychain refuses the read (measured 2026-09-08:
+# empty, no error), so run this from a Terminal on the mini's own screen and
+# click Allow if the Keychain asks.
+if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
+  OPENCLAW_GATEWAY_TOKEN="$(security find-generic-password -s openclaw-gateway-token -a openclaw -w 2>/dev/null || true)"
+  export OPENCLAW_GATEWAY_TOKEN
+fi
+if [ -z "$OPENCLAW_GATEWAY_TOKEN" ]; then
+  echo "    could not read the gateway token from the Keychain (locked to this session)."
+  echo "    Run this script from a Terminal on the mini's own screen, or export"
+  echo "    OPENCLAW_GATEWAY_TOKEN first. The dry run above already proved the sync works."
+  exit 1
+fi
+echo "==> Gateway token resolved from the Keychain"
+
 # The cron runs a shell so the env file is sourced at run time, never baked
 # into the job definition (openclaw cron list --json would print it).
 run_cmd() {
