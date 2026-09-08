@@ -18,9 +18,10 @@ import type { Blocker } from './insights'
 import type { Opportunity } from './procurements'
 import type { StrategicDecision } from './gtm'
 import type { Channel } from './channels'
+import type { RoadmapItem } from './roadmap'
 import { CRM_TERMINAL_STAGES } from './config'
 
-export type MoveKind = 'strategic' | 'blocker' | 'bid-decision' | 'crm-due' | 'deadline' | 'channel'
+export type MoveKind = 'strategic' | 'blocker' | 'bid-decision' | 'crm-due' | 'deadline' | 'channel' | 'roadmap'
 
 export interface Move {
   id: string
@@ -79,6 +80,7 @@ export interface MovesInput {
   buckets: CrmBuckets
   opportunities: Opportunity[]
   channels: Channel[] // pre-filtered: channelAlerts() output
+  roadmap: RoadmapItem[] // pre-filtered: roadmapAlerts() output
 }
 
 /**
@@ -172,6 +174,24 @@ export function buildMoves(input: MovesInput): Move[] {
       href: `/channels#${c.slug}`,
       source: 'channel',
       score: 15 + (c.staleness === 'cold' ? 12 : 0) + (c.status === 'blocked' ? 10 : 0),
+    })
+  }
+
+  // Roadmap trouble: a date you set and missed, or shipped work nobody wired up.
+  // Scored beside strategic gates (45) — a slipped commitment IS a decision to
+  // re-target or drop, and `stranded` outranks it because the work is already
+  // paid for and sitting unused.
+  for (const r of input.roadmap) {
+    const verb = r.state === 'stranded' ? 'Wire' : 'Decide'
+    moves.push({
+      id: `roadmap:${r.slug}`,
+      kind: 'roadmap',
+      action: `${verb}: ${r.name} — ${truncate(r.reason, 120)}`,
+      detail: r.target ? `Target ${r.target}` : undefined,
+      href: `/roadmap#${r.slug}`,
+      source: 'roadmap',
+      due: r.target,
+      score: (r.state === 'stranded' ? 50 : r.state === 'slipped' ? 45 : 38) + urgency(r.target),
     })
   }
 

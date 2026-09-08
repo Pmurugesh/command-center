@@ -48,5 +48,37 @@ export const PATHS = {
   contentSuggestions: path.join(HOME, 'repos/operations/content/suggestions'),
   // READ-ONLY inputs Voice reasons against — voice guides and the calendar.
   contentEngine: path.join(HOME, 'repos/content-engine'),
+  // Roadmap (Phase 12). Authored commitment files plus the DERIVED `_status.md`
+  // that scripts/roadmap-check.ts regenerates. Authored and derived never share
+  // a file — the registry doctrine, applied to dates.
+  roadmap: path.join(HOME, 'repos/operations/roadmap'),
+  roadmapStatus: path.join(HOME, 'repos/operations/roadmap/_status.md'),
 } as const
+
+/**
+ * Every repo the roadmap can cite, and where it might live.
+ *
+ * Two machines, two layouts: the MacBook keeps the platform at
+ * `~/infiniteai_platform` and the dashboard at `~/command-center`, the mini
+ * keeps everything under `~/repos/`. `verify-claims.ts` already carried a
+ * two-candidate list for the dashboard; this generalizes it rather than making
+ * a third copy (Phase 11 flagged `verify-claims.ts:29` and
+ * `generate-registry.ts:26` each re-deriving the platform path privately).
+ *
+ * EVERY repo here except command-center and operations is READ-ONLY. Callers
+ * fetch and read `origin/main`; nothing writes, and nothing trusts a working
+ * tree — on 2026-09-08 the mini's contract-management clone was 98 days behind
+ * its own origin.
+ */
+export const REPO_CANDIDATES: Record<string, string[]> = {
+  // The platform monorepo. `Nexus` is its canonical name (NovaEraSolutions/Nexus);
+  // `infiniteai_platform` is only what the MacBook happens to call the clone.
+  'Nexus': [path.join(HOME, 'repos/Nexus'), path.join(HOME, 'infiniteai_platform')],
+  'command-center': [path.join(HOME, 'repos/command-center'), path.join(HOME, 'command-center')],
+  'operations': [path.join(HOME, 'repos/operations')],
+  'contract-management': [path.join(HOME, 'repos/contract-management')],
+  'qual_table_automations': [path.join(HOME, 'repos/qual_table_automations')],
+  'infiniteai-website': [path.join(HOME, 'repos/infiniteai-website')],
+  'is-website': [path.join(HOME, 'repos/is-website')],
+}
 export const OUTREACH_PATH = path.join(HOME, 'repos/operations/intelligence/priority-outreach.md')

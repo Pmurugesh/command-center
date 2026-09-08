@@ -13,6 +13,7 @@ import {
   Bot,
   Inbox,
   Send,
+  Map,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -116,6 +117,12 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: '/meetings', label: 'Meetings', icon: NotebookPen, section: 'Sell' },
       { href: '/outreach', label: 'Outreach', icon: Send, section: 'Sell' },
       { href: '/content', label: 'Content', icon: PenTool, section: 'Sell' },
+    ],
+  },
+  {
+    label: 'Build',
+    items: [
+      { href: '/roadmap', label: 'Roadmap', icon: Map, section: 'Build' },
     ],
   },
   {
