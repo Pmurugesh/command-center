@@ -1264,9 +1264,10 @@ lies. This is rendering the connector's output, not a feature.
    issues it? Phase 1 needs none.
 3. Are 11.2's minimal rendering changes inside the connector's freeze exception, or do
    connector bids show as bare cards until 2026-09-22?
-4. Entity = organization? Do InfiniteAI (product) bids live in the same workbench org as
-   Infinite Solutions (staffing) bids, or in a second org? This decides how `entity` is
-   derived and whether the service account needs two memberships.
+4. ~~Entity = organization?~~ **Decided 2026-09-08: one workbench for both entities.** The
+   Nexus `procurement` module (Proc) is a product, not the bid tool. Whether entity is a bid
+   field or an org is the qual-table team's call (handoff question 6); the connector reads
+   `entity` when served, else `org_id`, else leaves the existing value.
 5. ~~Response library, style guide, platform knowledge after the solution module ships?~~
    **Decided 2026-09-08: the workbench database** (`response_blocks`, library `claims`).
 6. ~~Past-due open bids?~~ **Decided 2026-09-08: auto-mark No-Bid**, `stage: lapsed`,
