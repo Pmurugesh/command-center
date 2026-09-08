@@ -1607,8 +1607,15 @@ H1, H4–H6, M23/M24/M33/M34 — the 09-14 scan would have re-reported them all 
       LaunchAgent `com.paladin.nexus-sync`, daily 02:30 PT, log `~/.openclaw/logs/nexus-sync.log`.
 - [x] Deployed on the mini over ssh 2026-09-08: first run `6708b24a -> 1b454622 (5 commits)`;
       launchd kickstart confirmed `up to date`, exit 0, log written. Clone now 0/0 vs origin/main.
-- [ ] **Forge prompt patch (mini's on-screen Terminal, needs the Keychain token):** re-run the
-      installer there. It prepends "FIRST, run ~/bin/nexus-sync.sh …" to the cron message so the
-      scan itself syncs each time, independent of launchd. Idempotent (skips if already patched).
+- [x] **No hands on the mini, ever, for this class of change.** Pavan's rule (2026-09-08): one
+      synced system. `scripts/mini/post-deploy.sh` lists idempotent mini-side installers, and
+      `deploy-on-merge.sh` (the 5-min launchd job that already pulls main and rebuilds) now runs
+      it after every pull. Merging *is* deploying, for crons and LaunchAgents as well as code.
+      Tested on the mini from a temp copy: installer re-applied, exit 0.
+- [ ] Forge prompt patch (second belt: the scan runs `~/bin/nexus-sync.sh` itself). Applied by
+      the same hook *if* the Keychain gateway token resolves under launchd; otherwise it logs
+      "skipped" and the 02:30 sync alone carries it. Check `command-center-deploy.log` after this
+      merge lands to learn which — that answers the standing "can launchd read the Keychain"
+      question for every future cron installer too.
 - [ ] Optional, when any topic scan is re-enabled: point `run-nexus-task.sh`'s pull at
       `~/bin/nexus-sync.sh` so its `|| true` stops hiding fetch failures.

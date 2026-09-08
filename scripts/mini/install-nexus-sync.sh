@@ -15,12 +15,11 @@
 #      bid/intel files the bid workflow drops in there.
 #   2. The Forge cron prompt gets the sync as its first instruction, so the
 #      scan itself pulls "each time" even if launchd missed a tick. This half
-#      needs the gateway token (Keychain), which only resolves in the mini's
-#      on-screen Terminal — over ssh it prints the command to paste instead.
+#      needs the gateway token (Keychain); it is skipped, not failed, wherever
+#      the Keychain is locked (ssh), and layer 1 is sufficient alone.
 #
-# Idempotent: safe to re-run for every deploy.
-#
-# Run ON the mini as `paladin`:
+# Idempotent, and applied on every merge by scripts/mini/post-deploy.sh — no
+# hands on the mini. Can also be run there directly:
 #   ./scripts/mini/install-nexus-sync.sh
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
@@ -101,10 +100,8 @@ if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
 fi
 PREFIX="FIRST, run the shell command ~/bin/nexus-sync.sh and note its output line in the report header (it fast-forwards ~/repos/Nexus to origin/main; if it fails, say so in the report and scan what is there). THEN: "
 if [ -z "$OPENCLAW_GATEWAY_TOKEN" ]; then
-  echo "    gateway token not available in this shell (expected over ssh)."
-  echo "    In the mini's on-screen Terminal, run this installer again, or paste:"
-  echo "      openclaw cron list --json | python3 -c 'import json,sys; print(*[j[\"id\"]+\" \"+j[\"payload\"][\"message\"] for j in json.load(sys.stdin)[\"jobs\"] if j[\"name\"]==\"$JOB_NAME\"])'"
-  echo "      openclaw cron edit <id> --message \"$PREFIX<existing message>\""
+  echo "    gateway token not readable here (locked Keychain) — skipped; the 02:30 launchd sync"
+  echo "    covers the scan on its own. Re-applied automatically on the next deploy."
   exit 0
 fi
 read -r JOB_ID JOB_MSG < <(openclaw cron list --json | python3 -c '

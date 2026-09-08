@@ -11,6 +11,7 @@
 #   fetch → if origin/main == HEAD, exit silently
 #         → refuse if not on main or the tree is dirty (someone is mid-work)
 #         → pull --ff-only, pnpm install, pnpm build
+#         → run scripts/mini/post-deploy.sh (idempotent mini-side installers)
 #         → on success restart the service; on failure log and KEEP the old
 #           process serving (its .next may be partially overwritten — the same
 #           exposure install-dashboard-service.sh has always had; a failed
@@ -57,3 +58,7 @@ if pnpm install --frozen-lockfile --silent >>"$LOG" 2>&1 && pnpm build >>"$LOG" 
 else
   log "BUILD FAILED at ${remote_sha:0:7} — old bundle still serving; merge a fix"
 fi
+
+# Mini-side installers ride the same merge (see post-deploy.sh for the rule).
+# Independent of the build: a broken bundle must not hold back a cron fix.
+bash scripts/mini/post-deploy.sh >>"$LOG" 2>&1 || log "post-deploy hook exited non-zero"
