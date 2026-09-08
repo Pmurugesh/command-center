@@ -512,7 +512,10 @@ claim to cite evidence.** Three tiers by how automatable they are:
       fetching one without the cookies that produced it returns an HTML error page at HTTP 200
       that saves under a `.docx` name and looks exactly like a document on disk. That sank four
       earlier attempts, and it is precisely the subtlety not to reimplement in TypeScript.
-- [ ] **Integration shape: command-center reads, qual-table fetches.** The qual-table backend
+- [x] **Integration shape: command-center reads, qual-table fetches.** *Scheduled 2026-09-08:
+      `lead-sync` cron on the mini, weekdays 07:30 PT, via `scripts/mini/install-bid-sync.sh`;
+      first run 2026-09-09. Retire `caleprocure-scan` only after it has produced leads.* The
+      qual-table backend
       already exposes list / status / refresh / enrich / documents / adopt. The OpenClaw cron
       calls that API and writes results into `crm/leads/` as triageable rows. One network client
       pointed at a state website, not two — which also keeps the politeness controls (shared
@@ -1183,10 +1186,12 @@ Modeled on `scripts/sync-leads.ts`; same env, same auth, same store pattern as
 - [x] **Schedule:** *(`scripts/mini/install-bid-sync.sh`, registers `bid-sync` hourly + `lead-sync`
       daily, sources the env file at run time. Deployed 2026-09-08: the dry run passed on
       the mini and the FIRST SYNC RAN BY HAND — 17 bids, one commit `05b91e4` in operations,
-      dashboard rebuilt, "Bid sync" row green. The cron REGISTRATION step did not run:
-      `openclaw cron` reads its gateway token from the macOS Keychain, which is locked to ssh
-      sessions. Run `./scripts/mini/install-bid-sync.sh` once from a Terminal on the mini's
-      own screen; it is idempotent and skips the dry run's side effects.)* OpenClaw cron on the mini, weekdays hourly 07:00–18:00 PT, command
+      dashboard rebuilt, "Bid sync" row green. Crons REGISTERED 2026-09-08 from the
+      mini's own screen (the Keychain-backed gateway token is unreadable over ssh; the
+      installer now resolves it the way OpenClaw's own resolver does): `bid-sync`
+      `05b88215-0d89-437d-8652-bcec702c9251` weekdays hourly 07–18 PT, `lead-sync`
+      `d26140ca-e56a-4eb1-90b0-9c75d579eab6` weekdays 07:30 PT. First cron-driven run 12:14 PT:
+      `ok fetched=17 created=0 updated=0 unchanged=17`, no write, no commit. LIVE.)* OpenClaw cron on the mini, weekdays hourly 07:00–18:00 PT, command
       payload like `caleprocure-scan` (`scripts/mini/install-caleprocure-scan.sh` is the
       installer to copy), with an **explicit delivery target** (isolated crons without one
       read as errors every run; see memory). Same installer registers `sync-leads` daily —
