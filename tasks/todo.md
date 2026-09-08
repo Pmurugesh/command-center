@@ -1285,6 +1285,7 @@ lies. This is rendering the connector's output, not a feature.
    ISD, one NG 9-1-1 adopted from eProcure), all `status = open`, 7 past due (Jan–Mar), 0 due
    within 7 days. No folder link to set; the five folders are archive-only. Consequences:
    (a) the first sync would auto-No-Bid the 7 past-due bids under decision 6, so the handoff
-   asks the team to backfill outcomes first; (b) `name` is the solicitation number for
+   asks the team to backfill outcomes first (DMV 3569/3572/3576/3868, ids 2/3/4/10, were
+   all submitted per Pavan 2026-09-08; the three late-August ones are theirs to call); (b) `name` is the solicitation number for
    hand-made bids and the eProcure event id for adopted ones (`0000039912`), which is the
    `discoveryEvent` link for adopted bids until the team serves it explicitly.
