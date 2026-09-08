@@ -56,6 +56,14 @@ const canonAuthor = (a: string) => AUTHOR_ALIASES[a] ?? a
 
 const days = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
 
+/**
+ * A repo this machine simply does not have — distinct from one that failed to
+ * fetch. The first is a fact about the MACHINE and makes the whole run partial;
+ * the second is a fact about the WORLD and is worth recording as `unknown`.
+ * Only the first blocks the write (see main).
+ */
+const NOT_CLONED = 'not cloned on this machine'
+
 async function exists(p: string): Promise<boolean> {
   try { await fs.access(p); return true } catch { return false }
 }
@@ -212,7 +220,7 @@ async function checkBuild(a: Authored): Promise<Checked> {
   const errors: string[] = []
   for (const [repoName, paths] of byRepo) {
     const repo = await resolveRepo(repoName)
-    if (!repo) { errors.push(`${repoName} not cloned on this machine`); continue }
+    if (!repo) { errors.push(`${repoName} ${NOT_CLONED}`); continue }
     if (!await fetchOnce(repo)) { errors.push(`${repoName} could not fetch origin`); continue }
     const ref = await originRef(repo)
     // A path that matches nothing at the ref is a stale evidence pointer, which
@@ -258,7 +266,7 @@ async function checkHandoff(a: Authored): Promise<Checked> {
       }
     }
     const repo = await resolveRepo(repoName)
-    if (!repo) return { slug: a.slug, error: `${repoName} not cloned on this machine` }
+    if (!repo) return { slug: a.slug, error: `${repoName} ${NOT_CLONED}` }
     if (!await fetchOnce(repo)) return { slug: a.slug, error: `${repoName} could not fetch origin` }
     const ref = await originRef(repo)
     if (await grepAtRef(repo, ref, landed) > 0) {
@@ -367,6 +375,30 @@ async function main() {
 
   const next = `${fm}\n${body}`
   const prev = await fs.readFile(PATHS.roadmapStatus, 'utf-8').catch(() => '')
+
+  /**
+   * A machine that cannot see every repo must not publish a board.
+   *
+   * `_status.md` is one file written by two machines. The mini holds all the
+   * clones; the MacBook is missing contract-management and both websites, so a
+   * run there resolves them to `unknown` and — via the janitor's `git add -A` —
+   * quietly replaces the mini's correct board with a degraded one. That already
+   * happened once on 2026-09-08 during development.
+   *
+   * A partial board is worse than a stale board: it renders as current health.
+   * So refuse, name the repos, and leave what is there alone. `--dry` still
+   * prints, which is all a developer on the wrong machine actually needs.
+   */
+  const missing = checked.filter(c => c.error?.includes(NOT_CLONED))
+  if (missing.length > 0 && !DRY) {
+    console.error(
+      `roadmap-check: refusing to write — ${missing.length} of ${checked.length} initiatives ` +
+      `reference repos this machine does not have:`
+    )
+    for (const m of missing) console.error(`  ${m.slug}: ${m.error}`)
+    console.error('Run this on the mini, which holds every clone. (--dry prints anyway.)')
+    process.exit(2)
+  }
 
   // Compare on the body only: generated_at changes every run and would make
   // every run a commit (the registry's rule).

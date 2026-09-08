@@ -1489,6 +1489,17 @@ tree; header says DERIVED / DO NOT HAND-EDIT; commit only when content changed.
       The map exists and roadmap-check uses it, so the third copy was never created; removing
       the two existing ones touches scripts that gate bid claims, and doing that in the same
       change as a new feature is how a gate quietly breaks. Separate change.
+- [x] **First mini run — the system proven end-to-end.** *2026-09-08, after PR #39 merged.
+      All 10 rows resolved, zero unknowns: **Contract Management `stranded` — "Merged 98d ago,
+      still not consumed here"**, derived independently rather than from the manual check, and
+      Web presence `idle` at 63d — which resolves to 2026-07-07, infiniteai-website's last
+      HUMAN commit, so the bot filter correctly skipped the Paladin commits above it.*
+- [x] **Guard partial runs (found by that same run).** *`_status.md` is one file written by two
+      machines and only the mini can see every repo — a MacBook run resolved two initiatives to
+      `unknown` and the janitor committed the degraded board over the mini's correct one.
+      roadmap-check now refuses to write when any referenced repo is absent from the machine,
+      names them, and exits 2; `--dry` still prints. Verified: exit 2, file byte-identical
+      after the refusal, 10 rows still printed under --dry.*
 - [ ] **Register the weekly cron ON THE MINI** — `openclaw cron` changes need the mini's
       on-screen Terminal (the Keychain is empty over ssh), so this is Pavan's to run:
       ```
