@@ -1130,7 +1130,8 @@ Modeled on `scripts/sync-leads.ts`; same env, same auth, same store pattern as
 `src/lib/leads.ts`. One-way, read-only against the workbench, idempotent.
 
 - [x] **Extract the client.** *Built 2026-09-08: `src/lib/qual-table.ts` (config, signIn,
-      fetchJson, 20 s timeout on both calls, 401/403 named). `sync-leads.ts` uses it.*
+      fetchJson, 401/403 named; timeout 60 s after the mini measured a 16.7 s cold
+      summary read on 2026-09-08). `sync-leads.ts` uses it.*
 - [x] **One call per run:** `GET /api/v1/bids/summary`. *`scripts/sync-bids.ts`, 2026-09-08.*
       (later `?updated_since=` once the workbench adds it). Never the Brief from a cron; never
       any POST.
