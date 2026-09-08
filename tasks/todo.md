@@ -1185,9 +1185,8 @@ Modeled on `scripts/sync-leads.ts`; same env, same auth, same store pattern as
       installer to copy), with an **explicit delivery target** (isolated crons without one
       read as errors every run; see memory). Same installer registers `sync-leads` daily —
       that is the "leads on a schedule" freeze exception and shares the client.
-- [ ] **Link existing folders by hand, once.** For each of the five markdown folders that
-      has a workbench bid, set `source` in its `.status.json` (needs Pavan's answer to gate
-      question 7). Unlinked folders keep working as before.
+- [x] ~~Link existing folders by hand, once.~~ *Not needed: none of the five folders exist in
+      the workbench (gate 7, 2026-09-08). All five stay archive-only.*
 - [ ] **Test** in a scratch `HOME` with its own git repo (the content-outcomes precedent):
       new bid → folder + commit; unchanged summary → no write; workbench moved
       `open→submitted` → stage advances; stored `ready-to-submit` with workbench
@@ -1281,7 +1280,11 @@ lies. This is rendering the connector's output, not a feature.
    **Decided 2026-09-08: the workbench database** (`response_blocks`, library `claims`).
 6. ~~Past-due open bids?~~ **Decided 2026-09-08: auto-mark No-Bid**, `stage: lapsed`,
    generated reason. A later `submitted` from the workbench still overrides it (status moved).
-7. Which of the five existing folders correspond to workbench bids today, so `source` can
-   be set by hand once? Could not be read from the mini (no credentials); answer from BidPro's
-   Bids page: FTB-RFI-2526, ITN-37485, calhhs-otsi-okr-rfi, caltrans-adhoc-reporting,
-   sanjose-genai-chatbot.
+7. ~~Which existing folders are in the workbench?~~ **Answered 2026-09-08: none.** Read
+   `GET /api/v1/bids/summary` from the mini: 16 bids, all Infinite Solutions staffing (DMV,
+   ISD, one NG 9-1-1 adopted from eProcure), all `status = open`, 7 past due (Jan–Mar), 0 due
+   within 7 days. No folder link to set; the five folders are archive-only. Consequences:
+   (a) the first sync would auto-No-Bid the 7 past-due bids under decision 6, so the handoff
+   asks the team to backfill outcomes first; (b) `name` is the solicitation number for
+   hand-made bids and the eProcure event id for adopted ones (`0000039912`), which is the
+   `discoveryEvent` link for adopted bids until the team serves it explicitly.
