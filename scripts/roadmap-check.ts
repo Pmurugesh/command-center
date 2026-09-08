@@ -32,6 +32,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { execFile } from 'child_process'
+import crypto from 'crypto'
 import matter from 'gray-matter'
 import { PATHS, REPO_CANDIDATES } from '../src/lib/paths.ts'
 import { runCommandArgs } from '../src/lib/shell.ts'
@@ -173,7 +174,17 @@ interface Checked {
   last_evidence_author?: string | null
   handoff_state?: HandoffState
   handoff_age_days?: number | null
+  handoff_at?: string | null
   error?: string
+}
+
+/** One line per run, outside git — the page reads the last `ok` for freshness. */
+async function logRun(line: string): Promise<void> {
+  if (DRY) return
+  try {
+    await fs.mkdir(path.dirname(PATHS.roadmapCheckLog), { recursive: true })
+    await fs.appendFile(PATHS.roadmapCheckLog, `${new Date().toISOString()} ${line}\n`)
+  } catch { /* a logging failure must not fail a check */ }
 }
 
 function ymd(v: unknown): string | undefined {
@@ -275,6 +286,7 @@ async function checkHandoff(a: Authored): Promise<Checked> {
         slug: a.slug,
         handoff_state: 'merged',
         handoff_age_days: at ? days(at) : null,
+        handoff_at: at,
       }
     }
   }
@@ -287,7 +299,7 @@ async function checkHandoff(a: Authored): Promise<Checked> {
       const at = (await git(PATHS.operationsRoot, [
         'log', '-1', '--format=%aI', 'HEAD', '--', path.relative(PATHS.operationsRoot, abs),
       ])).trim()
-      return { slug: a.slug, handoff_state: 'spec-sent', handoff_age_days: at ? days(at) : null }
+      return { slug: a.slug, handoff_state: 'spec-sent', handoff_age_days: at ? days(at) : null, handoff_at: at || null }
     }
     return { slug: a.slug, error: `Spec ${spec} not found` }
   }
@@ -337,9 +349,22 @@ async function main() {
     x.a.name.localeCompare(y.a.name)
   )
 
+  // What counts as a change: a fact, not a day. The page recomputes ages from
+  // the stored timestamps, so this file only needs rewriting when a human
+  // commit landed, a handoff moved, a repo stopped resolving, a target was
+  // edited, or a state crossed a threshold. Without this, a daily cron commits
+  // every day as every age ticks — and the Telegram announce becomes noise.
+  const fingerprint = crypto.createHash('sha1').update(JSON.stringify(
+    [...rows].sort((x, y) => x.a.slug.localeCompare(y.a.slug)).map(r => [
+      r.a.slug, r.a.target ?? null, r.a.done ?? null, r.state,
+      r.d.last_evidence_at ?? null, r.d.handoff_state ?? null, r.d.handoff_at ?? null, r.d.error ?? null,
+    ])
+  )).digest('hex').slice(0, 12)
+
   const fm = [
     '---',
     `generated_at: '${new Date().toISOString()}'`,
+    `fingerprint: ${fingerprint}`,
     'checked:',
     ...checked.flatMap(c => [
       `  - slug: ${c.slug}`,
@@ -348,6 +373,7 @@ async function main() {
       ...(c.last_evidence_author ? [`    last_evidence_author: ${JSON.stringify(c.last_evidence_author)}`] : []),
       ...(c.handoff_state ? [`    handoff_state: ${c.handoff_state}`] : []),
       ...(c.handoff_age_days != null ? [`    handoff_age_days: ${c.handoff_age_days}`] : []),
+      ...(c.handoff_at ? [`    handoff_at: '${c.handoff_at}'`] : []),
       ...(c.error ? [`    error: ${JSON.stringify(c.error)}`] : []),
     ]),
     '---',
@@ -397,14 +423,15 @@ async function main() {
     )
     for (const m of missing) console.error(`  ${m.slug}: ${m.error}`)
     console.error('Run this on the mini, which holds every clone. (--dry prints anyway.)')
+    await logRun(`refused missing=${missing.length}`)
     process.exit(2)
   }
 
-  // Compare on the body only: generated_at changes every run and would make
-  // every run a commit (the registry's rule).
-  const strip = (s: string) => s.replace(/generated_at:.*\n/, '')
-  if (strip(prev) === strip(next)) {
+  // A file without a fingerprint is the pre-fingerprint format: rewrite once.
+  const prevFingerprint = /^fingerprint: (\w+)$/m.exec(prev)?.[1]
+  if (prevFingerprint === fingerprint) {
     console.log('roadmap-check: no change')
+    await logRun('ok unchanged')
     return
   }
 
@@ -414,8 +441,13 @@ async function main() {
   }
   await fs.mkdir(PATHS.roadmap, { recursive: true })
   await fs.writeFile(PATHS.roadmapStatus, next, 'utf-8')
+  await logRun(`ok changed rows=${rows.length}`)
   console.log(`roadmap-check: wrote ${rows.length} rows`)
   for (const r of rows) console.log(`  ${STATE_MARK[r.state]} ${r.a.name}: ${r.state} — ${r.reason}`)
 }
 
-await main()
+await main().catch(async (e: unknown) => {
+  await logRun(`fail ${String(e).replace(/\s+/g, ' ').slice(0, 160)}`)
+  console.error(e)
+  process.exit(1)
+})

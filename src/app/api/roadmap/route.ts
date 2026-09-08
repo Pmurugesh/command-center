@@ -9,6 +9,7 @@ export async function GET() {
     // Freshness travels with the data: a consumer that reads `items` without
     // knowing the check last ran three weeks ago is reading fiction.
     generatedAt: status.generatedAt ?? null,
+    lastRunAt: status.lastRunAt ?? null,
     ran: status.ran,
     stale: status.stale,
     items,

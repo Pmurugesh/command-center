@@ -160,8 +160,8 @@ export default async function RoadmapPage() {
                 {status.ran ? 'Status check is stale' : 'Status check has never run'}
               </p>
               <p className="mt-1 text-muted-foreground">
-                {status.generatedAt
-                  ? `Last run ${status.generatedAt.slice(0, 10)} — over ${STATUS_STALE_DAYS} days ago. `
+                {(status.lastRunAt ?? status.generatedAt)
+                  ? `Last run ${(status.lastRunAt ?? status.generatedAt)!.slice(0, 10)} — over ${STATUS_STALE_DAYS} days ago. `
                   : ''}
                 Rows below show what it last knew, not what is true now. Run{' '}
                 <code className="font-mono text-xs">scripts/roadmap-check.ts</code> on the mini.
