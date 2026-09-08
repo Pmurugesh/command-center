@@ -21,9 +21,12 @@ export interface QualTableConfig {
   password: string
 }
 
-/** Default per-request budget. Render is always-on since 2026-09-07, so a slow
- *  answer is a real failure, not a cold start; 20 s is generous for one JSON read. */
-export const QUAL_TABLE_TIMEOUT_MS = 20_000
+/** Default per-request budget. Measured from the mini on 2026-09-08: sign-in
+ *  0.5 s; the first /bids/summary read after a quiet spell 16.7 s, then 2.0 s and
+ *  1.1 s warm; discovery 2.2 s. Render is always-on since 2026-09-07 but the
+ *  first request still pays a warm-up, so 20 s failed the installer's dry run.
+ *  60 s covers the cold case with room; past that it is a real failure. */
+export const QUAL_TABLE_TIMEOUT_MS = 60_000
 
 export const QUAL_TABLE_CONFIG_HELP = [
   'Not configured. Set on the mini (see ~/.openclaw/workspace/.credentials/qual-table.env):',
