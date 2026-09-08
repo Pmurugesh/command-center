@@ -4,6 +4,7 @@ import matter from 'gray-matter'
 import { PATHS } from './paths'
 import { BID_TAB_ORDER, normalizeBidStatus } from './config'
 import { countFlags, extractPriority, extractEmails, extractContacts, parsePartnerships } from './markdown'
+import { lastBidSyncSuccess } from './bid-sync'
 import type {
   Bid, BidDetail, BidFile, BidStatusData, ScanReport, IntelAlert, LibraryFile,
   DocumentFile, DataSourceInfo, ScriptInfo, Agency, AgencyPriority, Partnership,
@@ -468,12 +469,13 @@ async function newestOutput(dir: string, ext = '.md'): Promise<string | null> {
 export async function getPipelineFreshness(): Promise<PipelineFreshness[]> {
   const { OUTREACH_PATH } = await import('./paths')
 
-  const [bids, alerts, procurements, reports, outreach] = await Promise.all([
+  const [bids, alerts, procurements, reports, outreach, bidSync] = await Promise.all([
     listBids(),
     newestOutput(PATHS.intelligence),
     newestOutput(path.join(PATHS.intelligenceBase, 'procurements')),
     newestOutput(PATHS.scanReports),
     fs.stat(OUTREACH_PATH).then(s => s.mtime.toISOString()).catch(() => null),
+    lastBidSyncSuccess(),
   ])
 
   let bidsLatest: string | null = null
@@ -486,6 +488,9 @@ export async function getPipelineFreshness(): Promise<PipelineFreshness[]> {
     { label: 'Intel alerts',      href: '/intel',    lastUpdated: alerts,       warnAfterDays: 8,  staleAfterDays: 15 },
     { label: 'Codebase reports',  href: '/health',   lastUpdated: reports,      warnAfterDays: 9,  staleAfterDays: 16 },
     { label: 'Bid pipeline',      href: '/bids',     lastUpdated: bidsLatest,   warnAfterDays: 7,  staleAfterDays: 21 },
+    // Hourly on weekdays; amber past ~26 h, red past three days (a weekend plus a
+    // missed Monday). No log line ever = null = stale: silence is never green.
+    { label: 'Bid sync',          href: '/bids',     lastUpdated: bidSync,      warnAfterDays: 1.1, staleAfterDays: 3 },
     { label: 'Priority outreach', href: '/agencies', lastUpdated: outreach,     warnAfterDays: 7,  staleAfterDays: 21 },
   ]
 }

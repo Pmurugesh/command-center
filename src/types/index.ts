@@ -37,7 +37,33 @@ export interface BidStatusData {
   // consumers read the normalized Bid.deadlineAt, never these directly.
   deadline?: string
   deadlineProposalDue?: string
+
+  // ── Phase 11: fields the bid connector (scripts/sync-bids.ts) writes from the
+  // workbench's GET /api/v1/bids/summary. Absent on markdown-era bids. There is
+  // deliberately no "engine" or "type" field: `plan.sections` says what kind of
+  // bid this is, derived from what the workbench found, never chosen.
+  stage?: BidStage
+  reason?: string                 // generated for connector bids; hand-written on markdown bids
+  via?: 'qual-table' | 'dashboard' | 'agent'
+  source?: { system: 'qual-table'; bid_id: number; name: string; status: string; org_id?: string }
+  syncedAt?: string               // ISO; last successful connector write for this bid
+  questionsDue?: string           // YYYY-MM-DD
+  agency?: string
+  contractValue?: number
+  pipeline?: { match: boolean; resume: boolean; tables: boolean; submit: boolean }
+  coverage?: { rolesTotal: number; rolesStaffed: number; slotsTotal: number; slotsFilled: number }
+  plan?: { sections: string[] }   // ['staffing'] when rolesTotal > 0 until the workbench serves plan_sections
+  decisionsOpen?: number
+  gate?: { status: 'pass' | 'fail' | 'unknown'; platformRef?: string; verifiedAt?: string }
+  discoveryEvent?: { businessUnit: string; eventId: string }  // = crm/leads slug; the lead→bid link
+  archived?: boolean
 }
+
+// The stage ladder. Ranked so the connector never lowers a stage unless the
+// workbench status itself moved (see src/lib/bid-sync.ts STAGE_RANK).
+export type BidStage =
+  | 'intake' | 'scanned' | 'planned' | 'team-confirmed' | 'tailoring' | 'drafted'
+  | 'gated' | 'ready-to-submit' | 'lapsed' | 'submitted' | 'awarded' | 'closed'
 
 export interface DocumentFile {
   name: string
