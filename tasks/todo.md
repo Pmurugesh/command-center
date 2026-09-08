@@ -1075,3 +1075,202 @@ the prompt, and the file-per-idea model renders whatever Voice writes.
 **Still open**
 - [ ] Revisit LinkedIn org-page API once posts are actually flowing and there are
       results worth automating the collection of.
+
+## Phase 11 — One bid system (connector first)
+
+**Written 2026-09-08.** Origin: the decision to converge the two bid systems on the
+qual-table workbench. The handoff for the qual-table team is
+`operations/workflows/unified-bid-system-handoff.md` (spine, solution module, claim gate,
+API contract, what moves out of operations). This section is only the command-center half.
+Verified this session against `Pmurugesh/qual_table_automations` and `NovaEraSolutions/Nexus`
+on `origin/main` (read-only), `operations` on disk, and this worktree.
+
+**Standing rules that bind every item:** drafts automatic, sends human; deterministic where
+a match decides, LLM only for judgment; each fact in one file, anything shown twice is
+generated; absence of data renders as unknown, never green. Dashboard features are frozen
+until 2026-09-22 (`operations/gtm/targets.md` phase-1 window) except finance wiring, the bid
+connector, leads on a schedule, and the outreach trigger cron.
+
+**What the exploration found that this plan has to fix, not work around:**
+- `scripts/sync-leads.ts` has no timeout on either `fetch`, no failure surface, and is
+  scheduled nowhere (grep hits only its own docstring). M3 boxes are all still unchecked.
+- `writeBidStatus` (`src/lib/files.ts:169`) is the only writer with no lock, no atomic
+  write, no commit, no status validation, no traversal guard on `bidName`. Every other
+  writer goes through `acquireLock` + `atomicWrite` + a `via:` commit.
+- Coverage % exists in `CLAUDE.md` and Phase 4.2 only; nothing computes it. `/bids` shows
+  `N docs`.
+- `bid-decision` moves score a flat 30 with no `due`; bid deadlines reach the Clock only.
+  `/bids/<name>#<file>` deep links from Moves are ignored by `bid-detail-tabs.tsx`.
+- No lead→bid link in either direction; `triageLead`/`getLeadQueue` have zero callers.
+- `PATHS` has no platform entry; `verify-claims.ts:29` and `generate-registry.ts:26` each
+  re-derive `~/infiniteai_platform`.
+- The workbench's multitenancy merge (2026-09-07, PRs #109/#110) requires an
+  `organization_members` row; the Paladin service account may now 403. Nothing here runs
+  until that is confirmed.
+
+### 11.0 Gate — before any code
+
+- [ ] **Confirm the service account still authenticates.** On the mini:
+      `node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/sync-leads.ts --dry`.
+      A `403` means no org membership; the fix is on the qual-table side (viewer role), asked
+      for in the handoff's last section. Do not build the connector against a 403.
+- [ ] **Pavan answers the questions in "Open gates" below** that change the shape
+      (entity = organization; freeze scope of the minimal rendering).
+
+### 11.1 `scripts/sync-bids.ts` — the connector (allowed inside the freeze)
+
+Modeled on `scripts/sync-leads.ts`; same env, same auth, same store pattern as
+`src/lib/leads.ts`. One-way, read-only against the workbench, idempotent.
+
+- [ ] **Extract the client.** Move `getConfig()` and `signIn()` out of `sync-leads.ts` into
+      `src/lib/qual-table.ts` and add `fetchJson(path, token, { timeoutMs })` that wraps
+      `fetch` with `signal: AbortSignal.timeout(20_000)`. `sync-leads.ts` switches to it in
+      the same change (this is the fix for its missing timeout, not a new feature).
+- [ ] **One call per run:** `GET /api/v1/bids/summary` (later `?updated_since=` once the
+      workbench adds it). Never the Brief from a cron; never any POST.
+- [ ] **Identity = `source.bid_id`.** Before writing, scan every `bids/*/.status.json` for
+      `source.system === 'qual-table' && source.bid_id === row.bid_id`. Found: update in
+      place. Not found: create `bids/<slug(display_name)>/` (collision → append `-qt<bid_id>`)
+      with only a `.status.json`. A folder is created once and never renamed; the display
+      name may change, the id may not.
+- [ ] **Status file shape** (extend `BidStatusData` in `src/types/index.ts`; no `engine`
+      field, `plan.sections` is what says what kind of bid it is):
+      ```ts
+      interface BidStatusData {
+        status: BidStatus              // Discovered | Analyzing | Draft Ready | Under Review | Submitted | Won | Lost | No-Bid
+        entity: Entity
+        stage?: string                 // intake | scanned | planned | team-confirmed | tailoring | drafted | gated | ready-to-submit | lapsed | submitted | awarded | closed
+        reason?: string                // generated for connector bids; hand-written for markdown bids
+        via?: 'qual-table' | 'dashboard' | 'agent'
+        source?: { system: 'qual-table'; bid_id: number; name: string; org_id?: string }
+        syncedAt?: string              // ISO; last successful connector write for this bid
+        deadline?: string              // YYYY-MM-DD (the one key; deadlineProposalDue stays readable, never written again)
+        questionsDue?: string
+        agency?: string
+        contractValue?: number
+        pipeline?: { match: boolean; resume: boolean; tables: boolean; submit: boolean }
+        coverage?: { rolesTotal: number; rolesStaffed: number; slotsTotal: number; slotsFilled: number }
+        plan?: { sections: string[] }  // ['staffing'] when rolesTotal > 0 until the workbench serves plan_sections
+        decisionsOpen?: number
+        gate?: { status: 'pass' | 'fail' | 'unknown'; platformRef?: string; verifiedAt?: string }
+        discoveryEvent?: { businessUnit: string; eventId: string }   // = crm/leads slug; the lead→bid link
+        archived?: boolean
+        updatedAt: string
+      }
+      ```
+- [ ] **Mapping** (the table in the handoff, "How we map your fields to our three"). Stage
+      ladder ranks: intake 0 · scanned 1 · planned 2 · team-confirmed 3 · tailoring 4 ·
+      drafted 4 · gated 5 · ready-to-submit 5 · lapsed 6 · submitted 6 · awarded 7 · closed 7.
+- [ ] **Never overwrite richer with coarser.** Write `stage` only when
+      `rank(new) >= rank(existing)` **or** the workbench `status` differs from the stored
+      `source.status` (a reopen is real and must show). Preserve `entity`, a hand-written
+      `reason` on a non-connector bid, `archived`, and any key the connector does not own.
+- [ ] **Change detection like leads:** rewrite only when a mapped field differs; `syncedAt`
+      alone is never a reason to write. One commit per batch, `bids: N new, M updated`, body
+      `via: qual-table`, through `acquireLock(PATHS.bids)` + `atomicWrite`.
+- [ ] **Failure renders unknown.** Timeout, non-200, or unparseable body: write nothing to
+      git, append one line to `~/.openclaw/logs/bid-sync.log` (new `PATHS.bidSyncLog`,
+      same precedent as `emailSyncLog`), exit 1. Success appends one line too. A "Bid sync"
+      row in `getPipelineFreshness()` (`src/lib/files.ts:484`) reads the log's last success;
+      older than 26 h → unknown, never green on silence.
+- [ ] **Schedule:** OpenClaw cron on the mini, weekdays hourly 07:00–18:00 PT, command
+      payload like `caleprocure-scan` (`scripts/mini/install-caleprocure-scan.sh` is the
+      installer to copy), with an **explicit delivery target** (isolated crons without one
+      read as errors every run; see memory). Same installer registers `sync-leads` daily —
+      that is the "leads on a schedule" freeze exception and shares the client.
+- [ ] **Link existing folders by hand, once.** For each of the five markdown folders that
+      has a workbench bid, set `source` in its `.status.json` (needs Pavan's answer to gate
+      question 7). Unlinked folders keep working as before.
+- [ ] **Test** in a scratch `HOME` with its own git repo (the content-outcomes precedent):
+      new bid → folder + commit; unchanged summary → no write; workbench moved
+      `open→submitted` → stage advances; stored `ready-to-submit` with workbench
+      `scanned` and unchanged status → stage kept; reopen → stage lowered with reason;
+      timeout → no write, log line, freshness row unknown.
+
+### 11.2 Dashboard — minimal, inside the freeze (needs Pavan's yes on gate question 3)
+
+A connector bid has no markdown, so `/bids/<name>` must render something or the pipeline
+lies. This is rendering the connector's output, not a feature.
+
+- [ ] **Detail page for a bid with zero `.md` files:** status, stage, reason, agency,
+      deadline, coverage numbers, and one button **Open in workbench** →
+      `${QUAL_TABLE_APP_URL}/bids/${source.bid_id}` (new env, the Vercel origin). No tab
+      strip. No status controls for connector bids (`via === 'qual-table'` hides
+      `bid-status-controls.tsx` and the kanban select; a write there would be a second
+      writer).
+- [ ] **Staffing chip** on `/bids` cards and Today's bid rows when `plan.sections` includes
+      `staffing`, showing `slotsFilled/slotsTotal`. A `solution` chip appears by the same
+      rule once the workbench serves it. No chip when `plan` is absent.
+- [ ] **Clock** reads `deadline` (already normalized via `bidDeadline()`) and, new,
+      `questionsDue` as a second row.
+- [ ] `listBids()` picks `updatedAt` from `syncedAt` when present, so a connector bid does
+      not look stale because it has no markdown mtime.
+
+### 11.3 Dashboard — after 2026-09-22
+
+- [ ] **One pipeline view.** Kanban columns keyed by `stage` rank, not by `status`; markdown
+      bids without a `stage` land by their `status` as today. Filter chips: entity,
+      staffing/solution/mixed (from `plan.sections`), agency.
+- [ ] **Harden `writeBidStatus`** to the lead-writer pattern: traversal guard on `bidName`,
+      `normalizeBidStatus` on input, `acquireLock` + `atomicWrite`, one commit with
+      `via: dashboard`. Refuse writes to `via: 'qual-table'` bids with a 409.
+- [ ] **Decisions into Moves** from `decisionsOpen` (count → one move per bid, `href` to
+      the workbench), with a `due` from `deadline` so urgency ranks them; retire the flat 30.
+- [ ] **`#file` deep links** in `bid-detail-tabs.tsx` (read the hash on mount).
+- [ ] **Lead→bid:** when `discoveryEvent` is present, the Clock and `/intel` show the bid
+      instead of the lead, by the slug equality `clock.ts:86` already relies on.
+- [ ] `PATHS.platform` for `~/infiniteai_platform`; `verify-claims.ts` and
+      `generate-registry.ts` read it instead of re-deriving.
+- [ ] **Snapshot push** (the claim gate's phase 1, command-center side): extend
+      `generate-registry.ts` to emit `products/_registry.json` (registry + path index +
+      symbols for cited files + `required/provides_capabilities`), render `_registry.md`
+      from the JSON, and `POST /api/v1/platform/snapshot` with the same client as 11.1.
+      Gated on the workbench shipping the endpoint.
+
+### 11.4 Retire the markdown pipeline for new bids (gated on the solution module shipping)
+
+- [ ] `operations/workflows/new-bid.md` gets a header: retired, new bids start in the
+      workbench; the eight steps are kept as history.
+- [ ] `/intake` "New bid from RFP docs" no longer creates `bids/<name>/documents/`; it links
+      to the workbench's create/adopt and keeps the file drop only for correspondence.
+- [ ] `openclaw agent --agent main` intake trigger for bids is disabled; Capture's bid
+      prompts are archived under `operations/agents/sales/`.
+- [ ] Response library, style guide, platform knowledge migrate into the workbench
+      (`response_blocks`, library `claims`); `PATHS.responseLibrary` and
+      `PATHS.platformKnowledge` are removed with `/library`, which becomes a link.
+- [ ] `scripts/verify-claims.ts`, `scripts/pre-bid-gate.sh`, and the `citationDrift()` half
+      of `drift-check.ts` are deleted after the workbench gate has passed on one real bid.
+      Name drift stays (it reads the registry, not bids).
+
+### 11.5 Archive `operations/bids/`
+
+- [ ] `operations/bids/_ARCHIVE.md`: one paragraph, the date, the workbench URL. No folder
+      moves, no renames; git history and meeting-note links keep resolving.
+- [ ] Each of the six status files gets `archived: true`; the one folder without a status
+      file (`caltrans-adhoc-reporting`) gets one. `listBids()` groups archived bids under a
+      collapsed "Archive" on `/bids` and drops them from the Clock, Moves, and
+      `getDecisionQueue()`.
+- [ ] `_platform-knowledge.md` and `_requirement-tracker.md` get a header pointing at the
+      workbench claims table; contents untouched.
+- [ ] Nexus `bids/` (README + seven `.gitkeep`, last touched 2026-06-13): recommend one
+      README line to the product team via the handoff; we do not touch it.
+
+### Open gates (Pavan)
+
+1. Is the Paladin account a member of an organization in the workbench after the
+   2026-09-07 multitenancy merge? (`sync-leads --dry` on the mini answers it.)
+2. Which GitHub credential, if any, may the workbench hold to read `NovaEraSolutions/Nexus`
+   from Render for the gate's phase 2 (fine-grained read-only PAT vs GitHub App), and who
+   issues it? Phase 1 needs none.
+3. Are 11.2's minimal rendering changes inside the connector's freeze exception, or do
+   connector bids show as bare cards until 2026-09-22?
+4. Entity = organization? Do InfiniteAI (product) bids live in the same workbench org as
+   Infinite Solutions (staffing) bids, or in a second org? This decides how `entity` is
+   derived and whether the service account needs two memberships.
+5. After the solution module ships, do the response library, style guide and platform
+   knowledge move into the workbench database (recommended, they are bid content), or stay
+   as authored files in operations the workbench pulls?
+6. Past-due open bids: leave `status` untouched with `stage: lapsed` (recommended), or
+   auto-mark No-Bid?
+7. Which of the five existing folders correspond to workbench bids today, so `source` can
+   be set by hand once?
