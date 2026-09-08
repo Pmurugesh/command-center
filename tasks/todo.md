@@ -1267,10 +1267,9 @@ lies. This is rendering the connector's output, not a feature.
 4. Entity = organization? Do InfiniteAI (product) bids live in the same workbench org as
    Infinite Solutions (staffing) bids, or in a second org? This decides how `entity` is
    derived and whether the service account needs two memberships.
-5. After the solution module ships, do the response library, style guide and platform
-   knowledge move into the workbench database (recommended, they are bid content), or stay
-   as authored files in operations the workbench pulls?
-6. Past-due open bids: leave `status` untouched with `stage: lapsed` (recommended), or
-   auto-mark No-Bid?
+5. ~~Response library, style guide, platform knowledge after the solution module ships?~~
+   **Decided 2026-09-08: the workbench database** (`response_blocks`, library `claims`).
+6. ~~Past-due open bids?~~ **Decided 2026-09-08: auto-mark No-Bid**, `stage: lapsed`,
+   generated reason. A later `submitted` from the workbench still overrides it (status moved).
 7. Which of the five existing folders correspond to workbench bids today, so `source` can
    be set by hand once?
