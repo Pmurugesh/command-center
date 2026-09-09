@@ -16,6 +16,7 @@ import {
   type RoadmapRow, type RoadmapGroup,
 } from '@/lib/roadmap'
 import { getStrategicDecisions } from '@/lib/gtm'
+import { isoToLocalDate } from '@/lib/dates'
 import { PageHeader } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/empty-state'
 import { Card, CardContent } from '@/components/ui/card'
@@ -78,8 +79,10 @@ export default async function RoadmapPage() {
                 {status.ran ? 'Status check is stale' : 'Status check has never run'}
               </p>
               <p className="mt-1 text-muted-foreground">
+                {/* isoToLocalDate, not .slice(0, 10): these are stored as UTC
+                    instants, so slicing printed TOMORROW all evening. */}
                 {(status.lastRunAt ?? status.generatedAt)
-                  ? `Last run ${(status.lastRunAt ?? status.generatedAt)!.slice(0, 10)} — over ${STATUS_STALE_DAYS} days ago. `
+                  ? `Last run ${isoToLocalDate((status.lastRunAt ?? status.generatedAt)!)} — over ${STATUS_STALE_DAYS} days ago. `
                   : ''}
                 Everything below shows what it last knew, not what is true now. Run{' '}
                 <code className="font-mono text-xs">scripts/roadmap-check.ts</code> on the mini.

@@ -45,3 +45,20 @@ export function localDaysAgo(days: number, now: Date = new Date()): string {
   const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days)
   return localDate(d)
 }
+
+/**
+ * The local calendar day an instant fell on, for display.
+ *
+ * `generated_at` and friends are stored as UTC ISO instants, which is correct —
+ * an instant should be unambiguous. But slicing the first ten characters of one
+ * shows the UTC day, so `/roadmap`'s staleness banner printed
+ * "Last run 2026-09-09" for a check that ran at 18:10 on 2026-09-08. A date in
+ * the future, on screen, above a board about being honest.
+ *
+ * Storage stays UTC. Only the reading is local.
+ */
+export function isoToLocalDate(iso: string): string {
+  const d = new Date(iso)
+  return isNaN(d.getTime()) ? iso.slice(0, 10) : localDate(d)
+}
+

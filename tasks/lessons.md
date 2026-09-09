@@ -219,3 +219,12 @@
   and are one character apart on screen. **Before applying a fix everywhere a pattern matches, ask
   what each site's input actually is.** A blanket sed would have introduced a new off-by-one in
   exactly the places that were already right.
+- **[2026-09-08]** The same UTC-vs-local bug had a second, more expensive instance I only found by
+  sweeping for the *pattern* rather than stopping at the first fix: `moves.ts` sliced
+  `Opportunity.deadlineAt`, a UTC instant built from a **local** wall-clock time, and
+  `parseDeadline` defaults to **17:00 when a solicitation gives no time** — which in PDT is exactly
+  midnight UTC. So it was not an edge case, it was the common path: **4 of 18 live solicitation
+  deadlines were rendering a day late**, feeding both the urgency score and the `daysUntil > 7`
+  gate that decides whether a bid appears on Today at all. **After fixing a bug, grep for its shape,
+  not its line** — and rank the hits by what each one costs. A stale "last run" label is cosmetic; a
+  bid deadline a day late is not.

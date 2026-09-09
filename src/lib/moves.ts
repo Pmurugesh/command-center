@@ -20,6 +20,7 @@ import type { StrategicDecision } from './gtm'
 import type { Channel } from './channels'
 import type { RoadmapMilestone, DemandSignal } from './roadmap'
 import { CRM_TERMINAL_STAGES } from './config'
+import { isoToLocalDate } from './dates'
 
 export type MoveKind = 'strategic' | 'blocker' | 'bid-decision' | 'crm-due' | 'deadline' | 'channel' | 'roadmap'
 
@@ -150,7 +151,14 @@ export function buildMoves(input: MovesInput): Move[] {
 
   for (const o of input.opportunities) {
     if (!o.deadlineAt) continue
-    const due = o.deadlineAt.slice(0, 10)
+    // isoToLocalDate, not .slice(0, 10). `deadlineAt` is a UTC instant built
+    // from a LOCAL wall-clock time, and parseDeadline defaults to 17:00 when a
+    // solicitation gives no time — which in PDT is exactly midnight UTC. So
+    // slicing pushed essentially EVERY deadline a day late: the wrong urgency
+    // score, and a bid due in 7 days silently failing the `> 7` gate below and
+    // dropping off Today. Of everything this bug touched, being a day late on a
+    // bid deadline is the one that costs money.
+    const due = isoToLocalDate(o.deadlineAt)
     const u = urgency(due)
     if (daysUntil(due) > 7) continue // distant solicitations live on the Clock, not here
     moves.push({
