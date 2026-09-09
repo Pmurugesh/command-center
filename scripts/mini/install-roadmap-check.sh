@@ -18,14 +18,30 @@
 #
 # Run ON the mini as `paladin`, from a Terminal on its own screen (Keychain):
 #   ./scripts/mini/install-roadmap-check.sh
+#
+# `--if-possible` is the post-deploy mode (2026-09-08): skip the dry run, and
+# treat an unreadable Keychain as a clean SKIP rather than a failure, so a merge
+# can register this job without a human at the mini's screen. That became viable
+# once install-cron-delivery.sh — which also mutates openclaw crons — started
+# succeeding from post-deploy under launchd, answering Phase 12's standing
+# "can launchd read the Keychain" question with yes. The interactive path is
+# unchanged and still fails loudly, because there a human asked for it.
 set -euo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+IF_POSSIBLE=0
+[ "${1:-}" = "--if-possible" ] && IF_POSSIBLE=1
 
 REPO_DIR="$HOME/repos/command-center"
 NODE="$(command -v node)"
 
-echo "==> Runner sanity check (dry run — prints the board, writes nothing)"
-( cd "$REPO_DIR" && "$NODE" --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/roadmap-check.ts --dry | grep -E '^\| (🔴|🟠|🟡|🟢|⚪|✅)' )
+# The dry run fetches every clone, so it is the interactive proof that the
+# runner works before a cron is registered — not something to repeat on every
+# deploy. The job's own run log is the ongoing evidence.
+if [ "$IF_POSSIBLE" -eq 0 ]; then
+  echo "==> Runner sanity check (dry run — prints the board, writes nothing)"
+  ( cd "$REPO_DIR" && "$NODE" --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/roadmap-check.ts --dry | grep -E '^\| (🔴|🟠|🟡|🟢|⚪|✅)' )
+fi
 
 # Same Keychain dance as install-bid-sync.sh — see the comment there.
 if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
@@ -33,6 +49,10 @@ if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
   export OPENCLAW_GATEWAY_TOKEN
 fi
 if [ -z "$OPENCLAW_GATEWAY_TOKEN" ]; then
+  if [ "$IF_POSSIBLE" -eq 1 ]; then
+    echo "    no gateway token in this context — skipping (retries next deploy)."
+    exit 0
+  fi
   echo "    could not read the gateway token from the Keychain (locked to this session)."
   echo "    Run this script from a Terminal on the mini's own screen, or export"
   echo "    OPENCLAW_GATEWAY_TOKEN first. The dry run above already proved the check works."
