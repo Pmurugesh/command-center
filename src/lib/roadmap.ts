@@ -32,6 +32,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import matter from 'gray-matter'
 import { PATHS } from './paths'
+import { stageAtLeast, CRM_STAGE_ORDER, type CrmStage } from './config'
 
 /** Evidence colder than this while a target is near means nobody is working. */
 export const EVIDENCE_WARN_DAYS = 14
@@ -899,4 +900,79 @@ export function allMilestones(rows: RoadmapRow[]): RoadmapMilestone[] {
 export function roadmapAlerts(milestones: RoadmapMilestone[]): RoadmapMilestone[] {
   return milestones.filter(m =>
     m.state === 'slipped' || m.state === 'at-risk' || m.state === 'stranded')
+}
+
+// ── demand → Today ──────────────────────────────────────────────────────────
+
+/** A contact this warm is a real buying signal, not a name on a list. */
+const DEMAND_FLOOR: CrmStage = 'demo-given'
+/** Fresh enough to still be the reason to pick up work today. */
+export const DEMAND_FRESH_DAYS = 14
+
+export interface DemandSignal {
+  row: string
+  rowName: string
+  /** The warmest recently-touched contact for this row's product. */
+  contactName: string
+  stage: CrmStage
+  daysAgo: number
+  /** The highest-ranked open `now` milestone in that row — the thing to build. */
+  next?: RoadmapMilestone
+}
+
+/**
+ * Rows where somebody just got warm and there is open work to do about it.
+ *
+ * Today's queue was built entirely for trouble — slipped, at-risk, stranded —
+ * so good news was silent: a contact reaching `won` produced no Move and no
+ * Clock row, even though it is the strongest build-next signal on the board.
+ * This is the other half.
+ *
+ * Deliberately read from the LIVE CRM rather than from `_status.md`. Pull in the
+ * status file is a snapshot with no history, so "who just got warm" is not
+ * derivable from it — and adding history to make it derivable would be a worse
+ * trade than reading two fields off a contact.
+ *
+ * Machine-set stages do not count, for the same reason they do not count
+ * anywhere else on this board: `crm/` is janitor-written.
+ */
+export function roadmapDemandSignals(
+  rows: RoadmapRow[],
+  contacts: { name: string; product?: string; stage: CrmStage; lastTouched?: string; worked: boolean }[],
+  now = new Date()
+): DemandSignal[] {
+  const out: DemandSignal[] = []
+  for (const row of rows) {
+    if (!row.product) continue
+    const warm = contacts
+      .filter(c =>
+        c.product === row.product &&
+        c.worked &&
+        stageAtLeast(c.stage, DEMAND_FLOOR) &&
+        c.lastTouched &&
+        -daysBetween(now, c.lastTouched) <= DEMAND_FRESH_DAYS &&
+        -daysBetween(now, c.lastTouched) >= 0)
+      // Warmest first, then most recent — one signal per row, not a list.
+      .sort((a, b) =>
+        CRM_STAGE_ORDER.indexOf(b.stage) - CRM_STAGE_ORDER.indexOf(a.stage) ||
+        (b.lastTouched ?? '').localeCompare(a.lastTouched ?? ''))
+    const c = warm[0]
+    if (!c) continue
+
+    // Only worth surfacing if there is something to DO about it.
+    const open = row.milestones.filter(m =>
+      m.horizon === 'now' && (m.stage === 'framed' || m.stage === 'committed' || m.stage === 'building'))
+    if (open.length === 0) continue
+
+    out.push({
+      row: row.slug,
+      rowName: row.name,
+      contactName: c.name,
+      stage: c.stage,
+      daysAgo: -daysBetween(now, c.lastTouched!),
+      next: open.sort(compareMilestones)[0],
+    })
+  }
+  return out.sort((a, b) =>
+    CRM_STAGE_ORDER.indexOf(b.stage) - CRM_STAGE_ORDER.indexOf(a.stage) || a.daysAgo - b.daysAgo)
 }

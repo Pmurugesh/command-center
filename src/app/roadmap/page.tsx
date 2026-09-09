@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { Card, CardContent } from '@/components/ui/card'
 import { RowCard } from '@/components/roadmap/row'
 import { StatePill, isNews } from '@/components/roadmap/milestone'
+import { RescoreButton } from '@/components/roadmap/rescore'
 import { Map as MapIcon, Boxes, Layers, Briefcase, Wrench, Globe, AlertTriangle, ArrowRight, HelpCircle } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -120,6 +121,7 @@ export default async function RoadmapPage() {
                 Open milestones ranked by reach through <span className="font-mono">unlocks</span>,
                 weighted by pull, plus urgency. Deterministic — no model call.
               </p>
+              <RescoreButton />
             </div>
             {status.ranking.length === 0 ? (
               <p className="mt-3 text-sm text-muted-foreground">

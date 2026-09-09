@@ -24,7 +24,7 @@ import os from 'os'
 import path from 'path'
 import {
   deriveState, deriveStage, lintRoadmap, rankBuildNext, reachableThroughUnlocks,
-  parseProof, pullScore, daysBetween,
+  parseProof, pullScore, daysBetween, roadmapDemandSignals, DEMAND_FRESH_DAYS,
   type RoadmapMilestone, type RoadmapRow, type DerivedEntry, type Stage,
 } from '../src/lib/roadmap.ts'
 import {
@@ -585,4 +585,71 @@ test('lint: a diamond is not a cycle', () => {
     lintM({ slug: 'c', unlocks: ['d'] }),
     lintM({ slug: 'd' }),
   ]), [])
+})
+
+// ── demand → Today ──────────────────────────────────────────────────────────
+
+const contact = (over: Partial<{
+  name: string; product: string; stage: string; lastTouched: string; worked: boolean
+}> = {}) => ({
+  name: 'A', product: 'prr', stage: 'demo-given', lastTouched: ago(3).slice(0, 10), worked: true,
+  ...over,
+}) as Parameters<typeof roadmapDemandSignals>[1][number]
+
+const demandRow = (milestones: RoadmapMilestone[]) => ({
+  ...row('R', milestones, 0), product: 'prr',
+})
+
+test('demand: a warm, recently-touched, human-worked contact surfaces the row\'s next `now` milestone', () => {
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now' })])]
+  const got = roadmapDemandSignals(rows, [contact()], NOW)
+  assert.equal(got.length, 1)
+  assert.equal(got[0].next?.slug, 'a')
+  assert.equal(got[0].daysAgo, 3)
+})
+
+test('demand: a machine-set stage is not demand', () => {
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now' })])]
+  assert.deepEqual(roadmapDemandSignals(rows, [contact({ worked: false })], NOW), [])
+})
+
+test('demand: a cold contact is not demand, however warm the stage', () => {
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now' })])]
+  const stale = contact({ stage: 'won', lastTouched: ago(DEMAND_FRESH_DAYS + 1).slice(0, 10) })
+  assert.deepEqual(roadmapDemandSignals(rows, [stale], NOW), [])
+})
+
+test('demand: below `demo-given` is not a buying signal', () => {
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now' })])]
+  assert.deepEqual(roadmapDemandSignals(rows, [contact({ stage: 'contacted' })], NOW), [])
+})
+
+test('demand: no open `now` work means nothing to surface', () => {
+  // Warm buyer, but every `now` milestone is shipped — there is no move to make.
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now', stage: 'shipped' })])]
+  assert.deepEqual(roadmapDemandSignals(rows, [contact()], NOW), [])
+  // …and `next`/`later` work does not count as something to do today.
+  const later = [demandRow([milestone({ slug: 'b', row: 'R', horizon: 'later' })])]
+  assert.deepEqual(roadmapDemandSignals(later, [contact()], NOW), [])
+})
+
+test('demand: a row with no product is skipped — pull is meaningless there', () => {
+  const rows = [row('R', [milestone({ slug: 'a', row: 'R', horizon: 'now' })], 0)]
+  assert.deepEqual(roadmapDemandSignals(rows, [contact({ product: undefined })], NOW), [])
+})
+
+test('demand: one signal per row, the warmest contact', () => {
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now' })])]
+  const got = roadmapDemandSignals(rows, [
+    contact({ name: 'Cool', stage: 'demo-given' }),
+    contact({ name: 'Hot', stage: 'won' }),
+  ], NOW)
+  assert.equal(got.length, 1)
+  assert.equal(got[0].contactName, 'Hot')
+})
+
+test('demand: a future last_touched is ignored rather than counted as fresh', () => {
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now' })])]
+  const future = contact({ lastTouched: ahead(5) })
+  assert.deepEqual(roadmapDemandSignals(rows, [future], NOW), [])
 })

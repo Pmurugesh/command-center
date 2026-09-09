@@ -19,7 +19,7 @@ import { getInsights } from '@/lib/insights'
 import { getCampaignScore, getStrategicDecisions } from '@/lib/gtm'
 import { listChannels, channelAlerts } from '@/lib/channels'
 import { buildMoves, buildWaitingOn } from '@/lib/moves'
-import { listContacts } from '@/lib/crm'
+import { listContacts, hasBeenWorked } from '@/lib/crm'
 import { getNormalizedCronJobs } from '@/lib/shell'
 import { isFailing } from '@/lib/cron'
 import { getOpenOpportunities } from '@/lib/procurements'
@@ -28,7 +28,7 @@ import { getDecisionQueue } from '@/lib/decisions'
 import { getAgent24hSummary } from '@/lib/agents'
 import { listLeads } from '@/lib/leads'
 import { buildClock } from '@/lib/clock'
-import { listRoadmap, roadmapAlerts, allMilestones } from '@/lib/roadmap'
+import { listRoadmap, roadmapAlerts, allMilestones, roadmapDemandSignals } from '@/lib/roadmap'
 import { PageHeader } from '@/components/shared/page-header'
 import { HealthDot } from '@/components/shared/status-badge'
 import { Scoreboard } from '@/components/today/scoreboard'
@@ -83,6 +83,16 @@ export default async function TodayPage() {
   // what slips, goes at-risk or sits stranded is always a milestone under it.
   const roadmap = allMilestones(roadmapRows)
 
+  // Demand reads the LIVE CRM, not `_status.md`: the status file holds a pull
+  // snapshot with no history, so "who just got warm" is not derivable from it.
+  const roadmapDemand = roadmapDemandSignals(
+    roadmapRows,
+    contacts.map(c => ({
+      name: c.name, product: c.product, stage: c.stage,
+      lastTouched: c.lastTouched, worked: hasBeenWorked(c),
+    })),
+  )
+
   // The merge that used to happen in Pavan's head: one ranked queue.
   const moves = buildMoves({
     strategic,
@@ -92,6 +102,7 @@ export default async function TodayPage() {
     opportunities,
     channels: channelAlerts(channels),
     roadmap: roadmapAlerts(roadmap),
+    roadmapDemand,
   })
 
   // Everything dated in the next 14 days — meetings and deadlines, one agenda.
