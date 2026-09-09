@@ -13,6 +13,7 @@ set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 
 INSTALLERS=(
+  scripts/mini/widen-clones.sh            # single-branch clones hide the branch the work is on
   scripts/mini/install-nexus-sync.sh      # Nexus clone on origin/main before health scans
   scripts/mini/install-cron-delivery.sh   # no cron may run with delivery "last" and no target
 )

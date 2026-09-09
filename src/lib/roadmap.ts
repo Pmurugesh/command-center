@@ -129,6 +129,9 @@ export interface RoadmapMilestone {
   evidenceAgeDays?: number
   lastEvidenceAt?: string
   handoffState?: HandoffState
+  /** Which ref the handoff literal was found at — `origin/main` or an
+   *  integration branch. Shown, so `merged` on staging is never read as main. */
+  handoffRef?: string
   handoffAgeDays?: number
   proofTrue?: number
   proofTotal?: number
@@ -198,6 +201,8 @@ export interface DerivedEntry {
   evidenceAgeDays?: number | null
   lastEvidenceAt?: string | null
   handoffState?: HandoffState
+  /** Which ref the literal was found at. Present only when merged/consumed. */
+  handoffRef?: string
   handoffAgeDays?: number | null
   handoffAt?: string | null
   proofTrue?: number | null
@@ -678,6 +683,7 @@ export async function readStatus(): Promise<RoadmapStatus> {
         evidenceAgeDays: num(r.evidence_age_days),
         lastEvidenceAt: str(r.last_evidence_at) ?? null,
         handoffState: str(r.handoff_state) as HandoffState | undefined,
+        handoffRef: str(r.handoff_ref),
         handoffAgeDays: num(r.handoff_age_days),
         handoffAt: str(r.handoff_at) ?? null,
         proofTrue: num(r.proof_true),

@@ -2013,3 +2013,62 @@ clean at 13 rows / 66 milestones.
 **Still open:** the `pull` columns, the cleared Candor warning and Attest's new squeeze flag all
 land when the mini regenerates `_status.md` — `_` files are derived and this machine refuses to
 write them. The vendor for the demo API container is deliberately unpinned.
+
+---
+
+## Phase 13 addendum — context session 4 (2026-09-08)
+
+**CRM backfill, found by scanning rather than by asking.** I ran the same pattern that hid OEIS
+across every human-written log line: which contacts mention a product they are not filed under.
+Three candidates, two real:
+
+- **Shafi Mohammed** (OEIS) — title *is* "Wildfire Mitigation Plan program", log records a
+  "wildfire mitigation plan comparison demo" in Sept 2025, filed `assistants` → `[plan-review]`.
+  The finding underneath: Attest's flagship use case had **already been demoed** to the OEIS
+  program owner a year ago and the board could not see it.
+- **Robert Payne** (CDT) — the July demos named a "PRA module" and "ad hoc querying" →
+  `[prr, ad-hoc-reporting]`.
+- **Amarjot** — rejected. Matched only on "procurement" meaning their *buying process*, not the
+  Proc product. Exactly why this field is set by a person and never inferred.
+
+Pull moved more than predicted, because **agency meetings flow through the same filter**:
+
+| row | before today | after | note |
+|---|---:|---:|---|
+| Attest | 0 | **12** | Jim Wang, Pindy, Shafi |
+| Candor | 0 | **17** | Pindy + Robert; meetings 90d 0 → 4 |
+| Reporting | 3 | **13** | Robert; meetings 90d 0 → 3 |
+| Steward | 15 | **17** | Jim Wang |
+
+**`reporting-eval-live` retired** (Pavan: drop the nightly eval). ~$490/mo warehouse, last run
+failed on missing secrets 2026-07-20. The consequence is written into the row rather than left
+implied: **the accuracy claim in the OEIS deep dive is now unverified, not pending.** A milestone
+left open implies someone intends to close it.
+
+**Handoff checks search integration branches** (Pavan: "fetch staging too because i need to know
+where progress is frequently"). Three parts:
+
+- `scripts/mini/widen-clones.sh` — new, in `post-deploy.sh`, so it deploys by merge. Rewrites a
+  clone's refspec **only when it is explicitly single-branch**, and fetches once. Local clone
+  config only: nothing is written to any remote, so the read-only rule is untouched.
+- `INTEGRATION_REFS = ['staging']` in `roadmap-check.ts` — deliberately a short list, not "every
+  remote branch". A literal on an abandoned feature branch is not landed, and reporting it as
+  merged would be worse than reporting nothing.
+- `handoff_ref` recorded and **shown** — `merged at origin/staging` never reads as `merged`.
+
+Two bugs in my own installer, caught by running it: `mapfile` is bash 4 and macOS ships 3.2; and
+because it failed, an *empty* refspec read as "narrow" and the script rewrote a clone that was
+already correct (harmless — it set git's own default — but the same mistake on a deliberate partial
+clone would not be). Both fixed; absent refspec now means leave alone.
+
+**Verified:** fixture repo reproducing the exact BidPro shape — narrow clone cannot see
+`origin/staging` and greps 0 hits on `main`; after widening it sees staging and finds the literal
+there. 81/81 tests, `tsc` clean, eslint clean, `--dry` lints clean.
+
+**NOT verified, and it cannot be from here:** the wiring inside `checkHandoff` against the real
+`qual_table_automations` — that repo is not cloned on this MacBook. The five BidPro handoffs
+resolve on the mini's next run after the merge. `checkHandoff` has no unit seam (unlike the nine
+proof checks, which have `GitOps`); worth adding, not tonight.
+
+**Open:** targets for `cm-production-books`, `platform-hosted-demo` and `attest-oeis-demo` — Pavan
+chose to date those three; the dates themselves are still his to give.

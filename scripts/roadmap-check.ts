@@ -110,6 +110,42 @@ async function originRef(repo: string): Promise<string> {
   return ref
 }
 
+/**
+ * Refs that count as "landed" beyond origin's default branch.
+ *
+ * The BidPro team merges to `staging` — 634 commits there in 90 days, and the
+ * unified-bid plan landed there on 2026-09-08 — while `origin/main` moves
+ * separately. Checking only the default ref made all five BidPro handoffs read
+ * `unknown`: the right render for absence, and useless, because the answer was
+ * one branch away. Pavan, 2026-09-08: "fetch staging too because i need to know
+ * where progress is frequently."
+ *
+ * Deliberately a SHORT list of integration branches, not "every remote branch".
+ * A literal sitting on somebody's abandoned feature branch is not landed, and
+ * reporting it as merged would be worse than reporting nothing — the board's
+ * whole contract is that green means something. Which ref matched is recorded
+ * and shown, so `merged` on `staging` is never silently read as `merged` on
+ * `main`.
+ */
+const INTEGRATION_REFS = ['staging']
+
+/** Default branch first, then any integration branch this clone can actually see. */
+const landedRefsCache = new Map<string, string[]>()
+async function landedRefs(repo: string): Promise<string[]> {
+  const hit = landedRefsCache.get(repo)
+  if (hit) return hit
+  const out = [await originRef(repo)]
+  for (const name of INTEGRATION_REFS) {
+    const ref = `origin/${name}`
+    if (out.includes(ref)) continue
+    // A single-branch clone cannot see it; scripts/mini/widen-clones.sh fixes
+    // that on the mini, and until it runs the ref simply is not searched.
+    if ((await git(repo, ['rev-parse', '--verify', '-q', ref])).trim()) out.push(ref)
+  }
+  landedRefsCache.set(repo, out)
+  return out
+}
+
 const fetched = new Set<string>()
 async function fetchOnce(repo: string): Promise<boolean> {
   if (fetched.has(repo)) return true
@@ -232,6 +268,8 @@ interface Checked {
   handoff_state?: HandoffState
   handoff_age_days?: number | null
   handoff_at?: string | null
+  /** The ref the literal was found at — `origin/main` or an integration branch. */
+  handoff_ref?: string | null
   proof_true?: number
   proof_total?: number
   proof_results?: ProofResult[]
@@ -294,13 +332,16 @@ async function checkHandoff(a: Milestone, rowRepos: string[]): Promise<Checked> 
     }
     const r = await openRepo(repoName)
     if ('error' in r) return { slug: a.slug, error: r.error }
-    if (await grepAtRef(r.dir, r.ref, landed) > 0) {
-      const at = await whenLanded(r.dir, r.ref, landed)
+    const refs = await landedRefs(r.dir)
+    for (const ref of refs) {
+      if (await grepAtRef(r.dir, ref, landed) === 0) continue
+      const at = await whenLanded(r.dir, ref, landed)
       return {
         slug: a.slug,
         handoff_state: 'merged',
         handoff_age_days: at ? days(at) : null,
         handoff_at: at,
+        handoff_ref: ref,
       }
     }
     // Not found — say WHERE we looked, because "not resolved" is a mystery and
@@ -310,13 +351,15 @@ async function checkHandoff(a: Milestone, rowRepos: string[]): Promise<Checked> 
     // `staging`. The board must not imply the work is missing when the truth is
     // that this machine cannot see the branch it is on.
     if (!pr && !spec) {
-      const single = (await git(r.dir, ['config', '--get-all', 'remote.origin.fetch']))
+      const specs = (await git(r.dir, ['config', '--get-all', 'remote.origin.fetch']))
         .split('\n').filter(Boolean)
-      const narrow = single.length === 1 && !single[0].includes('/*')
+      // An ABSENT refspec is git's default, which is every branch — only an
+      // explicit single-branch spec is narrow.
+      const narrow = specs.length > 0 && !specs.some(x => x.includes('/*'))
       return {
         slug: a.slug,
-        error: `"${landed}" not found at ${r.ref} in ${repoName}` +
-          (narrow ? ` — and this clone tracks only ${r.ref}, so other branches were not searched` : ''),
+        error: `"${landed}" not found at ${refs.join(' or ')} in ${repoName}` +
+          (narrow ? ' — and this clone is single-branch, so no other branch was searched' : ''),
       }
     }
   }
@@ -514,6 +557,7 @@ async function main() {
       evidenceAgeDays: d.evidence_age_days,
       lastEvidenceAt: d.last_evidence_at,
       handoffState: d.handoff_state,
+      handoffRef: d.handoff_ref ?? undefined,
       handoffAgeDays: d.handoff_age_days,
       proofTrue: d.proof_true,
       proofTotal: d.proof_total,
@@ -566,6 +610,7 @@ async function main() {
       return [
         m.slug, m.target ?? null, m.done ?? null, m.state, m.stage,
         d.last_evidence_at ?? null, d.handoff_state ?? null, d.handoff_at ?? null,
+        d.handoff_ref ?? null,
         d.proof_true ?? null, d.proof_total ?? null, d.error ?? null,
       ]
     }).concat(
@@ -613,6 +658,7 @@ async function main() {
       ...(c.handoff_state ? [`    handoff_state: ${c.handoff_state}`] : []),
       ...(c.handoff_age_days != null ? [`    handoff_age_days: ${c.handoff_age_days}`] : []),
       ...(c.handoff_at ? [`    handoff_at: '${c.handoff_at}'`] : []),
+      ...(c.handoff_ref ? [`    handoff_ref: ${c.handoff_ref}`] : []),
       ...(c.proof_total != null ? [`    proof_true: ${c.proof_true}`, `    proof_total: ${c.proof_total}`] : []),
       ...(c.proven_total != null ? [`    proven_true: ${c.proven_true}`, `    proven_total: ${c.proven_total}`] : []),
       ...(c.proof_results?.length
