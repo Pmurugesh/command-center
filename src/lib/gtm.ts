@@ -142,7 +142,15 @@ const QUESTIONS_HEADING_RE = /questions only .* can answer/i
 
 // Directories scanned, relative to the operations root. gtm/ plus the two intel
 // dirs agents write briefings into — the same set listIntelAlerts reads.
-const DECISION_DIRS = ['gtm', 'intelligence/alerts', 'intelligence/weekly']
+// `roadmap` joined the scan in Phase 13: the deep dive's own decisions ("promote
+// Attest or cap it", "which San José record is true") were written into milestone
+// files where nothing was looking, which is the same failure mode as a shipped
+// endpoint nobody calls. `roadmap/rows` is listed separately because the scan is
+// one level deep by design — an unbounded walk over operations would pull in the
+// bids and intel archives, which have their own queues.
+const DECISION_DIRS = [
+  'gtm', 'intelligence/alerts', 'intelligence/weekly', 'roadmap', 'roadmap/rows',
+]
 
 function stripMd(s: string): string {
   return s
@@ -224,7 +232,7 @@ export async function getStrategicDecisions(): Promise<StrategicDecision[]> {
     }
     await Promise.all(
       names
-        .filter(n => n.endsWith('.md') && !n.startsWith('.'))
+        .filter(n => n.endsWith('.md') && !n.startsWith('.') && !n.startsWith('_'))
         .map(async n => {
           try {
             const content = await fs.readFile(path.join(abs, n), 'utf-8')

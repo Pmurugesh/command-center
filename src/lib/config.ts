@@ -165,11 +165,31 @@ export function getCronCategory(jobName: string): string {
 // ── CRM (Phase 5 / M1) ──────────────────────────────────────────────────────
 // Pipeline position. Terminal stages stop the aging clocks: a won/lost/
 // disqualified contact is never "overdue" or "going cold".
+// `verbal-commitment` sits between pilot-discussion and won: someone has said yes
+// and nothing is on paper. It was added 2026-09-08 because the OEIS contact had
+// been carrying `stage: verbal-commitment` since August — a value outside this
+// list, which `normalizeCrmStage` silently discarded, so the warmest contact in
+// the book read back as `identified`. The schema now knows the stage the business
+// actually has, rather than the business rounding itself down to the schema.
 export const CRM_STAGES = [
   'identified', 'contacted', 'meeting-booked', 'demo-given',
-  'pilot-discussion', 'won', 'lost', 'disqualified',
+  'pilot-discussion', 'verbal-commitment', 'won', 'lost', 'disqualified',
 ] as const
 export type CrmStage = typeof CRM_STAGES[number]
+
+/** Pipeline order for "at least this warm" comparisons. Terminal stages sit
+ *  outside it: `lost` is not a lesser `won`, it is a different fact. */
+export const CRM_STAGE_ORDER: readonly CrmStage[] = [
+  'identified', 'contacted', 'meeting-booked', 'demo-given',
+  'pilot-discussion', 'verbal-commitment', 'won',
+]
+
+/** Is `stage` at or past `floor` on the pipeline? False for terminal non-`won`. */
+export function stageAtLeast(stage: CrmStage, floor: CrmStage): boolean {
+  const a = CRM_STAGE_ORDER.indexOf(stage)
+  const b = CRM_STAGE_ORDER.indexOf(floor)
+  return a >= 0 && b >= 0 && a >= b
+}
 
 export const CRM_TERMINAL_STAGES: readonly CrmStage[] = ['won', 'lost', 'disqualified']
 
@@ -200,8 +220,28 @@ export function normalizeCrmStage(input: unknown): CrmStage | undefined {
   return CRM_STAGES.find(s => s === target)
 }
 
+/** Warn once per unrecognized value, not once per read — these are called on
+ *  every render and a per-row warning would bury the signal it exists to give. */
+const warnedStatuses = new Set<string>()
+
+/**
+ * Unknown statuses normalize to `active` — but say so.
+ *
+ * The silent version of this is how `status: active-hot` sat in the CRM unnoticed:
+ * it fell through to `active`, which was the right answer, so nothing ever
+ * surfaced that the file was writing a value the schema did not know. A field
+ * that quietly discards input is a field that hides data entry mistakes.
+ */
 export function normalizeCrmStatus(input: unknown): CrmStatus | undefined {
   if (typeof input !== 'string') return undefined
   const target = input.trim().toLowerCase()
-  return CRM_STATUSES.find(s => s === target)
+  const hit = CRM_STATUSES.find(s => s === target)
+  if (!hit && target && !warnedStatuses.has(target)) {
+    warnedStatuses.add(target)
+    console.warn(
+      `[crm] unknown status ${JSON.stringify(target)} — reading as "active". ` +
+      `Known statuses: ${CRM_STATUSES.join(', ')}.`
+    )
+  }
+  return hit
 }

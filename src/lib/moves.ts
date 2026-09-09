@@ -18,7 +18,7 @@ import type { Blocker } from './insights'
 import type { Opportunity } from './procurements'
 import type { StrategicDecision } from './gtm'
 import type { Channel } from './channels'
-import type { RoadmapItem } from './roadmap'
+import type { RoadmapMilestone } from './roadmap'
 import { CRM_TERMINAL_STAGES } from './config'
 
 export type MoveKind = 'strategic' | 'blocker' | 'bid-decision' | 'crm-due' | 'deadline' | 'channel' | 'roadmap'
@@ -80,7 +80,7 @@ export interface MovesInput {
   buckets: CrmBuckets
   opportunities: Opportunity[]
   channels: Channel[] // pre-filtered: channelAlerts() output
-  roadmap: RoadmapItem[] // pre-filtered: roadmapAlerts() output
+  roadmap: RoadmapMilestone[] // pre-filtered: roadmapAlerts() output
 }
 
 /**
