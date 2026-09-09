@@ -303,6 +303,22 @@ async function checkHandoff(a: Milestone, rowRepos: string[]): Promise<Checked> 
         handoff_at: at,
       }
     }
+    // Not found — say WHERE we looked, because "not resolved" is a mystery and
+    // this is a fact. It matters here: the mini's qual_table_automations clone
+    // is single-branch (`+refs/heads/main:refs/remotes/origin/main`), so the
+    // five BidPro handoffs are checked against `main` while that team works on
+    // `staging`. The board must not imply the work is missing when the truth is
+    // that this machine cannot see the branch it is on.
+    if (!pr && !spec) {
+      const single = (await git(r.dir, ['config', '--get-all', 'remote.origin.fetch']))
+        .split('\n').filter(Boolean)
+      const narrow = single.length === 1 && !single[0].includes('/*')
+      return {
+        slug: a.slug,
+        error: `"${landed}" not found at ${r.ref} in ${repoName}` +
+          (narrow ? ` — and this clone tracks only ${r.ref}, so other branches were not searched` : ''),
+      }
+    }
   }
 
   if (pr) return { slug: a.slug, handoff_state: 'pr-opened' }

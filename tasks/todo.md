@@ -1662,7 +1662,7 @@ a CRM stage (`demand`) and a fact typed once (`decision`).
 
 ## 13.1 Schema and files — `operations/roadmap/`
 
-- [ ] **`rows/<row>.md` — 12 rows.** Frontmatter: `slug`, `name`, `group`, `kind`, `product`
+- [x] **`rows/<row>.md` — 12 rows.** Frontmatter: `slug`, `name`, `group`, `kind`, `product`
       (nexus rows only), `north_star`, `strategy` (optional), `repos`, `evidence` (the row's
       default investment paths). Body: the draft's *"what the repo says"* and *"where it stands"*
       paragraphs, then `## Log` (append-only dated lines for retargets and strategic shifts).
@@ -1689,7 +1689,7 @@ a CRM stage (`demand`) and a fact typed once (`decision`).
       platform's star is whichever product stars its milestones serve…") so the lint holds
       without inventing one.
 
-- [ ] **`<milestone>.md` at the top level — 65, one per `####` block in the draft**, slug exactly
+- [x] **`<milestone>.md` at the top level — 65, one per `####` block in the draft**, slug exactly
       as the draft has it. Frontmatter:
       ```yaml
       slug: candor-price          # the draft's, verbatim
@@ -1712,7 +1712,7 @@ a CRM stage (`demand`) and a fact typed once (`decision`).
       the second is recorded in the body. Nothing can read green from this: with no target, a
       `build` milestone can only reach `no-target`, never `on-track`.
 
-- [ ] **Proof vocabulary — nine checks, and no tenth.**
+- [x] **Proof vocabulary — nine checks, and no tenth.**
 
       | check | fields | reads |
       |---|---|---|
@@ -1731,54 +1731,54 @@ a CRM stage (`demand`) and a fact typed once (`decision`).
       `bidpro-sourcing-closed-loop` ("thirty days pass with none found outside the workbench"),
       `platform-process-engine` (four triggers, deliberately not framed), `govhire-2e-resilience`.
 
-- [ ] **Retire the ten seed files** — their content now lives in `rows/`. **Rewrite `README.md`**
+- [x] **Retire the ten seed files** — their content now lives in `rows/`. **Rewrite `README.md`**
       for the new schema, the four kinds, the proof vocabulary, and the updated not-tracked list
       (**Attest is a row now**; Web Intelligence, Data Intelligence and Echo are not, each with
       the reason). **Keep `_draft-north-stars.md` until 13.5 verifies the split, then delete it.**
 
-- [ ] **Lint, inside the check, failing the run and logged:** every `unlocks`/`blocked_on` slug
+- [x] **Lint, inside the check, failing the run and logged:** every `unlocks`/`blocked_on` slug
       exists · no cycles in the unlocks graph · every `build` milestone has `evidence` · every
       `demand` and `decision` milestone has `proof` · every row has a `north_star`.
 
 ## 13.2 Derivation — `scripts/roadmap-check.ts`, `src/lib/roadmap.ts`
 
-- [ ] **Keep the existing state ladder** for `build` and `handoff` (all ten Phase 12 cases stay
+- [x] **Keep the existing state ladder** for `build` and `handoff` (all ten Phase 12 cases stay
       green). **Add proof evaluation** for `demand` and `decision`: all `proof` checks true →
       `done`; some true → `active`; none → `no-target`; `proof: manual` → `needs-person`.
-- [ ] **Per-milestone `stage`, separate from `state`** — a ladder, highest reached:
+- [x] **Per-milestone `stage`, separate from `state`** — a ladder, highest reached:
       `framed` (the file exists) → `committed` (target set) → `building` (evidence moved, handoff
       opened, or proof partially true) → `shipped` (`done` recorded or proof true) → `proven`
       (a `proven:` proof true, e.g. `consumed_by`, or thirty clean days after `done`).
-- [ ] **Per row: investment** — human commits on the row's evidence paths, 30d and 90d.
+- [x] **Per row: investment** — human commits on the row's evidence paths, 30d and 90d.
       `nexus-platform` = all Nexus human commits **minus** those touching any product row's
       paths (set difference on commit SHAs, not a second guess).
-- [ ] **Per row: pull** — CRM contacts for the row's `product` bucketed by stage, plus meetings
+- [x] **Per row: pull** — CRM contacts for the row's `product` bucketed by stage, plus meetings
       with `category: agency` in the last 90 days. Derived, written to `_status.md`.
-- [ ] **Build-next ranking, deterministic:** for each open milestone,
+- [x] **Build-next ranking, deterministic:** for each open milestone,
       `score = (milestones reachable through unlocks) × (1 + normalized pull of those milestones'
       rows) + urgency`, where urgency is overdue `+3`, target within 14 days `+2`, `waiting_on:
       Pavan` `+1`. Ties break on slug. Print the top ten with a one-line reason string.
-- [ ] **`_status.md` keeps its shape** (`generated_at`, `fingerprint`, `checked`, human table)
+- [x] **`_status.md` keeps its shape** (`generated_at`, `fingerprint`, `checked`, human table)
       and gains milestone rows, per-row investment and pull, and the ranking. Run-log line format
       unchanged, so the freshness contract and the fingerprint gate survive.
-- [ ] **`roadmap/` joins `DECISION_DIRS`** in `src/lib/gtm.ts` (recursing into `rows/`) so
+- [x] **`roadmap/` joins `DECISION_DIRS`** in `src/lib/gtm.ts` (recursing into `rows/`) so
       `[DECISION]` lines in rows and milestones reach the Today queue.
-- [ ] **CRM:** add `verbal-commitment` to `CRM_STAGES` after `pilot-discussion`; unknown statuses
+- [x] **CRM:** add `verbal-commitment` to `CRM_STAGES` after `pilot-discussion`; unknown statuses
       normalize to `active` **with a logged warning** rather than silently.
 
 ## 13.3 Page — `/roadmap`, the queue view
 
-- [ ] **Top: Build next** (top eight, each with its reason line), then **Decisions** (open
+- [x] **Top: Build next** (top eight, each with its reason line), then **Decisions** (open
       `[DECISION]` lines from `roadmap/`).
-- [ ] **Groups in this order:** Nexus products → Platform → Infinite Solutions bid-to-cash
+- [x] **Groups in this order:** Nexus products → Platform → Infinite Solutions bid-to-cash
       (BidPro, Contract Management) → Command Center → Web.
-- [ ] **Row card:** north star, strategy if any, investment (30d / 90d) and pull, then its
+- [x] **Row card:** north star, strategy if any, investment (30d / 90d) and pull, then its
       milestones in three columns **Now / Next / Later**. Each milestone: name, kind chip, five
       stage dots, state pill, target or "no target", `waiting_on`. Expanding shows done-when,
       proof, sources, log.
-- [ ] **The stale banner stays.** Every state on the page comes from `_status.md`; the page never
+- [x] **The stale banner stays.** Every state on the page comes from `_status.md`; the page never
       computes from a working tree. Split the render into `src/components/roadmap/`.
-- [ ] **Today:** Moves and Clock keep their roadmap wiring and now read **milestones** — slipped,
+- [x] **Today:** Moves and Clock keep their roadmap wiring and now read **milestones** — slipped,
       at-risk, stranded, and a decision past its target.
 
 ## 13.4 Two data corrections — ask Pavan, then apply
@@ -1791,19 +1791,19 @@ a CRM stage (`demand`) and a fact typed once (`decision`).
 
 ## 13.5 Verify — nothing is done until this passes
 
-- [ ] **Unit tests** (`node:test`, run through `scripts/run-ts.mjs`; no test framework exists in
+- [x] **Unit tests** (`node:test`, run through `scripts/run-ts.mjs`; no test framework exists in
       this repo today): `deriveState` — the ten Phase 12 cases still green · stage derivation ·
       each of the nine proof types · the ranking against a fixed fixture with a known order ·
       the lint (each failure mode fails).
-- [ ] **`pnpm build` clean.**
-- [ ] **`scripts/roadmap-check.ts --dry` here** prints every row and every milestone and
+- [x] **`pnpm build` clean.**
+- [x] **`scripts/roadmap-check.ts --dry` here** prints every row and every milestone and
       **refuses to write** — that is the correct outcome on a machine missing three repos.
-- [ ] **Real run on the mini over ssh**, and paste its `_status.md` summary.
-- [ ] **Screenshot `/roadmap`** in the preview and confirm: every north star visible; Build-next
+- [x] **Real run on the mini over ssh**, and paste its `_status.md` summary.
+- [x] **Screenshot `/roadmap`** in the preview and confirm: every north star visible; Build-next
       order matches the ranking printout; **no milestone reads green without a proof**.
 - [ ] Update this Phase 13 with results; `tasks/lessons.md` with anything Pavan corrects.
 - [ ] Delete `_draft-north-stars.md` once the split is verified.
-- [ ] **Open a PR; Pavan merges.** `deploy-on-merge` and the roadmap-check cron are installed on
+- [x] **Open a PR; Pavan merges.** `deploy-on-merge` and the roadmap-check cron are installed on
       the mini via `scripts/mini/`. If they are not, say so — do not touch the mini.
 
 ### Open questions for Pavan (asked in-session, not assumed)
@@ -1815,3 +1815,71 @@ a CRM stage (`demand`) and a fact typed once (`decision`).
    `waiting_on`, and measure no slips at all until the first date is set — the same finding
    Phase 12 produced, one level down.
 
+
+## Phase 13 review (2026-09-08)
+
+**Built:** `rows/*.md` ×12 and `<milestone>.md` ×65 in `operations/roadmap/` (the ten Phase 12
+seeds retired, every seed DoD carried by a milestone); `src/lib/roadmap.ts` rewritten around
+rows + milestones + `stage` + the ranking; `src/lib/roadmap-proof.ts` (new — the nine checks,
+behind a `GitOps` seam so they are testable without a repo); `scripts/roadmap-check.ts`
+extended with proof, investment, pull, ranking and the lint; `src/components/roadmap/` +
+`/roadmap` rewritten as a queue; `scripts/roadmap-test.ts` (new — 67 cases).
+
+**What the first real run on the mini actually says.** 12 rows, 65 milestones, lint clean,
+**zero targets and zero milestones `done`**:
+
+| state | n | what it means |
+|---|---:|---|
+| `no-target` | 39 | framed, some moving, nobody has set a date |
+| `needs-person` | 16 | `proof: manual` — no check can express the DoD |
+| `unknown` | 5 | the five BidPro handoffs (see below) |
+| `idle` | 5 | evidence cold ≥30d |
+
+That is the predicted outcome one level down from Phase 12: **nothing here has ever had a
+date**, so the board ranks by unlocks × pull and by who is holding the ball, and measures no
+slips at all. It starts answering "are we on time?" the moment Pavan sets the first target.
+
+**Investment vs pull — the contrast the two derived numbers exist to show:**
+
+| row | 30d / 90d | pull | reading |
+|---|---:|---:|---|
+| Candor | 13 / 165 | 0 | 165 human commits, no contact past `identified`, no agency meeting |
+| BidPro | 171 / 372 | 0 | the largest spend on the board, internal by definition |
+| Nexus platform | 54 / 322 | 0 | the complement — sweeps, correctly not credited to any product |
+| Milestone | 7 / 16 | 14 | the inverse: three agency meetings, almost no work |
+| Steward | 6 / 74 | 15 | one meeting in 90d — the OEIS correction below made it visible |
+| Web presence | 0 / 6 | 0 | red on day one, as designed |
+
+**Two defects this phase found in itself, both before merge:**
+
+1. **A false green in the proof engine.** `flag_default` reused the frontmatter rule where
+   `equals: true` means "present and truthy". A source token is a string, so
+   `di_grounding_enabled: bool = False` — a non-empty string — read as **done**. Caught by
+   verifying the single milestone that came back green on the first `--dry` run instead of
+   accepting it. Split into `fieldMatches` (parsed YAML) and `literalMatches` (source tokens),
+   pinned by a named regression test.
+2. **A proof that would have read done for the wrong reason.** `milestone-cdt-proposal` was
+   authored with `contact_stage ≥ contacted` on both CDT contacts — who already sit at
+   `pilot-discussion`, so it passed, while the proposal has been owed since 2026-07-29. The
+   half that would make it checkable is a human `via` log line, which no check can read. Now
+   `proof: manual`. `reporting-first-next-step` was demoted for the same class of reason: its
+   DoD is an OR of three routes and a `proof:` list is an AND.
+
+**Open, and now visible rather than hidden:** the five BidPro handoffs read `unknown` because
+the mini's `qual_table_automations` clone is single-branch on `main` while that team works on
+`staging`. The check now names the ref it searched and says the clone is narrow. The decision
+about which ref counts as "landed" is in `operations/workflows/bidpro-handoff-branch-question.md`
+— it needs Pavan, and neither option writes to their read-only repo.
+
+**Verified, not assumed:** 67/67 unit tests on both machines (deriveState's Phase 12 cases
+unchanged, stage derivation, all nine proof types, the ranking against a fixed fixture with a
+known order, every lint failure mode); `tsc` clean on both configs; `pnpm build` clean;
+`--dry` on the MacBook prints 12 rows and 65 milestones and refuses to write with 4 repos
+missing; the real run on the mini wrote and exited 0; `/roadmap` renders every north star, the
+Build-next order matches the mini's printout 1–8 exactly, no console errors, and **no milestone
+reads green** — checked by expanding `candor-price` (both checks ✗ with auditable details) and
+`milestone-cdt-proposal` (manual).
+
+**Not done, deliberately:** no targets were invented — the draft's dates say "suggested" and
+setting them is Pavan's. The retrofit of `verify-claims.ts` / `generate-registry.ts` onto
+`REPO_CANDIDATES` is still Phase 12's open item.

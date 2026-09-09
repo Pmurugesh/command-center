@@ -113,3 +113,33 @@
   pointed outward needs an explicit external-safe pass** — strip parentheticals, take the first
   sentence, and return NOTHING rather than something questionable. "The user edits before
   sending" is not a safety argument; the default has to be safe on its own.
+- **[2026-09-08]** Phase 13's proof vocabulary shipped a false green for about ten minutes.
+  `flag_default` reused `fieldMatches`, whose `equals: true` rule means "present and truthy" —
+  the right reading for a YAML frontmatter field, where `0` and `false` are real values. But a
+  flag default is lifted out of SOURCE, so the value is always a **string**, and the non-empty
+  string `"False"` is truthy. `di_grounding_enabled: bool = False` read as `done`. The first
+  `--dry` run caught it only because I stopped to verify the single milestone that came back
+  green instead of taking the pass at face value. **A comparison helper is written against one
+  type of input; reusing it on another type is a silent coercion bug, not reuse.** There are now
+  two named functions — `fieldMatches` for parsed YAML, `literalMatches` for source tokens — and
+  a regression test that names the date. The wider rule: **when a check you just wrote reports
+  success, go read the underlying file before believing it.** A vocabulary designed to prevent
+  false greens is worth nothing if its own first green is unverified.
+- **[2026-09-08]** Five BidPro handoff milestones resolved to `unknown` on the mini, with the
+  useless reason "Handoff state not resolved". The cause was two levels away from the roadmap
+  files: the mini's `qual_table_automations` clone is single-branch
+  (`+refs/heads/main:refs/remotes/origin/main`), and that team's work merged into `staging` —
+  a branch the clone can never fetch. The check was answering correctly against a ref that is
+  not where the answer lives. **When a check reports "cannot tell", the reason string has to
+  name what it looked at**, or the finding costs an investigation every time someone reads the
+  board. The state is now `unknown` with `"<literal>" not found at origin/main in
+  qual_table_automations — and this clone tracks only origin/main`, and the decision about which
+  ref counts as "landed" went to Pavan in `operations/workflows/` rather than being guessed.
+- **[2026-09-08]** Five subagents authored the 65 milestone files in parallel and three of them
+  flagged judgement calls I then had to overturn — most importantly `milestone-cdt-proposal`,
+  where a `contact_stage ≥ contacted` proof would have read **done** because both CDT contacts
+  already sit at `pilot-discussion`, while the proposal itself has been owed since 2026-07-29.
+  The agent followed my instruction exactly and said so rather than silently deviating, which is
+  the only reason it was caught. **When fanning out authoring work, require the report to name
+  every judgement call — and read those reports as findings, not as status.** Three of the five
+  reports contained a defect in MY specification, not in their work.
