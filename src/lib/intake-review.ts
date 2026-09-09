@@ -15,6 +15,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { PATHS } from './paths'
+import { localToday } from './dates'
 import { runCommandArgs } from './shell'
 import { acquireLock, atomicWrite, fileExists } from './store'
 import type { IntakeReviewItem, IntakeReviewStatus } from '@/types'
@@ -103,7 +104,7 @@ export async function setReviewStatus(
     const item = current.find(i => i.id === id)
     if (!item) return null
     item.status = status
-    item.resolvedAt = new Date().toISOString().slice(0, 10)
+    item.resolvedAt = localToday()
     await writeAll(current, `${status}: ${item.from}`, via)
     return item
   } finally {

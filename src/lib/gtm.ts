@@ -16,6 +16,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import matter from 'gray-matter'
 import { PATHS } from './paths'
+import { localToday } from './dates'
 import { runCommandArgs } from './shell'
 import { acquireLock, atomicWrite } from './store'
 import { listMeetings } from './meetings'
@@ -262,7 +263,7 @@ export async function resolveStrategicDecision(relFile: string, lineNumber: numb
     const lines = content.split('\n')
     const line = lines[lineNumber - 1]
     if (line === undefined || RESOLVED_RE.test(line)) return false
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localToday()
     lines[lineNumber - 1] = `${line} [RESOLVED ${today}]`
     await atomicWrite(abs, lines.join('\n'))
   } catch {

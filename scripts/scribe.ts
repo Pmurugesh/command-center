@@ -26,6 +26,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { PATHS } from '../src/lib/paths.ts'
+import { localToday } from '../src/lib/dates.ts'
 import { appendLog, listContacts } from '../src/lib/crm.ts'
 import { upsertPending } from '../src/lib/intake-review.ts'
 import type { IntakeReviewItem } from '../src/types/index.ts'
@@ -103,7 +104,7 @@ async function main() {
   const pendingFiles = names.filter(n => STAGED_NAME.test(n) && !ledger[n.replace('.json', '')])
 
   const counts = { in: 0, out: 0, review: 0, internal: 0, autoReply: 0, skipped: 0 }
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
 
   // The review queue is per correspondent, not per message: five emails from
   // one unknown person are one question, asked once.

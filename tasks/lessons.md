@@ -203,3 +203,19 @@
   commits and repos but not to people. When a record gap concerns something only a person witnessed,
   the honest render is "not recorded", and the next move is to ask them, not to narrate what the gap
   implies.
+- **[2026-09-08]** Pavan: "my system does[n't] have a good grasp on what the date actually is."
+  He was right, and I had already been bitten by it without diagnosing it. `new Date()
+  .toISOString().slice(0, 10)` is the UTC day, so in PDT it returns **tomorrow from 17:00 until
+  midnight** — seven hours, 29% of every day, and only in the evening, which is when this system is
+  used most. Proof: `resolveDecision` wrote `[RESOLVED 2026-09-09]` from a commit made at 18:04
+  local on 2026-09-08. Earlier that afternoon I hand-corrected four files carrying tomorrow's date
+  and wrote it up as **my own** slip. It was not mine; it was this line, in five places.
+  **When the same small wrongness appears more than once, stop fixing instances and go find the
+  generator.** A second occurrence is data, not coincidence.
+- **[2026-09-08]** The other half of that fix matters as much: two call sites that looked identical
+  were correct and had to be left alone. `toDateStr()` and `weekOf()` take a value already parsed
+  as **UTC midnight** (`new Date('2026-09-08')`), where reading local components yields 2026-09-07 —
+  so "converting a Date to a date string" and "asking what day it is" want **opposite** timezones
+  and are one character apart on screen. **Before applying a fix everywhere a pattern matches, ask
+  what each site's input actually is.** A blanket sed would have introduced a new off-by-one in
+  exactly the places that were already right.

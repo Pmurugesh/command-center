@@ -33,6 +33,7 @@ import {
   type GitOps, type ProofContext,
 } from '../src/lib/roadmap-proof.ts'
 import { stageAtLeast, wantsProduct, CRM_STAGES } from '../src/lib/config.ts'
+import { localToday, localDate, localDaysAgo } from '../src/lib/dates.ts'
 
 /** A fixed "now" so nothing in here depends on the day it runs. */
 const NOW = new Date('2026-09-08T12:00:00Z')
@@ -466,6 +467,35 @@ test('resolveField: dotted, list-addressed, and absent', () => {
   assert.equal(resolveField(data, 'list[x].done'), true)
   assert.equal(resolveField(data, 'list[nope].done'), undefined)
   assert.equal(resolveField(data, 'a.b.c.d'), undefined)
+})
+
+test('localDate is the LOCAL calendar day at every hour (regression, 2026-09-08)', () => {
+  // The bug: `new Date().toISOString().slice(0, 10)` is the UTC day, so in any
+  // negative-offset zone it returns TOMORROW for the last hours of the evening.
+  // It shipped: resolveDecision stamped `[RESOLVED 2026-09-09]` from a commit
+  // made at 18:04 local on 2026-09-08.
+  //
+  // TZ-independent by construction: whatever hour of 2026-09-08 you build, the
+  // local calendar day is 2026-09-08. The UTC slice fails this for some hour in
+  // every zone that is not UTC, which is the whole point.
+  for (let h = 0; h < 24; h++) {
+    const d = new Date(2026, 8, 8, h, 30, 0)
+    assert.equal(localDate(d), '2026-09-08', `hour ${h} local`)
+  }
+  assert.equal(localToday(new Date(2026, 8, 8, 18, 4, 0)), '2026-09-08')
+  // Month and year boundaries are where an off-by-one day does the most damage.
+  assert.equal(localDate(new Date(2026, 0, 1, 23, 59, 0)), '2026-01-01')
+  assert.equal(localDate(new Date(2025, 11, 31, 22, 0, 0)), '2025-12-31')
+})
+
+test('localDaysAgo walks calendar days, not 86,400,000ms', () => {
+  const now = new Date(2026, 8, 8, 22, 58, 0)
+  assert.equal(localDaysAgo(0, now), '2026-09-08')
+  assert.equal(localDaysAgo(1, now), '2026-09-07')
+  assert.equal(localDaysAgo(90, now), '2026-06-10')
+  // Across a DST fall-back a day is 25 hours; subtracting fixed milliseconds
+  // would land on the wrong date. 2026-11-01 is the US transition.
+  assert.equal(localDaysAgo(1, new Date(2026, 10, 2, 0, 30, 0)), '2026-11-01')
 })
 
 test('daysBetween counts calendar days in local time', () => {

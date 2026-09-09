@@ -41,6 +41,7 @@ import { execFile } from 'child_process'
 import crypto from 'crypto'
 import matter from 'gray-matter'
 import { PATHS, REPO_CANDIDATES } from '../src/lib/paths.ts'
+import { localDaysAgo } from '../src/lib/dates.ts'
 import { runCommandArgs } from '../src/lib/shell.ts'
 import {
   readAuthored, lintRoadmap, deriveState, deriveStage, rankBuildNext, topOpenByRow,
@@ -464,7 +465,7 @@ function rowPull(row: RoadmapRow, contacts: Contact[], meetings: Meeting[], now:
   const workedByStage: Record<string, number> = {}
   for (const c of worked) workedByStage[c.stage] = (workedByStage[c.stage] ?? 0) + 1
 
-  const cutoff = new Date(now.getTime() - 90 * 86_400_000).toISOString().slice(0, 10)
+  const cutoff = localDaysAgo(90, now)
   const slugs = new Set(mine.map(c => c.slug))
   const meetings90 = meetings.filter(m =>
     m.category === 'agency' && m.date >= cutoff && m.contacts.some(s => slugs.has(s))).length

@@ -18,6 +18,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import matter from 'gray-matter'
 import { PATHS } from './paths'
+import { localToday } from './dates'
 import { runCommandArgs } from './shell'
 import { acquireLock as acquireStoreLock, atomicWrite, fileExists } from './store'
 import {
@@ -34,11 +35,9 @@ const LOG_HEADING = '## Log'
 // Everything is date-only (YYYY-MM-DD) in local time. Contact aging is measured
 // in days, so timezone-correct calendar days matter more than instants.
 
-export function today(): string {
-  const d = new Date()
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-}
+/** Re-exported so every caller of `today()` keeps working; the definition lives
+ *  in `dates.ts` with the reasoning, and there is only one of it. */
+export const today = localToday
 
 /** Whole days from `date` to today. Negative = date is in the future. */
 function daysSince(date?: string): number | undefined {
