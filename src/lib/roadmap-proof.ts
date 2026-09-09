@@ -26,7 +26,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import matter from 'gray-matter'
 import { CRM_STAGES, NON_HUMAN_VIA, stageAtLeast, wantsProduct, type CrmStage } from './config'
-import type { ProofCheck, ProofResult } from './roadmap'
+import type { ProofCheck, ProofResult, HandoffState } from './roadmap'
 
 /** Git, as the proof engine needs it. The script supplies the real one; the
  *  tests supply a fake, which is the point of the seam. */
@@ -322,3 +322,127 @@ export async function evalCheck(c: ProofCheck, ctx: ProofContext): Promise<Proof
   }
   return { check: (c as { check: string }).check, ok: false, detail: 'unknown check' }
 }
+
+// ── handoffs ────────────────────────────────────────────────────────────────
+
+/**
+ * Git, as the HANDOFF check needs it — a second seam, deliberately not folded
+ * into `GitOps`.
+ *
+ * The nine proof checks want one ref per repo. A handoff wants *several*: the
+ * BidPro team merges to `staging` while `origin/main` moves separately, so
+ * "landed" has to be asked of each integration branch in turn and the answer has
+ * to say which one. Widening `GitOps.open` to return a list would have touched
+ * all nine working, tested checks to serve one that had no tests at all — the
+ * wrong direction. One implementation object in the script satisfies both.
+ *
+ * This interface exists because until 2026-09-08 `checkHandoff` reached for git
+ * directly and could not be tested. Five milestones ran through it — every
+ * BidPro handoff, the thing Pavan most needs frequent visibility into — with
+ * zero coverage.
+ */
+export interface HandoffOps {
+  /**
+   * Resolve and fetch. `refs` is the default branch first, then any integration
+   * branch this clone can actually see; `narrow` means the clone is
+   * single-branch and other branches were never fetched.
+   */
+  open(repo: string): Promise<{ dir: string; refs: string[]; narrow: boolean } | { error: string }>
+  /** Files containing `needle` at `ref`, optionally restricted to `sub`. */
+  grep(dir: string, ref: string, needle: string, sub?: string): Promise<number>
+  /** ISO instant when `needle` FIRST appeared at `ref`, or null. */
+  firstSeen(dir: string, ref: string, needle: string): Promise<string | null>
+  /** Last-commit ISO instant of a spec path in operations; null when absent. */
+  specAt(relPath: string): Promise<string | null>
+}
+
+export interface HandoffCheck {
+  state?: HandoffState
+  ageDays?: number | null
+  at?: string | null
+  /** Which ref the literal was found at. Only set with `state: 'merged'`. */
+  ref?: string | null
+  error?: string
+}
+
+/** The handoff's own frontmatter — narrowed so a test need not build a whole milestone. */
+export interface HandoffSpec {
+  spec?: string
+  landed?: string
+  consumedBy?: string
+  pr?: string
+}
+
+const ageInDays = (iso: string, now: Date) =>
+  Math.floor((now.getTime() - new Date(iso).getTime()) / 86_400_000)
+
+/**
+ * Handoff state, mechanically. `landed` must be a literal string that appears in
+ * their code (a route, an export, a table name), never prose — a claim that
+ * cites evidence can be checked.
+ *
+ * Order is the whole design, strongest evidence first:
+ *
+ *   consumed  OUR repo references what they shipped. The only state that means
+ *             the handoff produced value rather than motion.
+ *   merged    the literal exists on one of their integration refs.
+ *   pr-opened they have a PR out.
+ *   spec-sent we wrote the spec and nothing has come back.
+ *   unknown   nothing is resolvable — never green.
+ */
+export async function evalHandoff(
+  h: HandoffSpec,
+  rowRepos: string[],
+  ops: HandoffOps,
+  now: Date = new Date(),
+): Promise<HandoffCheck> {
+  const { spec, landed, consumedBy, pr } = h
+  const repoName = rowRepos[0]
+  if (!repoName) return { error: 'No repo declared on the row' }
+
+  if (landed) {
+    // Consumed outranks merged: ask OUR repo whether it actually references what
+    // they shipped. Merged-but-unconsumed is the worst outcome on this board —
+    // they did the work and nothing picked it up — so the two must not blur.
+    if (consumedBy) {
+      const cc = await ops.open('command-center')
+      if (!('error' in cc)) {
+        for (const ref of cc.refs) {
+          if (await ops.grep(cc.dir, ref, landed, consumedBy) > 0) return { state: 'consumed' }
+        }
+      }
+    }
+
+    const r = await ops.open(repoName)
+    if ('error' in r) return { error: r.error }
+
+    for (const ref of r.refs) {
+      if (await ops.grep(r.dir, ref, landed) === 0) continue
+      const at = await ops.firstSeen(r.dir, ref, landed)
+      return { state: 'merged', ageDays: at ? ageInDays(at, now) : null, at, ref }
+    }
+
+    // Not found. Say WHERE we looked: "not resolved" is a mystery, this is a
+    // fact. It matters — the mini's qual_table_automations clone was
+    // single-branch on `main` while that team works on `staging`, and the board
+    // must not imply work is missing when the truth is that this machine could
+    // not see the branch it is on.
+    if (!pr && !spec) {
+      return {
+        error: `"${landed}" not found at ${r.refs.join(' or ')} in ${repoName}` +
+          (r.narrow ? ' — and this clone is single-branch, so no other branch was searched' : ''),
+      }
+    }
+  }
+
+  if (pr) return { state: 'pr-opened' }
+
+  if (spec) {
+    const at = await ops.specAt(spec)
+    if (at === null) return { error: `Spec ${spec} not found` }
+    return { state: 'spec-sent', ageDays: at ? ageInDays(at, now) : null, at: at || null }
+  }
+
+  return { state: 'unknown' }
+}
+

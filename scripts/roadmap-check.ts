@@ -51,8 +51,8 @@ import {
 } from '../src/lib/roadmap.ts'
 import { stageAtLeast, wantsProduct } from '../src/lib/config.ts'
 import {
-  evalCheck, readContacts, readMeetings,
-  type Contact, type Meeting, type ProofContext, type GitOps,
+  evalCheck, evalHandoff, readContacts, readMeetings,
+  type Contact, type Meeting, type ProofContext, type GitOps, type HandoffOps,
 } from '../src/lib/roadmap-proof.ts'
 
 const DRY = process.argv.includes('--dry')
@@ -136,12 +136,19 @@ async function landedRefs(repo: string): Promise<string[]> {
   const hit = landedRefsCache.get(repo)
   if (hit) return hit
   const out = [await originRef(repo)]
+  // LIST the remote branches and intersect, rather than probing each one with
+  // `rev-parse --verify`. Probing works — runCommandArgs swallows the non-zero
+  // exit — but it logs `Command failed: git … origin/staging` for every repo
+  // that simply has no staging branch, which is most of them. A cron log that
+  // cries wolf on every run is a log nobody reads when something real breaks.
+  const remote = new Set(
+    (await git(repo, ['for-each-ref', '--format=%(refname:short)', 'refs/remotes/origin']))
+      .split('\n').map(x => x.trim()).filter(Boolean))
   for (const name of INTEGRATION_REFS) {
     const ref = `origin/${name}`
-    if (out.includes(ref)) continue
     // A single-branch clone cannot see it; scripts/mini/widen-clones.sh fixes
     // that on the mini, and until it runs the ref simply is not searched.
-    if ((await git(repo, ['rev-parse', '--verify', '-q', ref])).trim()) out.push(ref)
+    if (!out.includes(ref) && remote.has(ref)) out.push(ref)
   }
   landedRefsCache.set(repo, out)
   return out
@@ -259,6 +266,34 @@ const GIT: GitOps = {
   show: showAtRef,
 }
 
+/** The handoff seam's real implementation. Every git-specific decision — which
+ *  refs count, what "narrow" means, where a spec lives — is HERE, so
+ *  `evalHandoff` holds only the logic and a fake can drive all of it. */
+const HANDOFF: HandoffOps = {
+  async open(name) {
+    const r = await openRepo(name)
+    if ('error' in r) return r
+    const specs = (await git(r.dir, ['config', '--get-all', 'remote.origin.fetch']))
+      .split('\n').filter(Boolean)
+    // An ABSENT refspec is git's default, which is every branch — only an
+    // explicit single-branch spec is narrow.
+    return {
+      dir: r.dir,
+      refs: await landedRefs(r.dir),
+      narrow: specs.length > 0 && !specs.some(x => x.includes('/*')),
+    }
+  },
+  grep: grepAtRef,
+  firstSeen: whenLanded,
+  async specAt(relPath) {
+    const abs = path.join(PATHS.operationsRoot, relPath.replace(/^operations\//, ''))
+    if (!await exists(abs)) return null
+    return (await git(PATHS.operationsRoot, [
+      'log', '-1', '--format=%aI', 'HEAD', '--', path.relative(PATHS.operationsRoot, abs),
+    ])).trim()
+  },
+}
+
 // ── per-milestone checks ────────────────────────────────────────────────────
 
 interface Checked {
@@ -314,71 +349,21 @@ async function checkBuild(a: Milestone): Promise<Checked> {
 }
 
 /**
- * Handoff state, mechanically. `landed` must be a literal string that appears
- * in their code (a route, an export), not prose — this is the verify-claims
- * mechanic: a claim that cites evidence can be checked.
+ * Handoff state — a thin adapter now. The logic lives in `evalHandoff` in
+ * roadmap-proof.ts behind the `HandoffOps` seam, so it can be tested against a
+ * fake instead of five real clones. Until 2026-09-08 it lived here, reached for
+ * git directly, and had no tests at all.
  */
 async function checkHandoff(a: Milestone, rowRepos: string[]): Promise<Checked> {
-  const { spec, landed, consumedBy, pr } = a.handoff ?? {}
-  const repoName = rowRepos[0]
-  if (!repoName) return { slug: a.slug, error: 'No repo declared on the row' }
-
-  if (landed) {
-    // Consumed? Ask OUR repo whether it actually references what they shipped.
-    if (consumedBy) {
-      const cc = await openRepo('command-center')
-      if (!('error' in cc) && await grepAtRef(cc.dir, cc.ref, landed, consumedBy) > 0) {
-        return { slug: a.slug, handoff_state: 'consumed' }
-      }
-    }
-    const r = await openRepo(repoName)
-    if ('error' in r) return { slug: a.slug, error: r.error }
-    const refs = await landedRefs(r.dir)
-    for (const ref of refs) {
-      if (await grepAtRef(r.dir, ref, landed) === 0) continue
-      const at = await whenLanded(r.dir, ref, landed)
-      return {
-        slug: a.slug,
-        handoff_state: 'merged',
-        handoff_age_days: at ? days(at) : null,
-        handoff_at: at,
-        handoff_ref: ref,
-      }
-    }
-    // Not found — say WHERE we looked, because "not resolved" is a mystery and
-    // this is a fact. It matters here: the mini's qual_table_automations clone
-    // is single-branch (`+refs/heads/main:refs/remotes/origin/main`), so the
-    // five BidPro handoffs are checked against `main` while that team works on
-    // `staging`. The board must not imply the work is missing when the truth is
-    // that this machine cannot see the branch it is on.
-    if (!pr && !spec) {
-      const specs = (await git(r.dir, ['config', '--get-all', 'remote.origin.fetch']))
-        .split('\n').filter(Boolean)
-      // An ABSENT refspec is git's default, which is every branch — only an
-      // explicit single-branch spec is narrow.
-      const narrow = specs.length > 0 && !specs.some(x => x.includes('/*'))
-      return {
-        slug: a.slug,
-        error: `"${landed}" not found at ${refs.join(' or ')} in ${repoName}` +
-          (narrow ? ' — and this clone is single-branch, so no other branch was searched' : ''),
-      }
-    }
+  const r = await evalHandoff(a.handoff ?? {}, rowRepos, HANDOFF)
+  return {
+    slug: a.slug,
+    ...(r.state ? { handoff_state: r.state } : {}),
+    ...(r.ageDays !== undefined ? { handoff_age_days: r.ageDays } : {}),
+    ...(r.at !== undefined ? { handoff_at: r.at } : {}),
+    ...(r.ref ? { handoff_ref: r.ref } : {}),
+    ...(r.error ? { error: r.error } : {}),
   }
-
-  if (pr) return { slug: a.slug, handoff_state: 'pr-opened' }
-
-  if (spec) {
-    const abs = path.join(PATHS.operationsRoot, spec.replace(/^operations\//, ''))
-    if (await exists(abs)) {
-      const at = (await git(PATHS.operationsRoot, [
-        'log', '-1', '--format=%aI', 'HEAD', '--', path.relative(PATHS.operationsRoot, abs),
-      ])).trim()
-      return { slug: a.slug, handoff_state: 'spec-sent', handoff_age_days: at ? days(at) : null, handoff_at: at || null }
-    }
-    return { slug: a.slug, error: `Spec ${spec} not found` }
-  }
-
-  return { slug: a.slug, handoff_state: 'unknown' }
 }
 
 async function checkProof(a: Milestone, ctx: ProofContext): Promise<Checked> {

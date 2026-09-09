@@ -2072,3 +2072,39 @@ proof checks, which have `GitOps`); worth adding, not tonight.
 
 **Open:** targets for `cm-production-books`, `platform-hosted-demo` and `attest-oeis-demo` — Pavan
 chose to date those three; the dates themselves are still his to give.
+
+---
+
+## Phase 13 addendum — the handoff seam (2026-09-08)
+
+**The gap.** The nine proof checks take git through `GitOps`, so a test can hand them a fake repo.
+`checkHandoff` did not — it reached for `openRepo`/`grepAtRef`/`git` directly, so it could not be
+tested at all. Five milestones ran through it, every one of them BidPro, which is the row Pavan
+said he needs frequent visibility into. Zero coverage.
+
+It showed the moment I changed it for the staging-branch work: I could only verify with a throwaway
+git fixture, which proves **git behaves as I assumed**, not that **my code calls git correctly**.
+
+**The fix.** `HandoffOps` — a second seam in `roadmap-proof.ts`, deliberately not folded into
+`GitOps`: the nine checks want one ref per repo, a handoff wants several, and widening `GitOps.open`
+would have touched nine working tested checks to serve one with no tests. One implementation object
+in the script satisfies both. `evalHandoff` now holds the logic; `checkHandoff` is a 12-line
+adapter; every git-specific decision (which refs count, what "narrow" means, where a spec lives)
+sits in the implementation.
+
+- [x] 12 tests, 83 → **95**. Cover: merged on the default ref · merged on `staging` when `main`
+      lacks it (the BidPro case) · default ref wins when both have it · not-found naming every ref
+      and flagging a narrow clone · `consumed` outranking `merged` · a reference outside
+      `consumed_by` NOT counting · an unreachable command-center not blocking the merged answer ·
+      pr/spec fall-through with age from an injected `now` · a declared-but-missing spec being an
+      error not `spec-sent` · no-repo vs unusable-repo · nothing-declared being `unknown`.
+- [x] **Verified behaviour-neutral**: `--dry` output byte-identical before and after, 67 lines of
+      git-coupled logic moved.
+
+**Found while refactoring, and it would have hit the mini.** `landedRefs` probed for
+`origin/staging` with `rev-parse --verify`. `runCommandArgs` swallows the non-zero exit, so it
+worked — but it logged `Command failed: git … origin/staging` for every repo with no staging
+branch, which is most of them. On this MacBook the probe never ran (the row repo isn't cloned, so
+`openRepo` errored first); the refactor routed `command-center` through the same path and exposed
+it. Now one `for-each-ref` listing intersected against `INTEGRATION_REFS` — no error path, no noise.
+A cron log that cries wolf every run is a log nobody reads when something real breaks.

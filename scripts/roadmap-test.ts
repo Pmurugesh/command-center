@@ -29,8 +29,8 @@ import {
   type RoadmapMilestone, type RoadmapRow, type DerivedEntry, type Stage,
 } from '../src/lib/roadmap.ts'
 import {
-  evalCheck, readContacts, readMeetings, resolveField, fieldMatches, literalMatches,
-  type GitOps, type ProofContext,
+  evalCheck, evalHandoff, readContacts, readMeetings, resolveField, fieldMatches, literalMatches,
+  type GitOps, type ProofContext, type HandoffOps,
 } from '../src/lib/roadmap-proof.ts'
 import { stageAtLeast, wantsProduct, CRM_STAGES } from '../src/lib/config.ts'
 import { localToday, localDate, localDaysAgo } from '../src/lib/dates.ts'
@@ -775,3 +775,180 @@ test('demand: interest in some OTHER product is still not demand for this row', 
   const other = contact({ product: 'assistants', interestedIn: ['plan-review'] })
   assert.deepEqual(roadmapDemandSignals(rows, [other], NOW), [])
 })
+
+// ── handoffs ────────────────────────────────────────────────────────────────
+// These exist because until 2026-09-08 `checkHandoff` reached for git directly
+// and could not be tested at all — five milestones, every BidPro handoff, with
+// zero coverage. The fake below is the whole point of the `HandoffOps` seam.
+
+interface FakeCfg {
+  /** repo name → what `open` answers. */
+  repos?: Record<string, { refs: string[]; narrow?: boolean } | { error: string }>
+  /** `dir@ref` → needles present. A needle scoped to a sub-path is `needle#sub`. */
+  hits?: Record<string, string[]>
+  /** `dir@ref@needle` → ISO instant it first appeared. */
+  first?: Record<string, string>
+  /** spec path → ISO instant. Absent key means the file does not exist. */
+  specs?: Record<string, string>
+}
+
+const fakeOps = (cfg: FakeCfg): HandoffOps => ({
+  async open(name) {
+    const r = cfg.repos?.[name]
+    if (!r) return { error: `${name} not configured` }
+    if ('error' in r) return r
+    return { dir: name, refs: r.refs, narrow: r.narrow ?? false }
+  },
+  async grep(dir, ref, needle, sub) {
+    const present = cfg.hits?.[`${dir}@${ref}`] ?? []
+    return present.includes(sub ? `${needle}#${sub}` : needle) ? 1 : 0
+  },
+  async firstSeen(dir, ref, needle) {
+    return cfg.first?.[`${dir}@${ref}@${needle}`] ?? null
+  },
+  async specAt(relPath) {
+    return Object.prototype.hasOwnProperty.call(cfg.specs ?? {}, relPath)
+      ? cfg.specs![relPath]
+      : null
+  },
+})
+
+const QT = { repos: { qual_table_automations: { refs: ['origin/main', 'origin/staging'] } } }
+
+test('handoff: a literal on the default ref is merged, and says which ref', async () => {
+  const got = await evalHandoff({ landed: 'bid_plan_items' }, ['qual_table_automations'], fakeOps({
+    ...QT,
+    hits: { 'qual_table_automations@origin/main': ['bid_plan_items'] },
+    first: { 'qual_table_automations@origin/main@bid_plan_items': '2026-08-01T00:00:00Z' },
+  }), NOW)
+  assert.equal(got.state, 'merged')
+  assert.equal(got.ref, 'origin/main')
+})
+
+test('handoff: found on staging when main does not have it — the BidPro case', async () => {
+  // The whole reason for the 2026-09-08 change: their team merges to `staging`
+  // and origin/main moves separately, so checking one ref rendered `unknown`.
+  const got = await evalHandoff({ landed: 'bid_plan_items' }, ['qual_table_automations'], fakeOps({
+    ...QT,
+    hits: { 'qual_table_automations@origin/staging': ['bid_plan_items'] },
+    first: { 'qual_table_automations@origin/staging@bid_plan_items': '2026-09-01T00:00:00Z' },
+  }), NOW)
+  assert.equal(got.state, 'merged')
+  assert.equal(got.ref, 'origin/staging', 'the ref must be reported, not implied')
+})
+
+test('handoff: the default ref wins when BOTH have the literal', async () => {
+  // `merged on main` is a stronger claim than `merged on staging`; if both are
+  // true the board must report the stronger one.
+  const got = await evalHandoff({ landed: 'x' }, ['qual_table_automations'], fakeOps({
+    ...QT,
+    hits: {
+      'qual_table_automations@origin/main': ['x'],
+      'qual_table_automations@origin/staging': ['x'],
+    },
+  }), NOW)
+  assert.equal(got.ref, 'origin/main')
+})
+
+test('handoff: not found names every ref searched, and flags a single-branch clone', async () => {
+  const narrow = await evalHandoff({ landed: 'awarded_at' }, ['qual_table_automations'], fakeOps({
+    repos: { qual_table_automations: { refs: ['origin/main'], narrow: true } },
+  }), NOW)
+  assert.match(narrow.error!, /"awarded_at" not found at origin\/main/)
+  assert.match(narrow.error!, /single-branch/)
+
+  const wide = await evalHandoff({ landed: 'awarded_at' }, ['qual_table_automations'], fakeOps({
+    ...QT,
+  }), NOW)
+  assert.match(wide.error!, /origin\/main or origin\/staging/)
+  assert.doesNotMatch(wide.error!, /single-branch/, 'a wide clone must not be blamed')
+})
+
+test('handoff: consumed outranks merged — value, not motion', async () => {
+  // Merged-but-unconsumed is the worst outcome on this board: they did the work
+  // and nothing picked it up. The two must never blur.
+  const got = await evalHandoff(
+    { landed: 'status_changed_at', consumedBy: 'scripts/sync-bids.ts' },
+    ['qual_table_automations'],
+    fakeOps({
+      repos: {
+        ...QT.repos,
+        'command-center': { refs: ['origin/main'] },
+      },
+      hits: {
+        'command-center@origin/main': ['status_changed_at#scripts/sync-bids.ts'],
+        'qual_table_automations@origin/main': ['status_changed_at'],
+      },
+    }), NOW)
+  assert.equal(got.state, 'consumed')
+  assert.equal(got.ref, undefined, 'consumed is about OUR repo, so their ref does not apply')
+})
+
+test('handoff: a reference OUTSIDE consumed_by does not count as consumed', async () => {
+  const got = await evalHandoff(
+    { landed: 'status_changed_at', consumedBy: 'scripts/sync-bids.ts' },
+    ['qual_table_automations'],
+    fakeOps({
+      repos: { ...QT.repos, 'command-center': { refs: ['origin/main'] } },
+      // present in command-center, but not under the declared path
+      hits: {
+        'command-center@origin/main': ['status_changed_at'],
+        'qual_table_automations@origin/main': ['status_changed_at'],
+      },
+      first: { 'qual_table_automations@origin/main@status_changed_at': '2026-08-01T00:00:00Z' },
+    }), NOW)
+  assert.equal(got.state, 'merged', 'falls back to merged, never to consumed')
+})
+
+test('handoff: an unreachable command-center does not block the merged answer', async () => {
+  const got = await evalHandoff(
+    { landed: 'x', consumedBy: 'scripts/a.ts' }, ['qual_table_automations'], fakeOps({
+      ...QT,   // command-center deliberately not configured -> open() errors
+      hits: { 'qual_table_automations@origin/main': ['x'] },
+    }), NOW)
+  assert.equal(got.state, 'merged')
+})
+
+test('handoff: pr and spec fall through in order, and each carries its age', async () => {
+  const pr = await evalHandoff({ pr: 'https://github.com/x/y/pull/1' }, ['r'],
+    fakeOps({ repos: { r: { refs: ['origin/main'] } } }), NOW)
+  assert.equal(pr.state, 'pr-opened')
+
+  const spec = await evalHandoff({ spec: 'operations/workflows/a.md' }, ['r'], fakeOps({
+    repos: { r: { refs: ['origin/main'] } },
+    specs: { 'operations/workflows/a.md': '2026-08-29T00:00:00Z' },
+  }), NOW)
+  assert.equal(spec.state, 'spec-sent')
+  assert.equal(spec.ageDays, 10, 'age is measured from the injected now, not the wall clock')
+})
+
+test('handoff: a declared spec that does not exist is an error, not spec-sent', async () => {
+  const got = await evalHandoff({ spec: 'operations/workflows/missing.md' }, ['r'],
+    fakeOps({ repos: { r: { refs: ['origin/main'] } } }), NOW)
+  assert.match(got.error!, /Spec .*missing\.md not found/)
+  assert.equal(got.state, undefined)
+})
+
+test('handoff: a missing landed literal still yields to pr/spec rather than erroring', async () => {
+  // A handoff can declare both. If the literal is absent but a PR is open, the
+  // honest answer is pr-opened — not "not found".
+  const got = await evalHandoff({ landed: 'nope', pr: 'https://x/1' }, ['qual_table_automations'],
+    fakeOps({ ...QT }), NOW)
+  assert.equal(got.state, 'pr-opened')
+  assert.equal(got.error, undefined)
+})
+
+test('handoff: no repo on the row, and an unusable repo, are different errors', async () => {
+  const noRepo = await evalHandoff({ landed: 'x' }, [], fakeOps({}), NOW)
+  assert.match(noRepo.error!, /No repo declared/)
+
+  const broken = await evalHandoff({ landed: 'x' }, ['r'],
+    fakeOps({ repos: { r: { error: 'r not cloned on this machine' } } }), NOW)
+  assert.match(broken.error!, /not cloned/)
+})
+
+test('handoff: nothing declared is unknown — never green', async () => {
+  const got = await evalHandoff({}, ['r'], fakeOps({ repos: { r: { refs: ['origin/main'] } } }), NOW)
+  assert.equal(got.state, 'unknown')
+})
+
