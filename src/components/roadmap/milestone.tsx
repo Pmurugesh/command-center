@@ -193,7 +193,13 @@ function EvidenceList({ item }: { item: RoadmapMilestone }) {
     const { spec, landed, consumedBy, pr } = item.handoff ?? {}
     return (
       <div className="min-w-0 space-y-1 text-xs">
-        <Field label="Handoff">{item.handoffState ?? 'unknown'}</Field>
+        {/* The ref is not decoration: `merged` on an integration branch is a
+            weaker claim than `merged` on the default branch, and the two must
+            not read the same. */}
+        <Field label="Handoff">
+          {item.handoffState ?? 'unknown'}
+          {item.handoffRef && <span className="text-muted-foreground"> at {item.handoffRef}</span>}
+        </Field>
         {landed && <Field label="Landed">{landed}</Field>}
         {consumedBy && <Field label="Consumed by">{consumedBy}</Field>}
         {spec && <Field label="Spec">{spec}</Field>}

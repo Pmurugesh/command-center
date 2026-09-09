@@ -173,3 +173,58 @@
   `deriveState` reached `no-target` first for an unrelated reason. **Authoring errors and genuine
   unknowns must not render the same.** Absence renders unknown by design; a pattern that cannot
   compile now fails in `lintRoadmap`, loudly, before the board is generated.
+- **[2026-09-08]** Third instance of one class of defect, so it gets a name: **a check that is
+  mechanically right and substantively wrong.** (1) `flag_default` read a non-empty string as
+  truthy. (2) `milestone-cdt-proposal` passed a `contact_stage ≥ contacted` threshold while the
+  proposal itself had been owed since 2026-07-29. (3) `attest-oeis-demo` used `meeting_logged` with
+  a title regex — and when Pavan gave me the real 2026-08-31 meeting to log, an honest write-up of a
+  **partial** Attest showing that ended with the client asking to see more sat one title-word away
+  from flipping the milestone to **done**. **The tell in all three: the check proves a PROXY for the
+  claim, not the claim.** Before adding a check, ask what the cheapest way to make it pass would be,
+  and whether that way would satisfy the definition of done. Two structural traps to watch for
+  specifically: a `proof:` list is an AND that reads done when every entry passes, so a
+  necessary-but-insufficient check cannot live in one; and a check whose input a person authors
+  (a meeting title, a file name) is self-fulfilling. `proof: manual` is not a failure to automate —
+  it is the correct answer when a person is genuinely required.
+- **[2026-09-08]** I set the first three targets and the board immediately produced its first green:
+  `platform-hosted-demo` read **on-track**. It rested on
+  `fix(security): close Paladin C2/C3/H5/H6… harden data-plane CORS` — infrastructure work touching
+  `deployment/`, nothing to do with a demo tenant. The derivation was correct; **my evidence paths
+  were too broad**. **When a state changes, check what it changed BECAUSE of before reporting it** —
+  the first green on a board that had none is exactly the result most worth distrusting. I recorded
+  the limitation in the milestone rather than repointing the paths by guess, because no path in that
+  repo uniquely means "a seeded tenant exists at a URL", and inventing precision would have been the
+  same mistake in the other direction.
+- **[2026-09-08]** I wrote "that window passed with no meeting logged" about Pavan's warmest contact,
+  inferring a lapsed calendar invite from two `via recall` log lines. Pavan: "she was trying to
+  reschedule our 8/31 meeting but we ended up having it." The meeting had happened; only the *record*
+  was missing. **Absent evidence about a HUMAN interaction is not evidence of absence** — the board's
+  "absence renders unknown, never green" rule applies to states, and I had applied its spirit to
+  commits and repos but not to people. When a record gap concerns something only a person witnessed,
+  the honest render is "not recorded", and the next move is to ask them, not to narrate what the gap
+  implies.
+- **[2026-09-08]** Pavan: "my system does[n't] have a good grasp on what the date actually is."
+  He was right, and I had already been bitten by it without diagnosing it. `new Date()
+  .toISOString().slice(0, 10)` is the UTC day, so in PDT it returns **tomorrow from 17:00 until
+  midnight** — seven hours, 29% of every day, and only in the evening, which is when this system is
+  used most. Proof: `resolveDecision` wrote `[RESOLVED 2026-09-09]` from a commit made at 18:04
+  local on 2026-09-08. Earlier that afternoon I hand-corrected four files carrying tomorrow's date
+  and wrote it up as **my own** slip. It was not mine; it was this line, in five places.
+  **When the same small wrongness appears more than once, stop fixing instances and go find the
+  generator.** A second occurrence is data, not coincidence.
+- **[2026-09-08]** The other half of that fix matters as much: two call sites that looked identical
+  were correct and had to be left alone. `toDateStr()` and `weekOf()` take a value already parsed
+  as **UTC midnight** (`new Date('2026-09-08')`), where reading local components yields 2026-09-07 —
+  so "converting a Date to a date string" and "asking what day it is" want **opposite** timezones
+  and are one character apart on screen. **Before applying a fix everywhere a pattern matches, ask
+  what each site's input actually is.** A blanket sed would have introduced a new off-by-one in
+  exactly the places that were already right.
+- **[2026-09-08]** The same UTC-vs-local bug had a second, more expensive instance I only found by
+  sweeping for the *pattern* rather than stopping at the first fix: `moves.ts` sliced
+  `Opportunity.deadlineAt`, a UTC instant built from a **local** wall-clock time, and
+  `parseDeadline` defaults to **17:00 when a solicitation gives no time** — which in PDT is exactly
+  midnight UTC. So it was not an edge case, it was the common path: **4 of 18 live solicitation
+  deadlines were rendering a day late**, feeding both the urgency score and the `daysUntil > 7`
+  gate that decides whether a bid appears on Today at all. **After fixing a bug, grep for its shape,
+  not its line** — and rank the hits by what each one costs. A stale "last run" label is cosmetic; a
+  bid deadline a day late is not.

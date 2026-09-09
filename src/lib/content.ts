@@ -17,6 +17,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import matter from 'gray-matter'
 import { PATHS } from './paths'
+import { localToday } from './dates'
 import { runCommandArgs } from './shell'
 import type { ContentSuggestion, ContentStatus, ContentSource, ContentBaselineRow } from '@/types'
 
@@ -213,7 +214,7 @@ export async function decideSuggestion(
   // status separately and risk outcome data attached to a 'picked' row.
   if (patch.publishedUrl && next.status !== 'published') {
     next.status = 'published'
-    if (!next.publishedAt) next.publishedAt = new Date().toISOString().slice(0, 10)
+    if (!next.publishedAt) next.publishedAt = localToday()
   }
   // Stamp only when the decision itself changed, so editing feedback later
   // doesn't rewrite when you made the call.

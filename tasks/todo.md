@@ -2013,3 +2013,98 @@ clean at 13 rows / 66 milestones.
 **Still open:** the `pull` columns, the cleared Candor warning and Attest's new squeeze flag all
 land when the mini regenerates `_status.md` — `_` files are derived and this machine refuses to
 write them. The vendor for the demo API container is deliberately unpinned.
+
+---
+
+## Phase 13 addendum — context session 4 (2026-09-08)
+
+**CRM backfill, found by scanning rather than by asking.** I ran the same pattern that hid OEIS
+across every human-written log line: which contacts mention a product they are not filed under.
+Three candidates, two real:
+
+- **Shafi Mohammed** (OEIS) — title *is* "Wildfire Mitigation Plan program", log records a
+  "wildfire mitigation plan comparison demo" in Sept 2025, filed `assistants` → `[plan-review]`.
+  The finding underneath: Attest's flagship use case had **already been demoed** to the OEIS
+  program owner a year ago and the board could not see it.
+- **Robert Payne** (CDT) — the July demos named a "PRA module" and "ad hoc querying" →
+  `[prr, ad-hoc-reporting]`.
+- **Amarjot** — rejected. Matched only on "procurement" meaning their *buying process*, not the
+  Proc product. Exactly why this field is set by a person and never inferred.
+
+Pull moved more than predicted, because **agency meetings flow through the same filter**:
+
+| row | before today | after | note |
+|---|---:|---:|---|
+| Attest | 0 | **12** | Jim Wang, Pindy, Shafi |
+| Candor | 0 | **17** | Pindy + Robert; meetings 90d 0 → 4 |
+| Reporting | 3 | **13** | Robert; meetings 90d 0 → 3 |
+| Steward | 15 | **17** | Jim Wang |
+
+**`reporting-eval-live` retired** (Pavan: drop the nightly eval). ~$490/mo warehouse, last run
+failed on missing secrets 2026-07-20. The consequence is written into the row rather than left
+implied: **the accuracy claim in the OEIS deep dive is now unverified, not pending.** A milestone
+left open implies someone intends to close it.
+
+**Handoff checks search integration branches** (Pavan: "fetch staging too because i need to know
+where progress is frequently"). Three parts:
+
+- `scripts/mini/widen-clones.sh` — new, in `post-deploy.sh`, so it deploys by merge. Rewrites a
+  clone's refspec **only when it is explicitly single-branch**, and fetches once. Local clone
+  config only: nothing is written to any remote, so the read-only rule is untouched.
+- `INTEGRATION_REFS = ['staging']` in `roadmap-check.ts` — deliberately a short list, not "every
+  remote branch". A literal on an abandoned feature branch is not landed, and reporting it as
+  merged would be worse than reporting nothing.
+- `handoff_ref` recorded and **shown** — `merged at origin/staging` never reads as `merged`.
+
+Two bugs in my own installer, caught by running it: `mapfile` is bash 4 and macOS ships 3.2; and
+because it failed, an *empty* refspec read as "narrow" and the script rewrote a clone that was
+already correct (harmless — it set git's own default — but the same mistake on a deliberate partial
+clone would not be). Both fixed; absent refspec now means leave alone.
+
+**Verified:** fixture repo reproducing the exact BidPro shape — narrow clone cannot see
+`origin/staging` and greps 0 hits on `main`; after widening it sees staging and finds the literal
+there. 81/81 tests, `tsc` clean, eslint clean, `--dry` lints clean.
+
+**NOT verified, and it cannot be from here:** the wiring inside `checkHandoff` against the real
+`qual_table_automations` — that repo is not cloned on this MacBook. The five BidPro handoffs
+resolve on the mini's next run after the merge. `checkHandoff` has no unit seam (unlike the nine
+proof checks, which have `GitOps`); worth adding, not tonight.
+
+**Open:** targets for `cm-production-books`, `platform-hosted-demo` and `attest-oeis-demo` — Pavan
+chose to date those three; the dates themselves are still his to give.
+
+---
+
+## Phase 13 addendum — the handoff seam (2026-09-08)
+
+**The gap.** The nine proof checks take git through `GitOps`, so a test can hand them a fake repo.
+`checkHandoff` did not — it reached for `openRepo`/`grepAtRef`/`git` directly, so it could not be
+tested at all. Five milestones ran through it, every one of them BidPro, which is the row Pavan
+said he needs frequent visibility into. Zero coverage.
+
+It showed the moment I changed it for the staging-branch work: I could only verify with a throwaway
+git fixture, which proves **git behaves as I assumed**, not that **my code calls git correctly**.
+
+**The fix.** `HandoffOps` — a second seam in `roadmap-proof.ts`, deliberately not folded into
+`GitOps`: the nine checks want one ref per repo, a handoff wants several, and widening `GitOps.open`
+would have touched nine working tested checks to serve one with no tests. One implementation object
+in the script satisfies both. `evalHandoff` now holds the logic; `checkHandoff` is a 12-line
+adapter; every git-specific decision (which refs count, what "narrow" means, where a spec lives)
+sits in the implementation.
+
+- [x] 12 tests, 83 → **95**. Cover: merged on the default ref · merged on `staging` when `main`
+      lacks it (the BidPro case) · default ref wins when both have it · not-found naming every ref
+      and flagging a narrow clone · `consumed` outranking `merged` · a reference outside
+      `consumed_by` NOT counting · an unreachable command-center not blocking the merged answer ·
+      pr/spec fall-through with age from an injected `now` · a declared-but-missing spec being an
+      error not `spec-sent` · no-repo vs unusable-repo · nothing-declared being `unknown`.
+- [x] **Verified behaviour-neutral**: `--dry` output byte-identical before and after, 67 lines of
+      git-coupled logic moved.
+
+**Found while refactoring, and it would have hit the mini.** `landedRefs` probed for
+`origin/staging` with `rev-parse --verify`. `runCommandArgs` swallows the non-zero exit, so it
+worked — but it logged `Command failed: git … origin/staging` for every repo with no staging
+branch, which is most of them. On this MacBook the probe never ran (the row repo isn't cloned, so
+`openRepo` errored first); the refactor routed `command-center` through the same path and exposed
+it. Now one `for-each-ref` listing intersected against `INTEGRATION_REFS` — no error path, no noise.
+A cron log that cries wolf every run is a log nobody reads when something real breaks.

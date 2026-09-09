@@ -29,10 +29,14 @@ import {
   type RoadmapMilestone, type RoadmapRow, type DerivedEntry, type Stage,
 } from '../src/lib/roadmap.ts'
 import {
-  evalCheck, readContacts, readMeetings, resolveField, fieldMatches, literalMatches,
-  type GitOps, type ProofContext,
+  evalCheck, evalHandoff, readContacts, readMeetings, resolveField, fieldMatches, literalMatches,
+  type GitOps, type ProofContext, type HandoffOps,
 } from '../src/lib/roadmap-proof.ts'
 import { stageAtLeast, wantsProduct, CRM_STAGES } from '../src/lib/config.ts'
+import { localToday, localDate, localDaysAgo } from '../src/lib/dates.ts'
+import { maxGapHours, parseCron } from '../src/lib/cron-schedule.ts'
+import { viewDeploy, type DeployState } from '../src/lib/deploy-state.ts'
+import { evaluateBeat, lateAfterHours, findings, type Pipeline, type Evidence } from '../src/lib/heartbeat.ts'
 
 /** A fixed "now" so nothing in here depends on the day it runs. */
 const NOW = new Date('2026-09-08T12:00:00Z')
@@ -468,6 +472,35 @@ test('resolveField: dotted, list-addressed, and absent', () => {
   assert.equal(resolveField(data, 'a.b.c.d'), undefined)
 })
 
+test('localDate is the LOCAL calendar day at every hour (regression, 2026-09-08)', () => {
+  // The bug: `new Date().toISOString().slice(0, 10)` is the UTC day, so in any
+  // negative-offset zone it returns TOMORROW for the last hours of the evening.
+  // It shipped: resolveDecision stamped `[RESOLVED 2026-09-09]` from a commit
+  // made at 18:04 local on 2026-09-08.
+  //
+  // TZ-independent by construction: whatever hour of 2026-09-08 you build, the
+  // local calendar day is 2026-09-08. The UTC slice fails this for some hour in
+  // every zone that is not UTC, which is the whole point.
+  for (let h = 0; h < 24; h++) {
+    const d = new Date(2026, 8, 8, h, 30, 0)
+    assert.equal(localDate(d), '2026-09-08', `hour ${h} local`)
+  }
+  assert.equal(localToday(new Date(2026, 8, 8, 18, 4, 0)), '2026-09-08')
+  // Month and year boundaries are where an off-by-one day does the most damage.
+  assert.equal(localDate(new Date(2026, 0, 1, 23, 59, 0)), '2026-01-01')
+  assert.equal(localDate(new Date(2025, 11, 31, 22, 0, 0)), '2025-12-31')
+})
+
+test('localDaysAgo walks calendar days, not 86,400,000ms', () => {
+  const now = new Date(2026, 8, 8, 22, 58, 0)
+  assert.equal(localDaysAgo(0, now), '2026-09-08')
+  assert.equal(localDaysAgo(1, now), '2026-09-07')
+  assert.equal(localDaysAgo(90, now), '2026-06-10')
+  // Across a DST fall-back a day is 25 hours; subtracting fixed milliseconds
+  // would land on the wrong date. 2026-11-01 is the US transition.
+  assert.equal(localDaysAgo(1, new Date(2026, 10, 2, 0, 30, 0)), '2026-11-01')
+})
+
 test('daysBetween counts calendar days in local time', () => {
   assert.equal(daysBetween(new Date('2026-09-08T23:00:00'), '2026-09-10'), 2)
   assert.equal(daysBetween(new Date('2026-09-08T01:00:00'), '2026-09-01'), -7)
@@ -745,3 +778,320 @@ test('demand: interest in some OTHER product is still not demand for this row', 
   const other = contact({ product: 'assistants', interestedIn: ['plan-review'] })
   assert.deepEqual(roadmapDemandSignals(rows, [other], NOW), [])
 })
+
+// ── handoffs ────────────────────────────────────────────────────────────────
+// These exist because until 2026-09-08 `checkHandoff` reached for git directly
+// and could not be tested at all — five milestones, every BidPro handoff, with
+// zero coverage. The fake below is the whole point of the `HandoffOps` seam.
+
+interface FakeCfg {
+  /** repo name → what `open` answers. */
+  repos?: Record<string, { refs: string[]; narrow?: boolean } | { error: string }>
+  /** `dir@ref` → needles present. A needle scoped to a sub-path is `needle#sub`. */
+  hits?: Record<string, string[]>
+  /** `dir@ref@needle` → ISO instant it first appeared. */
+  first?: Record<string, string>
+  /** spec path → ISO instant. Absent key means the file does not exist. */
+  specs?: Record<string, string>
+}
+
+const fakeOps = (cfg: FakeCfg): HandoffOps => ({
+  async open(name) {
+    const r = cfg.repos?.[name]
+    if (!r) return { error: `${name} not configured` }
+    if ('error' in r) return r
+    return { dir: name, refs: r.refs, narrow: r.narrow ?? false }
+  },
+  async grep(dir, ref, needle, sub) {
+    const present = cfg.hits?.[`${dir}@${ref}`] ?? []
+    return present.includes(sub ? `${needle}#${sub}` : needle) ? 1 : 0
+  },
+  async firstSeen(dir, ref, needle) {
+    return cfg.first?.[`${dir}@${ref}@${needle}`] ?? null
+  },
+  async specAt(relPath) {
+    return Object.prototype.hasOwnProperty.call(cfg.specs ?? {}, relPath)
+      ? cfg.specs![relPath]
+      : null
+  },
+})
+
+const QT = { repos: { qual_table_automations: { refs: ['origin/main', 'origin/staging'] } } }
+
+test('handoff: a literal on the default ref is merged, and says which ref', async () => {
+  const got = await evalHandoff({ landed: 'bid_plan_items' }, ['qual_table_automations'], fakeOps({
+    ...QT,
+    hits: { 'qual_table_automations@origin/main': ['bid_plan_items'] },
+    first: { 'qual_table_automations@origin/main@bid_plan_items': '2026-08-01T00:00:00Z' },
+  }), NOW)
+  assert.equal(got.state, 'merged')
+  assert.equal(got.ref, 'origin/main')
+})
+
+test('handoff: found on staging when main does not have it — the BidPro case', async () => {
+  // The whole reason for the 2026-09-08 change: their team merges to `staging`
+  // and origin/main moves separately, so checking one ref rendered `unknown`.
+  const got = await evalHandoff({ landed: 'bid_plan_items' }, ['qual_table_automations'], fakeOps({
+    ...QT,
+    hits: { 'qual_table_automations@origin/staging': ['bid_plan_items'] },
+    first: { 'qual_table_automations@origin/staging@bid_plan_items': '2026-09-01T00:00:00Z' },
+  }), NOW)
+  assert.equal(got.state, 'merged')
+  assert.equal(got.ref, 'origin/staging', 'the ref must be reported, not implied')
+})
+
+test('handoff: the default ref wins when BOTH have the literal', async () => {
+  // `merged on main` is a stronger claim than `merged on staging`; if both are
+  // true the board must report the stronger one.
+  const got = await evalHandoff({ landed: 'x' }, ['qual_table_automations'], fakeOps({
+    ...QT,
+    hits: {
+      'qual_table_automations@origin/main': ['x'],
+      'qual_table_automations@origin/staging': ['x'],
+    },
+  }), NOW)
+  assert.equal(got.ref, 'origin/main')
+})
+
+test('handoff: not found names every ref searched, and flags a single-branch clone', async () => {
+  const narrow = await evalHandoff({ landed: 'awarded_at' }, ['qual_table_automations'], fakeOps({
+    repos: { qual_table_automations: { refs: ['origin/main'], narrow: true } },
+  }), NOW)
+  assert.match(narrow.error!, /"awarded_at" not found at origin\/main/)
+  assert.match(narrow.error!, /single-branch/)
+
+  const wide = await evalHandoff({ landed: 'awarded_at' }, ['qual_table_automations'], fakeOps({
+    ...QT,
+  }), NOW)
+  assert.match(wide.error!, /origin\/main or origin\/staging/)
+  assert.doesNotMatch(wide.error!, /single-branch/, 'a wide clone must not be blamed')
+})
+
+test('handoff: consumed outranks merged — value, not motion', async () => {
+  // Merged-but-unconsumed is the worst outcome on this board: they did the work
+  // and nothing picked it up. The two must never blur.
+  const got = await evalHandoff(
+    { landed: 'status_changed_at', consumedBy: 'scripts/sync-bids.ts' },
+    ['qual_table_automations'],
+    fakeOps({
+      repos: {
+        ...QT.repos,
+        'command-center': { refs: ['origin/main'] },
+      },
+      hits: {
+        'command-center@origin/main': ['status_changed_at#scripts/sync-bids.ts'],
+        'qual_table_automations@origin/main': ['status_changed_at'],
+      },
+    }), NOW)
+  assert.equal(got.state, 'consumed')
+  assert.equal(got.ref, undefined, 'consumed is about OUR repo, so their ref does not apply')
+})
+
+test('handoff: a reference OUTSIDE consumed_by does not count as consumed', async () => {
+  const got = await evalHandoff(
+    { landed: 'status_changed_at', consumedBy: 'scripts/sync-bids.ts' },
+    ['qual_table_automations'],
+    fakeOps({
+      repos: { ...QT.repos, 'command-center': { refs: ['origin/main'] } },
+      // present in command-center, but not under the declared path
+      hits: {
+        'command-center@origin/main': ['status_changed_at'],
+        'qual_table_automations@origin/main': ['status_changed_at'],
+      },
+      first: { 'qual_table_automations@origin/main@status_changed_at': '2026-08-01T00:00:00Z' },
+    }), NOW)
+  assert.equal(got.state, 'merged', 'falls back to merged, never to consumed')
+})
+
+test('handoff: an unreachable command-center does not block the merged answer', async () => {
+  const got = await evalHandoff(
+    { landed: 'x', consumedBy: 'scripts/a.ts' }, ['qual_table_automations'], fakeOps({
+      ...QT,   // command-center deliberately not configured -> open() errors
+      hits: { 'qual_table_automations@origin/main': ['x'] },
+    }), NOW)
+  assert.equal(got.state, 'merged')
+})
+
+test('handoff: pr and spec fall through in order, and each carries its age', async () => {
+  const pr = await evalHandoff({ pr: 'https://github.com/x/y/pull/1' }, ['r'],
+    fakeOps({ repos: { r: { refs: ['origin/main'] } } }), NOW)
+  assert.equal(pr.state, 'pr-opened')
+
+  const spec = await evalHandoff({ spec: 'operations/workflows/a.md' }, ['r'], fakeOps({
+    repos: { r: { refs: ['origin/main'] } },
+    specs: { 'operations/workflows/a.md': '2026-08-29T00:00:00Z' },
+  }), NOW)
+  assert.equal(spec.state, 'spec-sent')
+  assert.equal(spec.ageDays, 10, 'age is measured from the injected now, not the wall clock')
+})
+
+test('handoff: a declared spec that does not exist is an error, not spec-sent', async () => {
+  const got = await evalHandoff({ spec: 'operations/workflows/missing.md' }, ['r'],
+    fakeOps({ repos: { r: { refs: ['origin/main'] } } }), NOW)
+  assert.match(got.error!, /Spec .*missing\.md not found/)
+  assert.equal(got.state, undefined)
+})
+
+test('handoff: a missing landed literal still yields to pr/spec rather than erroring', async () => {
+  // A handoff can declare both. If the literal is absent but a PR is open, the
+  // honest answer is pr-opened — not "not found".
+  const got = await evalHandoff({ landed: 'nope', pr: 'https://x/1' }, ['qual_table_automations'],
+    fakeOps({ ...QT }), NOW)
+  assert.equal(got.state, 'pr-opened')
+  assert.equal(got.error, undefined)
+})
+
+test('handoff: no repo on the row, and an unusable repo, are different errors', async () => {
+  const noRepo = await evalHandoff({ landed: 'x' }, [], fakeOps({}), NOW)
+  assert.match(noRepo.error!, /No repo declared/)
+
+  const broken = await evalHandoff({ landed: 'x' }, ['r'],
+    fakeOps({ repos: { r: { error: 'r not cloned on this machine' } } }), NOW)
+  assert.match(broken.error!, /not cloned/)
+})
+
+test('handoff: nothing declared is unknown — never green', async () => {
+  const got = await evalHandoff({}, ['r'], fakeOps({ repos: { r: { refs: ['origin/main'] } } }), NOW)
+  assert.equal(got.state, 'unknown')
+})
+
+// ── cron schedules → an expectation ─────────────────────────────────────────
+
+test('maxGapHours answers the REAL gap, not the nominal cadence', () => {
+  const from = new Date(2026, 8, 8)   // fixed Tuesday, so this never depends on today
+  // The two that decide whether this check cries wolf:
+  assert.equal(maxGapHours('0 8 * * 1-5', from), 72,
+    'weekday-daily is 72h Friday to Monday — a 24h expectation alarms every Monday')
+  assert.equal(maxGapHours('0 9 * * 3', from), 168,
+    'daily-intel-scan fires Wednesdays despite its name')
+  assert.equal(maxGapHours('0 * * * *', from), 1)
+  assert.equal(maxGapHours('0 2 * * *', from), 24)
+  assert.equal(maxGapHours('30 6 * * 1', from), 168)
+  // Sub-hourly collapses to an hour, which is the right resolution for staleness.
+  assert.equal(maxGapHours('*/15 * * * *', from), 1)
+})
+
+test('maxGapHours returns null rather than guessing — unreadable is never healthy', () => {
+  const from = new Date(2026, 8, 8)
+  assert.equal(maxGapHours('nonsense', from), null)
+  assert.equal(maxGapHours('0 8 * * 1-5 *', from), null, 'six fields is not this dialect')
+  assert.equal(maxGapHours('0 25 * * *', from), null, 'hour 25 is out of range')
+  assert.equal(maxGapHours('@daily', from), null, 'named schedules are not supported')
+  assert.equal(maxGapHours('0 0 1 * *', from), null, 'monthly fires once in the sample window')
+})
+
+test('parseCron: day-of-month and day-of-week are OR-ed when both are set', () => {
+  // The classic cron quirk. Reading it as AND would narrow the expected cadence
+  // and manufacture "late" alarms.
+  const c = parseCron('0 0 1 * 1')!
+  assert.equal(c.domAndDowBothSet, true)
+  const onlyDom = parseCron('0 0 1 * *')!
+  assert.equal(onlyDom.domAndDowBothSet, false)
+})
+
+// ── heartbeat ───────────────────────────────────────────────────────────────
+
+const pipe = (over: Partial<Pipeline> = {}): Pipeline => ({
+  key: 'p', name: 'P', produces: 'a thing', declaredHours: 24,
+  runsOn: 'mini', probes: [], ...over,
+})
+const ev = (at: string | null, kind: Evidence['kind'], sourceSeen = true): Evidence =>
+  ({ at, kind, sourceSeen })
+const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3_600_000).toISOString()
+
+test('heartbeat: the grace window is generous — a check that cries wolf gets muted', () => {
+  assert.equal(lateAfterHours(1), 2)      // hourly tolerates 2h
+  assert.equal(lateAfterHours(24), 36)
+  assert.equal(lateAfterHours(72), 108)   // weekday-daily
+})
+
+test('heartbeat: a live schedule beats the declared fallback, and a mismatch is reported', () => {
+  const p = pipe({ declaredHours: 24 })
+  const fromSchedule = evaluateBeat(p, ev(hoursAgo(30), 'run-record'), 72, NOW)
+  assert.equal(fromSchedule.expectHours, 72)
+  assert.equal(fromSchedule.expectFrom, 'schedule')
+  assert.equal(fromSchedule.state, 'ok', '30h is fine against the REAL 72h gap')
+  assert.match(fromSchedule.drift!, /72h.*declares 24h/)
+
+  const noSchedule = evaluateBeat(p, ev(hoursAgo(30), 'run-record'), null, NOW)
+  assert.equal(noSchedule.expectFrom, 'declared')
+  assert.equal(noSchedule.state, 'ok', '30h is within the 36h limit for 24h')
+  assert.equal(noSchedule.drift, undefined)
+
+  assert.equal(evaluateBeat(p, ev(hoursAgo(40), 'run-record'), null, NOW).state, 'late')
+})
+
+test('heartbeat: "never ran" and "nothing to look at here" are different answers', () => {
+  const never = evaluateBeat(pipe(), ev(null, 'none', true), null, NOW)
+  assert.equal(never.state, 'never')
+
+  // The MacBook cannot see the mini's logs. Reporting that as `never` would make
+  // every mini-side pipeline a false alarm.
+  const elsewhere = evaluateBeat(pipe(), ev(null, 'none', false), null, NOW)
+  assert.equal(elsewhere.state, 'unknown')
+  assert.match(elsewhere.detail, /no evidence source on this machine/)
+})
+
+test('heartbeat: a quiet pipeline judged only by its artifact is unknown, never late', () => {
+  // Most of these write nothing when they find nothing, so an untouched file is
+  // equally what "healthy and quiet" and "dead" look like.
+  const quiet = pipe({ quietRunsAreNormal: true })
+  const byArtifact = evaluateBeat(quiet, ev(hoursAgo(400), 'artifact'), null, NOW)
+  assert.equal(byArtifact.state, 'unknown')
+  assert.match(byArtifact.detail, /quiet from dead/)
+
+  // A RUN RECORD settles it, and then late means late.
+  const byRecord = evaluateBeat(quiet, ev(hoursAgo(400), 'run-record'), null, NOW)
+  assert.equal(byRecord.state, 'late')
+
+  // A pipeline that writes every run gets no such benefit of the doubt.
+  const noisy = evaluateBeat(pipe(), ev(hoursAgo(400), 'artifact'), null, NOW)
+  assert.equal(noisy.state, 'late')
+})
+
+test('heartbeat: a future timestamp is a clock fault, not freshness', () => {
+  // Exactly the shape tonight's UTC-vs-local bug produced. It must never read ok.
+  const b = evaluateBeat(pipe(), ev(hoursAgo(-30), 'run-record'), null, NOW)
+  assert.equal(b.state, 'unknown')
+  assert.match(b.detail, /FUTURE/)
+  assert.equal(evaluateBeat(pipe(), ev('not-a-date', 'run-record'), null, NOW).state, 'unknown')
+})
+
+test('heartbeat: findings are worst-first and hide only genuinely healthy pipelines', () => {
+  const beats = [
+    evaluateBeat(pipe({ key: 'ok' }), ev(hoursAgo(1), 'run-record'), null, NOW),
+    evaluateBeat(pipe({ key: 'never' }), ev(null, 'none', true), null, NOW),
+    evaluateBeat(pipe({ key: 'late' }), ev(hoursAgo(99), 'run-record'), null, NOW),
+    evaluateBeat(pipe({ key: 'unknown' }), ev(null, 'none', false), null, NOW),
+  ]
+  assert.deepEqual(findings(beats).map(b => b.key), ['late', 'unknown', 'never'])
+
+  // An `ok` pipeline whose schedule disagrees with the declaration still surfaces:
+  // the belief and the configuration have come apart.
+  const drifting = evaluateBeat(pipe({ declaredHours: 24 }), ev(hoursAgo(1), 'run-record'), 168, NOW)
+  assert.equal(drifting.state, 'ok')
+  assert.equal(findings([drifting]).length, 1)
+})
+
+test('viewDeploy: a failed build serving old code is DANGER, a skip is only a warning', () => {
+  const base: DeployState = {
+    at: NOW.toISOString(), result: 'deployed', sha: 'a'.repeat(40), target: 'a'.repeat(40),
+  }
+  assert.equal(viewDeploy(base, NOW).severity, 'ok')
+  assert.equal(viewDeploy(base, NOW).behind, false)
+
+  // The dangerous one: the dashboard looks completely normal and is weeks behind.
+  const failed = viewDeploy({ ...base, result: 'build-failed', target: 'b'.repeat(40) }, NOW)
+  assert.equal(failed.severity, 'danger')
+  assert.equal(failed.behind, true)
+  assert.match(failed.headline, /BUILD FAILED/)
+
+  // Someone mid-work on the mini is a choice, not a fault — warn, never danger.
+  const dirty = viewDeploy({ ...base, result: 'skipped-dirty', target: 'b'.repeat(40) }, NOW)
+  assert.equal(dirty.severity, 'warn')
+
+  // `current` means the tick found nothing to do, which is the healthy steady
+  // state — it must not read as staleness just because no deploy happened.
+  assert.equal(viewDeploy({ ...base, result: 'current' }, NOW).severity, 'ok')
+})
+

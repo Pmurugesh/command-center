@@ -4,7 +4,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { TimeAgo } from '@/components/shared/time-ago'
-import { Database, Terminal, CreditCard, Mail } from 'lucide-react'
+import { readDeployState } from '@/lib/deploy-state'
+import { Database, Terminal, CreditCard, Mail, GitCommitHorizontal } from 'lucide-react'
 import os from 'os'
 
 export const dynamic = 'force-dynamic'
@@ -16,9 +17,10 @@ function collapseHome(p: string): string {
 }
 
 export default async function SystemPage() {
-  const [dataSources, scripts] = await Promise.all([
+  const [dataSources, scripts, deploy] = await Promise.all([
     getDataSources(),
     listScripts(),
+    readDeployState(),
   ])
 
   const okCount = dataSources.filter(s => s.exists).length
@@ -36,6 +38,64 @@ export default async function SystemPage() {
           </div>
         }
       />
+
+      {/* Which code is actually being served.
+          The dashboard looks identical whether the mini is on origin/main or
+          frozen weeks behind on an old bundle, because deploy-on-merge keeps the
+          old build serving when a new one fails. This is the only place that
+          difference is visible. Rendered only where the file exists — a dev
+          machine is not a deploy target and should not claim to be one. */}
+      {deploy && (
+        <Card className={
+          deploy.severity === 'danger' ? 'border-status-danger/40'
+            : deploy.severity === 'warn' ? 'border-status-warning/40' : undefined
+        }>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <GitCommitHorizontal className="h-5 w-5" />
+              Deployed code
+            </CardTitle>
+            <CardDescription>
+              What <span className="font-mono text-xs">{deploy.host ?? 'this host'}</span> is
+              serving, recorded by <span className="font-mono text-xs">deploy-on-merge</span>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className={
+              deploy.severity === 'danger' ? 'text-sm font-medium text-status-danger'
+                : deploy.severity === 'warn' ? 'text-sm font-medium text-status-warning'
+                : 'text-sm font-medium'
+            }>
+              {deploy.headline}
+            </p>
+            <dl className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-[8rem_1fr]">
+              <dt className="text-muted-foreground">Serving</dt>
+              <dd className="font-mono">
+                {deploy.sha.slice(0, 7)}
+                {deploy.subject ? <span className="ml-2 text-muted-foreground">{deploy.subject}</span> : null}
+              </dd>
+              {deploy.behind && (
+                <>
+                  <dt className="text-muted-foreground">origin/main</dt>
+                  <dd className="font-mono text-status-warning">{deploy.target.slice(0, 7)}</dd>
+                </>
+              )}
+              <dt className="text-muted-foreground">Last checked</dt>
+              <dd className="font-mono tabular-nums">
+                <TimeAgo date={deploy.at} />
+              </dd>
+            </dl>
+            {/* Say the consequence, not just the state — "build failed" is a fact
+                about the build; "you are reading old data" is what it costs. */}
+            {deploy.severity === 'danger' && (
+              <p className="text-xs leading-relaxed text-status-danger/90">
+                Everything on this dashboard is rendered by the older commit. Merging a fix to
+                main is what clears this — the mini retries every five minutes.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Data Sources */}
       <Card>
