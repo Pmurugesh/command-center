@@ -143,3 +143,12 @@
   the only reason it was caught. **When fanning out authoring work, require the report to name
   every judgement call — and read those reports as findings, not as status.** Three of the five
   reports contained a defect in MY specification, not in their work.
+- **[2026-09-08]** I told Pavan the roadmap-check cron "was never registered". It was — enabled,
+  weekdays 06:00 PT, simply not yet fired. The check I trusted was `openclaw cron list --json`
+  over ssh, which fails with `GatewaySecretRefUnavailableError` because the gateway token is a
+  Keychain secret reference and **the Keychain is empty in an ssh session**. I had piped it
+  through `grep -c` and read `0` as absence. **A grep over a command that failed to authenticate
+  counts zero the same way an empty result does — check the exit status and the stderr, not just
+  the matches.** The ssh-safe way to ask the gateway anything is the dashboard's own API, which
+  runs under launchd and can read the Keychain (`cronReachable: true`, 13 jobs); that path was
+  already recorded in memory and I reached for the CLI anyway.

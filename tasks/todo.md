@@ -1865,6 +1865,18 @@ slips at all. It starts answering "are we on time?" the moment Pavan sets the fi
    `proof: manual`. `reporting-first-next-step` was demoted for the same class of reason: its
    DoD is an OR of three routes and a `proof:` list is an AND.
 
+**Correction (same day, after Pavan asked why cron said OpenClaw was unreachable).** I reported
+that the roadmap-check cron "was never registered". That was wrong, and the way it was wrong is
+the lesson: `openclaw cron list --json` over ssh fails with `GatewaySecretRefUnavailableError`
+(the token is a Keychain secret reference and the Keychain is empty in an ssh session), and I
+read its empty output as "no such job". The job exists — `f89eaed7-d0da-468b-ad9d-321d38b3064e`,
+agent `product`, `0 6 * * 1-5` America/Los_Angeles, enabled, `lastRunAt` undefined because its
+first fire is 2026-09-09 06:00 PT. The ssh-safe way to ask is the dashboard's own API, which runs
+under launchd and can read the Keychain: it reports `cronReachable: true` and 13 jobs.
+`install-roadmap-check.sh` stays in `post-deploy.sh` on its own merits — it is idempotent and
+leaves an existing job alone, and the standing rule is that mini state is reproducible from the
+repo, which is why install-nexus-sync and install-cron-delivery are already there.
+
 **Open, and now visible rather than hidden:** the five BidPro handoffs read `unknown` because
 the mini's `qual_table_automations` clone is single-branch on `main` while that team works on
 `staging`. The check now names the ref it searched and says the clone is narrow. The decision
