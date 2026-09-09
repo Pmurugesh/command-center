@@ -176,6 +176,8 @@ export interface RoadmapRow {
   // ── derived ──
   investment?: Record<number, number> // window in days → human commit count
   pull?: RowPull
+  /** Slug of this row's highest-ranked open milestone — the local "do this". */
+  nextMilestone?: string
   milestones: RoadmapMilestone[]
 }
 
@@ -211,6 +213,7 @@ export interface DerivedRow {
   slug: string
   investment?: Record<number, number>
   pull?: RowPull
+  nextMilestone?: string
 }
 
 export interface RankedMilestone {
@@ -471,6 +474,30 @@ export function rankBuildNext(
   now = new Date(),
   limit = 10
 ): RankedMilestone[] {
+  return rankAllOpen(rows, now).slice(0, limit)
+}
+
+/**
+ * The highest-scoring OPEN milestone in each row, by the same ranking Build
+ * next uses.
+ *
+ * Build next is a global top ten, so eight of twelve rows have nothing in it —
+ * and a reader inside a row card had no way to tell which of its nine tiles
+ * mattered most without scrolling back to the top. This answers that locally
+ * without inventing a second notion of importance.
+ */
+export function topOpenByRow(rows: RoadmapRow[], now = new Date()): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const r of rankAllOpen(rows, now)) {
+    if (!(r.row in out)) out[r.row] = r.slug // already sorted, so first wins
+  }
+  return out
+}
+
+function rankAllOpen(
+  rows: RoadmapRow[],
+  now: Date
+): RankedMilestone[] {
   const milestones = rows.flatMap(r => r.milestones)
   const bySlug = new Map(milestones.map(m => [m.slug, m]))
   const unlocksBySlug = new Map(milestones.map(m => [m.slug, m.unlocks]))
@@ -517,9 +544,7 @@ export function rankBuildNext(
     return { slug: m.slug, name: m.name, row: m.row, score, reason }
   })
 
-  return ranked
-    .sort((a, b) => b.score - a.score || a.slug.localeCompare(b.slug))
-    .slice(0, limit)
+  return ranked.sort((a, b) => b.score - a.score || a.slug.localeCompare(b.slug))
 }
 
 // ── parsing ─────────────────────────────────────────────────────────────────
@@ -634,6 +659,7 @@ export async function readStatus(): Promise<RoadmapStatus> {
       const p = (r.pull ?? {}) as Record<string, unknown>
       rows[slug] = {
         slug,
+        nextMilestone: str(r.next_milestone),
         investment: Object.keys(inv).length ? inv : undefined,
         pull: r.pull
           ? {
@@ -880,6 +906,7 @@ export async function listRoadmap(now = new Date()): Promise<RoadmapRow[]> {
     const d = status.rows[r.slug]
     r.investment = d?.investment
     r.pull = d?.pull
+    r.nextMilestone = d?.nextMilestone
     r.milestones.sort(compareMilestones)
   }
 

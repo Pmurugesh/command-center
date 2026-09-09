@@ -43,8 +43,8 @@ import matter from 'gray-matter'
 import { PATHS, REPO_CANDIDATES } from '../src/lib/paths.ts'
 import { runCommandArgs } from '../src/lib/shell.ts'
 import {
-  readAuthored, lintRoadmap, deriveState, deriveStage, rankBuildNext, pullScore,
-  INVESTMENT_WINDOWS,
+  readAuthored, lintRoadmap, deriveState, deriveStage, rankBuildNext, topOpenByRow,
+  pullScore, INVESTMENT_WINDOWS,
   type HandoffState, type ProofCheck, type ProofResult, type RoadmapRow,
   type RoadmapMilestone, type RowPull, type DerivedEntry,
 } from '../src/lib/roadmap.ts'
@@ -539,6 +539,9 @@ async function main() {
 
   for (const r of rows) r.milestones = full.filter(m => m.row === r.slug)
   const ranking = rankBuildNext(rows, now, 10)
+  // Same scoring, applied per row — Build next is a global top ten, so most
+  // rows have nothing in it and need a local answer.
+  const nextByRow = topOpenByRow(rows, now)
 
   const order = ['slipped', 'stranded', 'at-risk', 'unknown', 'idle', 'no-target', 'needs-person', 'on-track', 'active', 'done']
   const sorted = [...full].sort((x, y) =>
@@ -561,7 +564,10 @@ async function main() {
         d.proof_true ?? null, d.proof_total ?? null, d.error ?? null,
       ]
     }).concat(
-      rows.map(r => [r.slug, JSON.stringify(r.investment ?? {}), JSON.stringify(r.pull ?? {})]) as never[]
+      rows.map(r => [
+        r.slug, JSON.stringify(r.investment ?? {}), JSON.stringify(r.pull ?? {}),
+        nextByRow[r.slug] ?? null,
+      ]) as never[]
     ).concat([lint as never])
   )).digest('hex').slice(0, 12)
 
@@ -573,6 +579,7 @@ async function main() {
     'rows:',
     ...rows.flatMap(r => [
       `  - slug: ${r.slug}`,
+      ...(nextByRow[r.slug] ? [`    next_milestone: ${nextByRow[r.slug]}`] : []),
       '    investment:',
       ...INVESTMENT_WINDOWS.map(w => `      d${w}: ${r.investment?.[w] ?? 0}`),
       '    pull:',

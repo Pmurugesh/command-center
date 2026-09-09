@@ -18,6 +18,7 @@
  * `listRoadmap` — the page is a renderer, and a board that computed its own
  * health from a working tree is exactly the failure this whole layer avoids.
  */
+import React from 'react'
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { STAGES, type RoadmapMilestone, type RoadmapState, type Stage } from '@/lib/roadmap'
 import { cn } from '@/lib/utils'
@@ -105,6 +106,43 @@ function compactFact(item: RoadmapMilestone): string | null {
   }
 }
 
+/**
+ * The authored body is three `##` sections — Done when, Sources, Log — and
+ * rendering them as one markdown blob is what made an expanded tile a wall.
+ * They have different jobs: the definition of done is what you came to read,
+ * sources are citations you check occasionally, the log is history. Split them
+ * so each gets the weight it deserves.
+ */
+function splitBody(body: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  let key = ''
+  let buf: string[] = []
+  const flush = () => { if (key && buf.join('\n').trim()) out[key] = buf.join('\n').trim() }
+  for (const line of body.split('\n')) {
+    const h = /^##\s+(.+?)\s*$/.exec(line)
+    if (h) { flush(); buf = []; key = h[1].toLowerCase() } else buf.push(line)
+  }
+  flush()
+  return out
+}
+
+const countItems = (md?: string) => md ? (md.match(/^\s*-\s+/gm) ?? []).length : 0
+
+/** A collapsed sub-section — available, checkable, out of the way. */
+function Aside({ label, count, md }: { label: string; count: number; md?: string }) {
+  if (!md) return null
+  return (
+    <details className="min-w-0">
+      <summary className="cursor-pointer list-none select-none text-[10px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground">
+        &#9656; {label} <span className="font-mono tabular-nums opacity-60">{count || ''}</span>
+      </summary>
+      <div className="mt-2 max-w-prose break-words text-xs [&_code]:break-all [&_li]:my-0.5 [&_ul]:list-disc [&_ul]:pl-4">
+        <MarkdownRenderer content={md} />
+      </div>
+    </details>
+  )
+}
+
 function ProofList({ item }: { item: RoadmapMilestone }) {
   if (item.proof === null) {
     return (
@@ -135,62 +173,94 @@ function ProofList({ item }: { item: RoadmapMilestone }) {
   )
 }
 
+/**
+ * A label above its value, never beside it. Inside a one-third-width tile a
+ * label/value grid leaves the value ~68px, which is narrower than a repo path.
+ * `break-words` is not optional here: an unbreakable path escapes the tile and
+ * paints over the next column.
+ */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <div className="break-words font-mono">{children}</div>
+    </div>
+  )
+}
+
 function EvidenceList({ item }: { item: RoadmapMilestone }) {
   if (item.kind === 'handoff') {
     const { spec, landed, consumedBy, pr } = item.handoff ?? {}
     return (
-      <dl className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-[7rem_1fr]">
-        <dt className="text-muted-foreground">Handoff</dt>
-        <dd className="font-mono">{item.handoffState ?? 'unknown'}</dd>
-        {landed && (<><dt className="text-muted-foreground">Landed</dt><dd className="font-mono break-all">{landed}</dd></>)}
-        {consumedBy && (<><dt className="text-muted-foreground">Consumed by</dt><dd className="font-mono break-all">{consumedBy}</dd></>)}
-        {spec && (<><dt className="text-muted-foreground">Spec</dt><dd className="font-mono break-all">{spec}</dd></>)}
-        {pr && (<><dt className="text-muted-foreground">PR</dt><dd className="font-mono break-all">{pr}</dd></>)}
-      </dl>
+      <div className="min-w-0 space-y-1 text-xs">
+        <Field label="Handoff">{item.handoffState ?? 'unknown'}</Field>
+        {landed && <Field label="Landed">{landed}</Field>}
+        {consumedBy && <Field label="Consumed by">{consumedBy}</Field>}
+        {spec && <Field label="Spec">{spec}</Field>}
+        {pr && <Field label="PR">{pr}</Field>}
+      </div>
     )
   }
   if (item.kind !== 'build') return null
   return (
-    <dl className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-[7rem_1fr]">
-      <dt className="text-muted-foreground">Last human commit</dt>
-      <dd className="font-mono tabular-nums">
+    <div className="min-w-0 space-y-1 text-xs">
+      <Field label="Last human commit">
         {item.evidenceAgeDays == null ? 'unknown' : `${item.evidenceAgeDays}d ago`}
         {item.lastEvidenceAt && (
-          <span className="ml-2 text-muted-foreground">{item.lastEvidenceAt.slice(0, 10)}</span>
+          <span className="ml-1.5 text-muted-foreground">{item.lastEvidenceAt.slice(0, 10)}</span>
         )}
-      </dd>
-      <dt className="text-muted-foreground">Evidence</dt>
-      <dd className="space-y-0.5">
+      </Field>
+      <Field label="Evidence">
         {item.evidence.length === 0
           ? <span className="text-muted-foreground">none declared</span>
           : item.evidence.map((e, i) => (
-              <div key={i} className="font-mono break-all">
+              <div key={i}>
                 <span className="text-muted-foreground">{e.repo}</span> {e.path}
               </div>
             ))}
-      </dd>
-    </dl>
+      </Field>
+    </div>
   )
 }
 
-export function MilestoneCard({ item }: { item: RoadmapMilestone }) {
+export function MilestoneCard({ item, rank, isNext }: {
+  item: RoadmapMilestone
+  /** Its position in the global Build-next list, when it is in the top ten. */
+  rank?: number
+  /** The highest-ranked open milestone in its own row. */
+  isNext?: boolean
+}) {
   const alerting = item.state === 'slipped' || item.state === 'at-risk' || item.state === 'stranded'
   const fact = compactFact(item)
   const news = isNews(item.state)
+  const sections = splitBody(item.body)
 
   return (
     <details
       id={item.slug}
       className={cn(
-        'group scroll-mt-16 rounded-r border-l-2 bg-card/40 py-1.5 pl-2.5 pr-2 transition-colors',
+        'group min-w-0 overflow-hidden scroll-mt-24 rounded-r border-l-2 bg-card/40 py-1.5 pl-2.5 pr-2 transition-colors',
         'hover:bg-card',
         KIND_EDGE[item.kind] ?? 'border-l-border',
-        alerting && 'bg-status-danger/[0.04]'
+        alerting && 'bg-status-danger/[0.04]',
+        // The landing mark for a Build-next click. Pure CSS, so it works with
+        // JavaScript off and survives a reload of a deep link.
+        'target:bg-status-accent/10 target:ring-1 target:ring-status-accent/50',
+        isNext && 'bg-card'
       )}
     >
       <summary className="cursor-pointer list-none select-none">
         <div className="flex items-start gap-2">
-          {!news && (
+          {rank !== undefined ? (
+            // The number from Build next, carried onto the tile — so a jump
+            // lands somewhere that says out loud which item you clicked.
+            <span
+              className="mt-px inline-flex h-4 shrink-0 items-center rounded bg-status-accent/15 px-1 font-mono text-[10px] font-medium tabular-nums text-status-accent"
+              title={`#${rank} in Build next`}
+            >
+              {rank}
+            </span>
+          ) : !news && (
             <span className={cn('mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full', STATE_DOT[item.state])} />
           )}
           <span className={cn(
@@ -199,6 +269,11 @@ export function MilestoneCard({ item }: { item: RoadmapMilestone }) {
           )}>
             {item.name}
           </span>
+          {isNext && rank === undefined && (
+            <span className="mt-px shrink-0 rounded border border-border px-1 text-[9px] uppercase tracking-wide text-muted-foreground">
+              next
+            </span>
+          )}
           <StageDots stage={item.stage} />
         </div>
 
@@ -220,38 +295,55 @@ export function MilestoneCard({ item }: { item: RoadmapMilestone }) {
         )}
       </summary>
 
-      <div className="mt-3 space-y-3 border-t border-border pt-3">
-        <p className="text-xs text-muted-foreground">
-          <span className="font-mono">{item.kind}</span> · {item.horizon} · {item.reason}
+      <div className="mt-2.5 border-t border-border pt-2.5">
+        {/* Deliberately ONE column. A tile always sits inside a one-third-width
+            horizon column, so its width has nothing to do with the viewport's —
+            an `xl:` two-column split gave ~100px sub-columns at 1400px and the
+            evidence paths overflowed into the next column. This wants a
+            container query or nothing, and nothing reads fine. */}
+        <div className="space-y-3">
+          <div className="min-w-0">
+            {sections['done when'] && (
+              <>
+                <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Done when
+                </h4>
+                <div className="max-w-prose break-words text-xs leading-relaxed [&_code]:break-all [&_p]:my-1">
+                  <MarkdownRenderer content={sections['done when']} />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="min-w-0 space-y-3">
+            {(item.kind === 'demand' || item.kind === 'decision') && (
+              <div>
+                <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Proof</h4>
+                <ProofList item={item} />
+              </div>
+            )}
+
+            {(item.kind === 'build' || item.kind === 'handoff') && <EvidenceList item={item} />}
+
+            {(item.unlocks.length > 0 || item.blockedOn.length > 0) && (
+              <div className="min-w-0 space-y-1 text-xs">
+                {item.unlocks.length > 0 && <Field label="Unlocks">{item.unlocks.join(', ')}</Field>}
+                {item.blockedOn.length > 0 && <Field label="Blocked on">{item.blockedOn.join(', ')}</Field>}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {(sections['sources'] || sections['log']) && (
+          <div className="mt-3 flex flex-wrap gap-x-8 gap-y-2 border-t border-border/60 pt-2.5">
+            <Aside label="Sources" count={countItems(sections['sources'])} md={sections['sources']} />
+            <Aside label="Log" count={countItems(sections['log'])} md={sections['log']} />
+          </div>
+        )}
+
+        <p className="mt-3 text-[10px] text-muted-foreground/70">
+          <span className="font-mono">{item.kind}</span> &middot; {item.horizon} &middot; {item.reason}
         </p>
-
-        {(item.kind === 'demand' || item.kind === 'decision') && (
-          <div>
-            <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Proof</h4>
-            <ProofList item={item} />
-          </div>
-        )}
-
-        {(item.kind === 'build' || item.kind === 'handoff') && <EvidenceList item={item} />}
-
-        {(item.unlocks.length > 0 || item.blockedOn.length > 0) && (
-          <dl className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-[7rem_1fr]">
-            {item.unlocks.length > 0 && (<>
-              <dt className="text-muted-foreground">Unlocks</dt>
-              <dd className="font-mono break-all">{item.unlocks.join(', ')}</dd>
-            </>)}
-            {item.blockedOn.length > 0 && (<>
-              <dt className="text-muted-foreground">Blocked on</dt>
-              <dd className="font-mono break-all">{item.blockedOn.join(', ')}</dd>
-            </>)}
-          </dl>
-        )}
-
-        {item.body && (
-          <div className="border-t border-border pt-3">
-            <MarkdownRenderer content={item.body} />
-          </div>
-        )}
       </div>
     </details>
   )

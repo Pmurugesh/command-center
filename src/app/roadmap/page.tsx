@@ -22,6 +22,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { RowCard } from '@/components/roadmap/row'
 import { StatePill, isNews } from '@/components/roadmap/milestone'
 import { RescoreButton } from '@/components/roadmap/rescore'
+import { FocusOnHash } from '@/components/roadmap/focus'
 import { Map as MapIcon, Boxes, Layers, Briefcase, Wrench, Globe, AlertTriangle, ArrowRight, HelpCircle } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -46,6 +47,8 @@ export default async function RoadmapPage() {
   // Only decisions raised by the roadmap itself — the GTM and intel queues have
   // their own home on Today and would drown this one.
   const roadmapDecisions = decisions.filter(d => d.file.startsWith('roadmap/'))
+  // slug → Build-next position, so a tile can show the number you clicked.
+  const ranks = Object.fromEntries(status.ranking.map((r, i) => [r.slug, i + 1]))
 
   const withTarget = milestones.filter(m => m.target && !m.done).length
   const trouble = milestones.filter(m =>
@@ -53,6 +56,7 @@ export default async function RoadmapPage() {
 
   return (
     <div className="space-y-8">
+      <FocusOnHash />
       <PageHeader
         title="Roadmap"
         description={
@@ -118,8 +122,9 @@ export default async function RoadmapPage() {
                 <ArrowRight className="h-4 w-4" /> Build next
               </h2>
               <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                Open milestones ranked by reach through <span className="font-mono">unlocks</span>,
-                weighted by pull, plus urgency. Deterministic — no model call.
+                Ranked by reach through <span className="font-mono">unlocks</span>, weighted by
+                pull, plus urgency. These numbers reappear on the tiles below; each row also
+                marks its own top item <span className="rounded border border-border px-1 text-[9px] uppercase tracking-wide">next</span>.
               </p>
               <RescoreButton />
             </div>
@@ -214,7 +219,7 @@ export default async function RoadmapPage() {
                   </h2>
                   <p className="text-xs text-muted-foreground">{g.blurb}</p>
                 </div>
-                {group.map(r => <RowCard key={r.slug} row={r} />)}
+                {group.map(r => <RowCard key={r.slug} row={r} ranks={ranks} />)}
               </section>
             )
           })}

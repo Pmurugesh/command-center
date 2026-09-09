@@ -21,7 +21,11 @@ import { cn } from '@/lib/utils'
 
 const HORIZON_LABEL: Record<string, string> = { now: 'Now', next: 'Next', later: 'Later' }
 
-export function RowCard({ row }: { row: RoadmapRow }) {
+export function RowCard({ row, ranks }: {
+  row: RoadmapRow
+  /** slug → position in the global Build-next list. */
+  ranks?: Record<string, number>
+}) {
   const inv30 = row.investment?.[30]
   const inv90 = row.investment?.[90]
   const pull = row.pull
@@ -115,7 +119,14 @@ export function RowCard({ row }: { row: RoadmapRow }) {
                 <div className="space-y-1">
                   {items.length === 0
                     ? <p className="pl-1 text-xs text-muted-foreground/40">—</p>
-                    : items.map(m => <MilestoneCard key={m.slug} item={m} />)}
+                    : items.map(m => (
+                        <MilestoneCard
+                          key={m.slug}
+                          item={m}
+                          rank={ranks?.[m.slug]}
+                          isNext={row.nextMilestone === m.slug}
+                        />
+                      ))}
                 </div>
               </div>
             )
