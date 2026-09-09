@@ -32,6 +32,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import matter from 'gray-matter'
 import { PATHS } from './paths'
+import { stageAtLeast, wantsProduct, CRM_STAGE_ORDER, type CrmStage } from './config'
 
 /** Evidence colder than this while a target is near means nobody is working. */
 export const EVIDENCE_WARN_DAYS = 14
@@ -175,6 +176,8 @@ export interface RoadmapRow {
   // ── derived ──
   investment?: Record<number, number> // window in days → human commit count
   pull?: RowPull
+  /** Slug of this row's highest-ranked open milestone — the local "do this". */
+  nextMilestone?: string
   milestones: RoadmapMilestone[]
 }
 
@@ -210,6 +213,7 @@ export interface DerivedRow {
   slug: string
   investment?: Record<number, number>
   pull?: RowPull
+  nextMilestone?: string
 }
 
 export interface RankedMilestone {
@@ -427,6 +431,58 @@ const PULL_STAGE_WEIGHT: Record<string, number> = {
   lost: 0, disqualified: 0,
 }
 
+/**
+ * The two ways a row's effort and its demand can disagree — deliberately mirrors.
+ *
+ * `investedWithoutPull` is effort with nobody asking. `demandWithoutInvestment`
+ * is the opposite and the more expensive one: somebody warm is asking and
+ * nobody is building. Pavan named the second himself on 2026-09-08 — "if I need
+ * more resources then I need more and I need to hire or fire depending on the
+ * need" — and asked for the squeeze to be surfaced **without the board tracking
+ * people**. So this reads only commits and demand, the two things it already
+ * derives, and says nothing about who. The read that the answer is a person
+ * stays his.
+ *
+ * Both are gated on `product`. That gate is load-bearing: a row with no product
+ * has no demand column at all, so both flags would be meaningless there — and
+ * BidPro's `pull 0` in particular is now correct BY DEFINITION (Pavan confirmed
+ * it internal, 2026-09-08), not a finding.
+ *
+ * The thresholds, and why they are these:
+ *
+ * - `pull >= 5` is one contact at `verbal-commitment` — someone has actually
+ *   said yes — or an equivalent mix. Below that, "demand" is a meeting or two
+ *   and quiet is a defensible answer.
+ * - `inv30 < 10` is under roughly two human commits a week: a row nobody is
+ *   actively building, as opposed to one being built slowly.
+ *
+ * Checked against the real board rather than picked in the abstract: it fires on
+ * Attest (8 commits / pull 9), Steward (6 / 17) and Milestone (7 / 14) and on
+ * nothing else. Those are exactly the rows behind Pavan's own sentence — "the
+ * two products with warm agencies got 18 between them".
+ */
+export const DEMAND_FLOOR_SCORE = 5
+export const QUIET_COMMITS_30D = 10
+
+export interface RowSignals {
+  /** Effort with nobody asking. */
+  investedWithoutPull: boolean
+  /** Somebody warm is asking and nobody is building — the squeeze. */
+  demandWithoutInvestment: boolean
+}
+
+export function rowSignals(row: Pick<RoadmapRow, 'product' | 'investment' | 'pull'>): RowSignals {
+  const scored = Boolean(row.product)
+  const inv30 = row.investment?.[30] ?? 0
+  const inv90 = row.investment?.[90] ?? 0
+  const score = row.pull?.score ?? 0
+  return {
+    investedWithoutPull: scored && inv90 >= 20 && score === 0,
+    demandWithoutInvestment:
+      scored && score >= DEMAND_FLOOR_SCORE && inv30 < QUIET_COMMITS_30D,
+  }
+}
+
 export function pullScore(byStage: Record<string, number>, meetings90: number): number {
   let s = 0
   for (const [stage, n] of Object.entries(byStage)) s += (PULL_STAGE_WEIGHT[stage] ?? 0) * n
@@ -469,6 +525,30 @@ export function rankBuildNext(
   rows: RoadmapRow[],
   now = new Date(),
   limit = 10
+): RankedMilestone[] {
+  return rankAllOpen(rows, now).slice(0, limit)
+}
+
+/**
+ * The highest-scoring OPEN milestone in each row, by the same ranking Build
+ * next uses.
+ *
+ * Build next is a global top ten, so eight of twelve rows have nothing in it —
+ * and a reader inside a row card had no way to tell which of its nine tiles
+ * mattered most without scrolling back to the top. This answers that locally
+ * without inventing a second notion of importance.
+ */
+export function topOpenByRow(rows: RoadmapRow[], now = new Date()): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const r of rankAllOpen(rows, now)) {
+    if (!(r.row in out)) out[r.row] = r.slug // already sorted, so first wins
+  }
+  return out
+}
+
+function rankAllOpen(
+  rows: RoadmapRow[],
+  now: Date
 ): RankedMilestone[] {
   const milestones = rows.flatMap(r => r.milestones)
   const bySlug = new Map(milestones.map(m => [m.slug, m]))
@@ -516,9 +596,7 @@ export function rankBuildNext(
     return { slug: m.slug, name: m.name, row: m.row, score, reason }
   })
 
-  return ranked
-    .sort((a, b) => b.score - a.score || a.slug.localeCompare(b.slug))
-    .slice(0, limit)
+  return ranked.sort((a, b) => b.score - a.score || a.slug.localeCompare(b.slug))
 }
 
 // ── parsing ─────────────────────────────────────────────────────────────────
@@ -633,6 +711,7 @@ export async function readStatus(): Promise<RoadmapStatus> {
       const p = (r.pull ?? {}) as Record<string, unknown>
       rows[slug] = {
         slug,
+        nextMilestone: str(r.next_milestone),
         investment: Object.keys(inv).length ? inv : undefined,
         pull: r.pull
           ? {
@@ -801,6 +880,18 @@ export function lintRoadmap(
     if ((m.kind === 'demand' || m.kind === 'decision') && m.proof !== null && m.proof.length === 0) {
       errors.push(`${m.slug}: kind ${m.kind} with no proof (use \`proof: manual\` if none exists)`)
     }
+    // A pattern that will not compile is an AUTHORING error, not an unknown.
+    // Caught 2026-09-08: `attest-oeis-demo` carried `(?i)(demo|walkthrough…)`,
+    // a Python inline flag JavaScript rejects, so the milestone rendered
+    // `unknown` with the reason buried in `checked:` — indistinguishable from a
+    // repo that is not cloned. Absence renders unknown; a typo should render
+    // loud, at lint time, before the board ever shows it.
+    for (const c of m.proof ?? []) {
+      if (!('title_match' in c) || typeof c.title_match !== 'string') continue
+      try { new RegExp(c.title_match) } catch {
+        errors.push(`${m.slug}: title_match ${JSON.stringify(c.title_match)} is not a regex`)
+      }
+    }
   }
 
   // Cycles in `unlocks` would make `reachableThroughUnlocks` meaningless and the
@@ -879,6 +970,7 @@ export async function listRoadmap(now = new Date()): Promise<RoadmapRow[]> {
     const d = status.rows[r.slug]
     r.investment = d?.investment
     r.pull = d?.pull
+    r.nextMilestone = d?.nextMilestone
     r.milestones.sort(compareMilestones)
   }
 
@@ -899,4 +991,82 @@ export function allMilestones(rows: RoadmapRow[]): RoadmapMilestone[] {
 export function roadmapAlerts(milestones: RoadmapMilestone[]): RoadmapMilestone[] {
   return milestones.filter(m =>
     m.state === 'slipped' || m.state === 'at-risk' || m.state === 'stranded')
+}
+
+// ── demand → Today ──────────────────────────────────────────────────────────
+
+/** A contact this warm is a real buying signal, not a name on a list. */
+const DEMAND_FLOOR: CrmStage = 'demo-given'
+/** Fresh enough to still be the reason to pick up work today. */
+export const DEMAND_FRESH_DAYS = 14
+
+export interface DemandSignal {
+  row: string
+  rowName: string
+  /** The warmest recently-touched contact wanting this row's product. */
+  contactName: string
+  stage: CrmStage
+  daysAgo: number
+  /** The highest-ranked open `now` milestone in that row — the thing to build. */
+  next?: RoadmapMilestone
+}
+
+/**
+ * Rows where somebody just got warm and there is open work to do about it.
+ *
+ * Today's queue was built entirely for trouble — slipped, at-risk, stranded —
+ * so good news was silent: a contact reaching `won` produced no Move and no
+ * Clock row, even though it is the strongest build-next signal on the board.
+ * This is the other half.
+ *
+ * Deliberately read from the LIVE CRM rather than from `_status.md`. Pull in the
+ * status file is a snapshot with no history, so "who just got warm" is not
+ * derivable from it — and adding history to make it derivable would be a worse
+ * trade than reading two fields off a contact.
+ *
+ * Machine-set stages do not count, for the same reason they do not count
+ * anywhere else on this board: `crm/` is janitor-written.
+ */
+export function roadmapDemandSignals(
+  rows: RoadmapRow[],
+  contacts: {
+    name: string; product?: string; interestedIn?: string[]
+    stage: CrmStage; lastTouched?: string; worked: boolean
+  }[],
+  now = new Date()
+): DemandSignal[] {
+  const out: DemandSignal[] = []
+  for (const row of rows) {
+    if (!row.product) continue
+    const warm = contacts
+      .filter(c =>
+        wantsProduct(c, row.product!) &&
+        c.worked &&
+        stageAtLeast(c.stage, DEMAND_FLOOR) &&
+        c.lastTouched &&
+        -daysBetween(now, c.lastTouched) <= DEMAND_FRESH_DAYS &&
+        -daysBetween(now, c.lastTouched) >= 0)
+      // Warmest first, then most recent — one signal per row, not a list.
+      .sort((a, b) =>
+        CRM_STAGE_ORDER.indexOf(b.stage) - CRM_STAGE_ORDER.indexOf(a.stage) ||
+        (b.lastTouched ?? '').localeCompare(a.lastTouched ?? ''))
+    const c = warm[0]
+    if (!c) continue
+
+    // Only worth surfacing if there is something to DO about it.
+    const open = row.milestones.filter(m =>
+      m.horizon === 'now' && (m.stage === 'framed' || m.stage === 'committed' || m.stage === 'building'))
+    if (open.length === 0) continue
+
+    out.push({
+      row: row.slug,
+      rowName: row.name,
+      contactName: c.name,
+      stage: c.stage,
+      daysAgo: -daysBetween(now, c.lastTouched!),
+      next: open.sort(compareMilestones)[0],
+    })
+  }
+  return out.sort((a, b) =>
+    CRM_STAGE_ORDER.indexOf(b.stage) - CRM_STAGE_ORDER.indexOf(a.stage) || a.daysAgo - b.daysAgo)
 }

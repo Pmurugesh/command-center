@@ -193,6 +193,34 @@ export function stageAtLeast(stage: CrmStage, floor: CrmStage): boolean {
 
 export const CRM_TERMINAL_STAGES: readonly CrmStage[] = ['won', 'lost', 'disqualified']
 
+/**
+ * Does this contact want `product`?
+ *
+ * `product:` is the record's PRIMARY attribution and stays single-valued: a
+ * contact sits in one owner's pipeline, and the shape charts have to sum to the
+ * headcount. But interest is not exclusive, and reading `product` as if it were
+ * put two false facts on the board (2026-09-08). The OEIS CIO carries
+ * `product: assistants` while her own log records her asking for WMP (Attest)
+ * and PRA (Candor). Read strictly, that left Attest structurally unable to
+ * score pull — no contact anywhere carried `plan-review` — and made Candor's
+ * "165 human commits in 90 days and no recorded pull" callout untrue: there was
+ * a warm agency asking, filed under another product.
+ *
+ * `interested_in` is additive and never replaces `product`. Everything that
+ * measures DEMAND — roadmap pull, demand signals, the `contacts_count` proof —
+ * reads through here. Everything that measures ATTRIBUTION — pipeline shape,
+ * owner load — keeps reading `product` alone, so one person still counts once.
+ *
+ * Human judgement only. Nothing infers interest from a transcript; somebody has
+ * to have asked.
+ */
+export function wantsProduct(
+  c: { product?: string; interestedIn?: string[] },
+  product: string,
+): boolean {
+  return c.product === product || (c.interestedIn?.includes(product) ?? false)
+}
+
 // Orthogonal to stage: where a contact sits in the pipeline vs. whether work on
 // them can currently proceed. `blocked` exists because the 87-day CalHR miss was
 // an action waiting on an artifact nobody had made, with no way to say so.

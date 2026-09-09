@@ -301,6 +301,13 @@ export interface CrmContact {
   agency?: string         // agency slug, joins to intelligence/agencies/<slug>.md
   agencyName?: string
   product?: string        // product slug (prrai | aihire | reporting | procurement | echo)
+  /**
+   * Other products this person has asked about, beyond their primary. Additive:
+   * demand reads `wantsProduct()`, attribution keeps reading `product`, and a
+   * slug appearing here never removes it from anywhere else. Set by hand — see
+   * `wantsProduct` in lib/config for why this exists.
+   */
+  interestedIn?: string[]
   owner?: string          // who on the team owns this relationship
   tier?: string           // T1/T2/T3 from CIO Academy triage
   stage: CrmStage
@@ -358,6 +365,8 @@ export interface CrmContactUpdate {
   agency?: string
   agencyName?: string
   product?: string
+  /** `null` clears the list; an empty array is treated the same way. */
+  interestedIn?: string[] | null
   owner?: string
   tier?: string
   servicesClient?: boolean

@@ -24,14 +24,15 @@ import os from 'os'
 import path from 'path'
 import {
   deriveState, deriveStage, lintRoadmap, rankBuildNext, reachableThroughUnlocks,
-  parseProof, pullScore, daysBetween,
+  parseProof, pullScore, daysBetween, roadmapDemandSignals, DEMAND_FRESH_DAYS,
+  rowSignals,
   type RoadmapMilestone, type RoadmapRow, type DerivedEntry, type Stage,
 } from '../src/lib/roadmap.ts'
 import {
   evalCheck, readContacts, readMeetings, resolveField, fieldMatches, literalMatches,
   type GitOps, type ProofContext,
 } from '../src/lib/roadmap-proof.ts'
-import { stageAtLeast, CRM_STAGES } from '../src/lib/config.ts'
+import { stageAtLeast, wantsProduct, CRM_STAGES } from '../src/lib/config.ts'
 
 /** A fixed "now" so nothing in here depends on the day it runs. */
 const NOW = new Date('2026-09-08T12:00:00Z')
@@ -351,6 +352,20 @@ test('proof fixtures', async t => {
     assert.equal((await n(2)).ok, false, 'the machine-set and the identified contact must not count')
   })
 
+  await t.test('contacts_count: `interested_in` counts, so one person can be demand for two products', async () => {
+    // The OEIS case, reduced: filed under `assistants`, on record asking for PRA.
+    const contacts = [
+      { slug: 'pindy', product: 'assistants', interestedIn: ['prr', 'plan-review'],
+        stage: 'verbal-commitment' as const, worked: true },
+    ]
+    const n = (product: string) => evalCheck(
+      { check: 'contacts_count', product, stage_at_least: 'contacted', count: 1 }, ctx({ contacts }))
+    assert.equal((await n('assistants')).ok, true, 'primary still counts')
+    assert.equal((await n('prr')).ok, true, 'and so does the secondary ask')
+    assert.equal((await n('plan-review')).ok, true)
+    assert.equal((await n('procurement')).ok, false, 'interest is a list, not a wildcard')
+  })
+
   await t.test('meeting_logged: category agency is part of the check, not a bonus', async () => {
     const meetings = [
       { slug: 'm1', title: 'OEIS AI demo', date: '2026-08-26', category: 'agency', agency: 'oeis', contacts: [] },
@@ -421,6 +436,21 @@ test('stageAtLeast: verbal-commitment sits between pilot-discussion and won', ()
   assert.ok(CRM_STAGES.includes('verbal-commitment'))
   // Terminal non-`won` stages are outside the ladder: `lost` is not a lesser win.
   assert.ok(!stageAtLeast('lost', 'contacted'))
+})
+
+test('wantsProduct: interest is additive to attribution, never a replacement', () => {
+  const pindy = { product: 'assistants', interestedIn: ['prr', 'plan-review'] }
+  assert.equal(wantsProduct(pindy, 'assistants'), true, 'primary')
+  assert.equal(wantsProduct(pindy, 'prr'), true, 'secondary')
+  assert.equal(wantsProduct(pindy, 'recruitment'), false)
+  // Absent list, absent product: neither may throw or become a wildcard.
+  assert.equal(wantsProduct({ product: 'prr' }, 'prr'), true)
+  assert.equal(wantsProduct({ product: 'prr' }, 'plan-review'), false)
+  assert.equal(wantsProduct({}, 'prr'), false)
+  assert.equal(wantsProduct({ interestedIn: [] }, 'prr'), false)
+  // The regression this shipped for: a row whose product NOBODY carries as
+  // primary can still score, which is the whole reason the field exists.
+  assert.equal(wantsProduct(pindy, 'plan-review'), true)
 })
 
 test('fieldMatches vs literalMatches: the two coercion rules are different on purpose', () => {
@@ -528,6 +558,34 @@ const lintM = (over: Partial<LintM> & { slug: string }): LintM => ({
   evidence: [{ repo: 'Nexus', path: 'p/' }], proof: [], ...over,
 })
 
+test('rowSignals: the two warnings are mirrors, and both need a product to mean anything', () => {
+  const r = (product: string | undefined, inv30: number, inv90: number, score: number) =>
+    ({ product, investment: { 30: inv30, 90: inv90 }, pull: { score } }) as Parameters<typeof rowSignals>[0]
+
+  // Effort with nobody asking.
+  assert.deepEqual(rowSignals(r('prr', 13, 165, 0)),
+    { investedWithoutPull: true, demandWithoutInvestment: false })
+
+  // The squeeze: somebody warm asking, nobody building. The real Attest numbers.
+  assert.deepEqual(rowSignals(r('plan-review', 8, 17, 9)),
+    { investedWithoutPull: false, demandWithoutInvestment: true })
+
+  // Being built AND wanted is the state we want; neither fires. Real Candor.
+  assert.deepEqual(rowSignals(r('prr', 13, 165, 7)),
+    { investedWithoutPull: false, demandWithoutInvestment: false })
+
+  // A row with no product has no demand column, so NEITHER may fire — BidPro's
+  // `pull 0` is correct by definition (internal, Pavan 2026-09-08), not a finding.
+  assert.deepEqual(rowSignals(r(undefined, 0, 372, 0)),
+    { investedWithoutPull: false, demandWithoutInvestment: false })
+
+  // Warm but only just: below the floor, quiet is a defensible answer.
+  assert.equal(rowSignals(r('ad-hoc-reporting', 26, 99, 3)).demandWithoutInvestment, false)
+  // And a row can be quiet at exactly the threshold without firing.
+  assert.equal(rowSignals(r('prr', 10, 20, 9)).demandWithoutInvestment, false)
+  assert.equal(rowSignals(r('prr', 9, 20, 9)).demandWithoutInvestment, true)
+})
+
 test('lint: a clean board produces no errors', () => {
   assert.deepEqual(lintRoadmap([lintRow()], [lintM({ slug: 'a' })]), [])
 })
@@ -567,6 +625,23 @@ test('lint: a demand/decision with an empty proof list fails, but `manual` passe
   }
 })
 
+test('lint: a proof pattern that will not compile fails at lint, not as `unknown`', () => {
+  // `(?i)` is a Python inline flag; JavaScript throws on it. Shipped in
+  // attest-oeis-demo and only visible as a buried `unknown` reason.
+  const bad = milestone({
+    slug: 'a', row: 'R', kind: 'demand',
+    proof: [{ check: 'meeting_logged', agency: 'oeis', title_match: '(?i)(demo)' }],
+  })
+  const errs = lintRoadmap([row('R', [bad], 0)], [bad])
+  assert.equal(errs.length, 1)
+  assert.match(errs[0], /title_match .* is not a regex/)
+  const good = milestone({
+    slug: 'a', row: 'R', kind: 'demand',
+    proof: [{ check: 'meeting_logged', agency: 'oeis', title_match: '(demo)' }],
+  })
+  assert.deepEqual(lintRoadmap([row('R', [good], 0)], [good]), [])
+})
+
 test('lint: a cycle in unlocks fails and names the loop', () => {
   const errs = lintRoadmap([lintRow()], [
     lintM({ slug: 'a', unlocks: ['b'] }),
@@ -585,4 +660,88 @@ test('lint: a diamond is not a cycle', () => {
     lintM({ slug: 'c', unlocks: ['d'] }),
     lintM({ slug: 'd' }),
   ]), [])
+})
+
+// ── demand → Today ──────────────────────────────────────────────────────────
+
+const contact = (over: Partial<{
+  name: string; product: string; interestedIn: string[]
+  stage: string; lastTouched: string; worked: boolean
+}> = {}) => ({
+  name: 'A', product: 'prr', stage: 'demo-given', lastTouched: ago(3).slice(0, 10), worked: true,
+  ...over,
+}) as Parameters<typeof roadmapDemandSignals>[1][number]
+
+const demandRow = (milestones: RoadmapMilestone[]) => ({
+  ...row('R', milestones, 0), product: 'prr',
+})
+
+test('demand: a warm, recently-touched, human-worked contact surfaces the row\'s next `now` milestone', () => {
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now' })])]
+  const got = roadmapDemandSignals(rows, [contact()], NOW)
+  assert.equal(got.length, 1)
+  assert.equal(got[0].next?.slug, 'a')
+  assert.equal(got[0].daysAgo, 3)
+})
+
+test('demand: a machine-set stage is not demand', () => {
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now' })])]
+  assert.deepEqual(roadmapDemandSignals(rows, [contact({ worked: false })], NOW), [])
+})
+
+test('demand: a cold contact is not demand, however warm the stage', () => {
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now' })])]
+  const stale = contact({ stage: 'won', lastTouched: ago(DEMAND_FRESH_DAYS + 1).slice(0, 10) })
+  assert.deepEqual(roadmapDemandSignals(rows, [stale], NOW), [])
+})
+
+test('demand: below `demo-given` is not a buying signal', () => {
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now' })])]
+  assert.deepEqual(roadmapDemandSignals(rows, [contact({ stage: 'contacted' })], NOW), [])
+})
+
+test('demand: no open `now` work means nothing to surface', () => {
+  // Warm buyer, but every `now` milestone is shipped — there is no move to make.
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now', stage: 'shipped' })])]
+  assert.deepEqual(roadmapDemandSignals(rows, [contact()], NOW), [])
+  // …and `next`/`later` work does not count as something to do today.
+  const later = [demandRow([milestone({ slug: 'b', row: 'R', horizon: 'later' })])]
+  assert.deepEqual(roadmapDemandSignals(later, [contact()], NOW), [])
+})
+
+test('demand: a row with no product is skipped — pull is meaningless there', () => {
+  const rows = [row('R', [milestone({ slug: 'a', row: 'R', horizon: 'now' })], 0)]
+  assert.deepEqual(roadmapDemandSignals(rows, [contact({ product: undefined })], NOW), [])
+})
+
+test('demand: one signal per row, the warmest contact', () => {
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now' })])]
+  const got = roadmapDemandSignals(rows, [
+    contact({ name: 'Cool', stage: 'demo-given' }),
+    contact({ name: 'Hot', stage: 'won' }),
+  ], NOW)
+  assert.equal(got.length, 1)
+  assert.equal(got[0].contactName, 'Hot')
+})
+
+test('demand: a future last_touched is ignored rather than counted as fresh', () => {
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now' })])]
+  const future = contact({ lastTouched: ahead(5) })
+  assert.deepEqual(roadmapDemandSignals(rows, [future], NOW), [])
+})
+
+test('demand: a secondary `interested_in` is demand for that row too', () => {
+  // Filed under another product, asking for this one. Before `interested_in`
+  // this row saw nobody at all (2026-09-08).
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now' })])]
+  const elsewhere = contact({ name: 'Pindy', product: 'assistants', interestedIn: ['prr'] })
+  const got = roadmapDemandSignals(rows, [elsewhere], NOW)
+  assert.equal(got.length, 1)
+  assert.equal(got[0].contactName, 'Pindy')
+})
+
+test('demand: interest in some OTHER product is still not demand for this row', () => {
+  const rows = [demandRow([milestone({ slug: 'a', row: 'R', horizon: 'now' })])]
+  const other = contact({ product: 'assistants', interestedIn: ['plan-review'] })
+  assert.deepEqual(roadmapDemandSignals(rows, [other], NOW), [])
 })

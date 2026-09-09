@@ -64,20 +64,32 @@ run_cmd() {
   printf 'bash -lc %q' "cd $REPO_DIR && $NODE --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/$1"
 }
 
-job_id() {
+# One `cron list` call, two questions: the job's id and its current schedule.
+job_field() {
   openclaw cron list --json | python3 -c '
 import json, sys
 for j in json.load(sys.stdin).get("jobs", []):
     if j.get("name") == sys.argv[1]:
-        print(j["id"]); break
-' "$1"
+        print(j.get(sys.argv[2], "")); break
+' "$1" "$2"
 }
+job_id() { job_field "$1" id; }
 
 register() {
   local name="$1" schedule="$2" script="$3" desc="$4"
   local existing; existing=$(job_id "$name")
   if [ -n "$existing" ]; then
-    echo "    $name already registered ($existing) — leaving as is"
+    # Reconcile, do not just skip. "Already registered" used to mean "leave it
+    # alone", which made the schedule in this file a lie the moment it changed:
+    # the job stayed on whatever it was first created with and nothing said so.
+    # An installer that cannot correct the thing it installs is documentation.
+    local current; current=$(job_field "$name" scheduleExpr)
+    if [ "$current" = "$schedule" ]; then
+      echo "    $name already registered ($existing) on $schedule PT — no change"
+    else
+      openclaw cron edit "$existing" --cron "$schedule" --tz "America/Los_Angeles"
+      echo "    $name reschedule: $current -> $schedule PT"
+    fi
     return
   fi
   # Delivery must be EXPLICIT (an isolated cron without a target reads as an
@@ -94,6 +106,13 @@ register() {
 }
 
 echo "==> Registering cron"
-register roadmap-check "0 6 * * 1-5" roadmap-check.ts "Derive operations/roadmap/_status.md from human commits on origin — Phase 12 commitments board, 2026-09-08"
+# 08:00, not 06:00 — and the two hours matter more than they look.
+#
+# granola-sync writes the day's meeting files at 07:30. At 06:00 the roadmap
+# check ran ninety minutes BEFORE the signal it most wants to read, so a meeting
+# always missed that morning's rescore and waited for the next one: ~40 hours
+# from a Tuesday meeting to the ranking moving, ~64 over a weekend. 08:00 puts
+# it after granola-sync and beside sales-daily-bid-review, and costs a day less.
+register roadmap-check "0 8 * * 1-5" roadmap-check.ts "Derive operations/roadmap/_status.md from human commits on origin, CRM pull, and the build-next ranking — runs after granola-sync so the day's meetings are in it"
 
 echo "==> Done. Verify with: openclaw cron run $(job_id roadmap-check)  (then tail ~/.openclaw/logs/roadmap-check.log)"

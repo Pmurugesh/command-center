@@ -18,7 +18,7 @@ import type { Blocker } from './insights'
 import type { Opportunity } from './procurements'
 import type { StrategicDecision } from './gtm'
 import type { Channel } from './channels'
-import type { RoadmapMilestone } from './roadmap'
+import type { RoadmapMilestone, DemandSignal } from './roadmap'
 import { CRM_TERMINAL_STAGES } from './config'
 
 export type MoveKind = 'strategic' | 'blocker' | 'bid-decision' | 'crm-due' | 'deadline' | 'channel' | 'roadmap'
@@ -81,6 +81,8 @@ export interface MovesInput {
   opportunities: Opportunity[]
   channels: Channel[] // pre-filtered: channelAlerts() output
   roadmap: RoadmapMilestone[] // pre-filtered: roadmapAlerts() output
+  /** Rows where somebody just got warm and there is open `now` work about it. */
+  roadmapDemand: DemandSignal[]
 }
 
 /**
@@ -192,6 +194,34 @@ export function buildMoves(input: MovesInput): Move[] {
       source: 'roadmap',
       due: r.target,
       score: (r.state === 'stranded' ? 50 : r.state === 'slipped' ? 45 : 38) + urgency(r.target),
+    })
+  }
+
+  /**
+   * Demand, the half of the roadmap Today could not see.
+   *
+   * Every other roadmap Move is a debt — a date missed, work shipped and never
+   * wired up. This one is the opposite: someone got warm and there is open work
+   * in that row. Scored at 48, above a slipped commitment (45) and below a
+   * stranded handoff (50): a live buyer outranks a date you set yourself, and
+   * still loses to value already paid for and sitting unused.
+   */
+  // The verb has to match the work. Moves are action-phrased, and telling
+  // someone to "Build:" a `demand` milestone — whose definition of done is a
+  // CRM stage — is an instruction they cannot follow.
+  const VERB: Record<string, string> = {
+    build: 'Build', handoff: 'Chase', demand: 'Close', decision: 'Decide',
+  }
+  for (const d of input.roadmapDemand) {
+    if (!d.next) continue
+    moves.push({
+      id: `roadmap-demand:${d.row}`,
+      kind: 'roadmap',
+      action: `${VERB[d.next.kind] ?? 'Do'}: ${d.next.name} — ${d.contactName} reached ${d.stage} ${d.daysAgo}d ago`,
+      detail: `${d.rowName} · ${d.next.reason}`,
+      href: `/roadmap#${d.next.slug}`,
+      source: 'roadmap',
+      score: 48,
     })
   }
 

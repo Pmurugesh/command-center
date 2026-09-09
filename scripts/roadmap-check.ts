@@ -43,12 +43,12 @@ import matter from 'gray-matter'
 import { PATHS, REPO_CANDIDATES } from '../src/lib/paths.ts'
 import { runCommandArgs } from '../src/lib/shell.ts'
 import {
-  readAuthored, lintRoadmap, deriveState, deriveStage, rankBuildNext, pullScore,
-  INVESTMENT_WINDOWS,
+  readAuthored, lintRoadmap, deriveState, deriveStage, rankBuildNext, topOpenByRow,
+  pullScore, INVESTMENT_WINDOWS,
   type HandoffState, type ProofCheck, type ProofResult, type RoadmapRow,
   type RoadmapMilestone, type RowPull, type DerivedEntry,
 } from '../src/lib/roadmap.ts'
-import { stageAtLeast } from '../src/lib/config.ts'
+import { stageAtLeast, wantsProduct } from '../src/lib/config.ts'
 import {
   evalCheck, readContacts, readMeetings,
   type Contact, type Meeting, type ProofContext, type GitOps,
@@ -398,17 +398,22 @@ async function rowInvestment(
 /**
  * Pull: is anyone asking for this?
  *
- * `byStage` is the honest inventory — every contact for the row's product,
+ * `byStage` is the honest inventory — every contact who WANTS the row's product,
  * bucketed. The SCORE counts only human-worked contacts, because a stage set by
  * lead-sync is an import, not interest, and `identified` is weighted zero
  * because 95 of 104 contacts sit there. Meetings are the strongest signal in
  * the set and are worth two stage-points each.
+ *
+ * "Wants" is `wantsProduct`, not `product ===`: one contact can ask for several
+ * products, so these row totals deliberately do NOT partition the book. A person
+ * asking for three things is demand for three rows, and counting them once would
+ * be the bug this replaced.
  */
 function rowPull(row: RoadmapRow, contacts: Contact[], meetings: Meeting[], now: Date): RowPull {
   const empty: RowPull = { byStage: {}, total: 0, warm: 0, meetings90: 0, score: 0 }
   if (!row.product) return empty
 
-  const mine = contacts.filter(c => c.product === row.product)
+  const mine = contacts.filter(c => wantsProduct(c, row.product!))
   const byStage: Record<string, number> = {}
   for (const c of mine) byStage[c.stage] = (byStage[c.stage] ?? 0) + 1
 
@@ -539,6 +544,9 @@ async function main() {
 
   for (const r of rows) r.milestones = full.filter(m => m.row === r.slug)
   const ranking = rankBuildNext(rows, now, 10)
+  // Same scoring, applied per row — Build next is a global top ten, so most
+  // rows have nothing in it and need a local answer.
+  const nextByRow = topOpenByRow(rows, now)
 
   const order = ['slipped', 'stranded', 'at-risk', 'unknown', 'idle', 'no-target', 'needs-person', 'on-track', 'active', 'done']
   const sorted = [...full].sort((x, y) =>
@@ -561,7 +569,10 @@ async function main() {
         d.proof_true ?? null, d.proof_total ?? null, d.error ?? null,
       ]
     }).concat(
-      rows.map(r => [r.slug, JSON.stringify(r.investment ?? {}), JSON.stringify(r.pull ?? {})]) as never[]
+      rows.map(r => [
+        r.slug, JSON.stringify(r.investment ?? {}), JSON.stringify(r.pull ?? {}),
+        nextByRow[r.slug] ?? null,
+      ]) as never[]
     ).concat([lint as never])
   )).digest('hex').slice(0, 12)
 
@@ -573,6 +584,7 @@ async function main() {
     'rows:',
     ...rows.flatMap(r => [
       `  - slug: ${r.slug}`,
+      ...(nextByRow[r.slug] ? [`    next_milestone: ${nextByRow[r.slug]}`] : []),
       '    investment:',
       ...INVESTMENT_WINDOWS.map(w => `      d${w}: ${r.investment?.[w] ?? 0}`),
       '    pull:',
