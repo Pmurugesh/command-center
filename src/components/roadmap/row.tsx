@@ -16,7 +16,7 @@
  */
 import { Card, CardContent } from '@/components/ui/card'
 import { MilestoneCard } from './milestone'
-import { HORIZONS, type RoadmapRow } from '@/lib/roadmap'
+import { HORIZONS, rowSignals, type RoadmapRow } from '@/lib/roadmap'
 import { cn } from '@/lib/utils'
 
 const HORIZON_LABEL: Record<string, string> = { now: 'Now', next: 'Next', later: 'Later' }
@@ -33,22 +33,11 @@ export function RowCard({ row, ranks }: {
   const trouble = row.milestones.filter(m =>
     m.state === 'slipped' || m.state === 'at-risk' || m.state === 'stranded').length
 
-  // Effort with nobody asking is the single most useful thing this card can say,
-  // and it is only sayable because both halves are derived.
-  //
-  // Gated on `product`, and that gate is load-bearing: pull is measured from CRM
-  // contacts who want this row's product, so a row without one scores 0 by
-  // construction, not by neglect. Ungated, this fired on BidPro, Contract
-  // Management and the platform row — three rows where a demand column is
-  // meaningless — and an alarm that cannot ever be true is one you learn to
-  // ignore, which would have cost the three rows where it IS true.
-  //
-  // "Want" is `product` OR `interested_in` (2026-09-08). Before that it was
-  // `product` alone, and this warning fired on Candor — 165 human commits, pull
-  // 0 — while a CIO was on record asking for PRA under `product: assistants`.
-  // The alarm was right about the shape and wrong about the fact.
-  const investedWithoutPull =
-    Boolean(row.product) && (inv90 ?? 0) >= 20 && (pull?.score ?? 0) === 0
+  // Effort and demand disagreeing is the single most useful thing this card can
+  // say, and it is only sayable because both halves are derived. Both directions
+  // live in `rowSignals` so the page and the script cannot drift on the
+  // thresholds; the reasoning for each is there.
+  const { investedWithoutPull, demandWithoutInvestment } = rowSignals(row)
 
   return (
     <Card id={row.slug} className={cn('scroll-mt-16', trouble > 0 && 'border-status-danger/30')}>
@@ -109,6 +98,17 @@ export function RowCard({ row, ranks }: {
           <p className="mt-3 text-xs text-status-warning/90">
             {inv90} human commits in 90 days and no recorded pull — no contact past
             {' '}<span className="font-mono">identified</span>, no agency meeting.
+          </p>
+        )}
+
+        {/* The mirror, and the more expensive one. Deliberately says "somebody is
+            asking", never "somebody should be assigned": Pavan asked for the
+            squeeze to be visible without the board tracking people. */}
+        {demandWithoutInvestment && (
+          <p className="mt-3 text-xs text-status-accent/90">
+            Pull {pull?.score}{pull && pull.warm > 0 ? ` from ${pull.warm} warm contact${pull.warm === 1 ? '' : 's'}` : ''}
+            {' '}and {inv30 ?? 0} human commit{inv30 === 1 ? '' : 's'} in 30 days — somebody is asking
+            and nobody is building.
           </p>
         )}
 

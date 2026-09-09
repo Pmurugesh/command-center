@@ -25,6 +25,7 @@ import path from 'path'
 import {
   deriveState, deriveStage, lintRoadmap, rankBuildNext, reachableThroughUnlocks,
   parseProof, pullScore, daysBetween, roadmapDemandSignals, DEMAND_FRESH_DAYS,
+  rowSignals,
   type RoadmapMilestone, type RoadmapRow, type DerivedEntry, type Stage,
 } from '../src/lib/roadmap.ts'
 import {
@@ -555,6 +556,34 @@ type LintM = Parameters<typeof lintRoadmap>[1][number]
 const lintM = (over: Partial<LintM> & { slug: string }): LintM => ({
   row: 'r', kind: 'build', unlocks: [], blockedOn: [],
   evidence: [{ repo: 'Nexus', path: 'p/' }], proof: [], ...over,
+})
+
+test('rowSignals: the two warnings are mirrors, and both need a product to mean anything', () => {
+  const r = (product: string | undefined, inv30: number, inv90: number, score: number) =>
+    ({ product, investment: { 30: inv30, 90: inv90 }, pull: { score } }) as Parameters<typeof rowSignals>[0]
+
+  // Effort with nobody asking.
+  assert.deepEqual(rowSignals(r('prr', 13, 165, 0)),
+    { investedWithoutPull: true, demandWithoutInvestment: false })
+
+  // The squeeze: somebody warm asking, nobody building. The real Attest numbers.
+  assert.deepEqual(rowSignals(r('plan-review', 8, 17, 9)),
+    { investedWithoutPull: false, demandWithoutInvestment: true })
+
+  // Being built AND wanted is the state we want; neither fires. Real Candor.
+  assert.deepEqual(rowSignals(r('prr', 13, 165, 7)),
+    { investedWithoutPull: false, demandWithoutInvestment: false })
+
+  // A row with no product has no demand column, so NEITHER may fire — BidPro's
+  // `pull 0` is correct by definition (internal, Pavan 2026-09-08), not a finding.
+  assert.deepEqual(rowSignals(r(undefined, 0, 372, 0)),
+    { investedWithoutPull: false, demandWithoutInvestment: false })
+
+  // Warm but only just: below the floor, quiet is a defensible answer.
+  assert.equal(rowSignals(r('ad-hoc-reporting', 26, 99, 3)).demandWithoutInvestment, false)
+  // And a row can be quiet at exactly the threshold without firing.
+  assert.equal(rowSignals(r('prr', 10, 20, 9)).demandWithoutInvestment, false)
+  assert.equal(rowSignals(r('prr', 9, 20, 9)).demandWithoutInvestment, true)
 })
 
 test('lint: a clean board produces no errors', () => {

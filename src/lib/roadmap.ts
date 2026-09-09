@@ -431,6 +431,58 @@ const PULL_STAGE_WEIGHT: Record<string, number> = {
   lost: 0, disqualified: 0,
 }
 
+/**
+ * The two ways a row's effort and its demand can disagree — deliberately mirrors.
+ *
+ * `investedWithoutPull` is effort with nobody asking. `demandWithoutInvestment`
+ * is the opposite and the more expensive one: somebody warm is asking and
+ * nobody is building. Pavan named the second himself on 2026-09-08 — "if I need
+ * more resources then I need more and I need to hire or fire depending on the
+ * need" — and asked for the squeeze to be surfaced **without the board tracking
+ * people**. So this reads only commits and demand, the two things it already
+ * derives, and says nothing about who. The read that the answer is a person
+ * stays his.
+ *
+ * Both are gated on `product`. That gate is load-bearing: a row with no product
+ * has no demand column at all, so both flags would be meaningless there — and
+ * BidPro's `pull 0` in particular is now correct BY DEFINITION (Pavan confirmed
+ * it internal, 2026-09-08), not a finding.
+ *
+ * The thresholds, and why they are these:
+ *
+ * - `pull >= 5` is one contact at `verbal-commitment` — someone has actually
+ *   said yes — or an equivalent mix. Below that, "demand" is a meeting or two
+ *   and quiet is a defensible answer.
+ * - `inv30 < 10` is under roughly two human commits a week: a row nobody is
+ *   actively building, as opposed to one being built slowly.
+ *
+ * Checked against the real board rather than picked in the abstract: it fires on
+ * Attest (8 commits / pull 9), Steward (6 / 17) and Milestone (7 / 14) and on
+ * nothing else. Those are exactly the rows behind Pavan's own sentence — "the
+ * two products with warm agencies got 18 between them".
+ */
+export const DEMAND_FLOOR_SCORE = 5
+export const QUIET_COMMITS_30D = 10
+
+export interface RowSignals {
+  /** Effort with nobody asking. */
+  investedWithoutPull: boolean
+  /** Somebody warm is asking and nobody is building — the squeeze. */
+  demandWithoutInvestment: boolean
+}
+
+export function rowSignals(row: Pick<RoadmapRow, 'product' | 'investment' | 'pull'>): RowSignals {
+  const scored = Boolean(row.product)
+  const inv30 = row.investment?.[30] ?? 0
+  const inv90 = row.investment?.[90] ?? 0
+  const score = row.pull?.score ?? 0
+  return {
+    investedWithoutPull: scored && inv90 >= 20 && score === 0,
+    demandWithoutInvestment:
+      scored && score >= DEMAND_FLOOR_SCORE && inv30 < QUIET_COMMITS_30D,
+  }
+}
+
 export function pullScore(byStage: Record<string, number>, meetings90: number): number {
   let s = 0
   for (const [stage, n] of Object.entries(byStage)) s += (PULL_STAGE_WEIGHT[stage] ?? 0) * n

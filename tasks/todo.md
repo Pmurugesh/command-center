@@ -1960,3 +1960,56 @@ because those clones are not on this machine. That is the check working; the rea
 from the mini.
 
 **Still open:** the three other DWR attendees are named but uncreated — Pavan named only Jim.
+
+---
+
+## Phase 13 addendum — context sessions 2 and 3 (2026-09-08)
+
+Eight answers from Pavan. Four resolved standing decisions; four defined things the board was
+asserting without being able to check.
+
+| | answer | what changed |
+|---|---|---|
+| **#8 Allocation** | a **sequence**, not a split | CM + BidPro to live → both to maintenance; warm demand resourced by **headcount**, not by moving effort off the first two |
+| **#5 BidPro** | internal tool, confirmed | no product slug, no demand column, no price; 337 commits/month = overhead. Handoff written for the contradicting plan doc |
+| **Web Intelligence** | delete per M7 | chat surface + module shell out, crawl/search stay as tools; `waiting_on` moves from nobody to the Nexus team |
+| **Contract Management** | Pavan takes it over | Antariksh's 8-week gap is a change of hands, not a stall; four `waiting_on: Pavan` items become his own queue |
+| **CM "live"** | our own book runs on it | `cm-production-books` is now the definition — and it was already #3 in Build-next, so the ranking agrees with the stated goal rather than merely correlating |
+| **BidPro "live"** | the team stops using the old way | adoption. Deliberately unmeasurable here and left `proof: manual` — a proxy would read done while people quietly work around the tool |
+| **Demo tenant API** | always-on container, not serverless | Attest examines 747 pages in one run; function timeouts break exactly that. **Already containerized** (`deployment/docker/Dockerfile.api`), so it is a deploy-target choice |
+| **Headcount** | surface the squeeze, don't track people | new `demandWithoutInvestment` signal |
+
+### The squeeze signal
+
+`rowSignals()` in `src/lib/roadmap.ts` — the two ways effort and demand can disagree, as mirrors:
+
+- `investedWithoutPull` — effort with nobody asking (existing, moved out of the component)
+- `demandWithoutInvestment` — **pull ≥ 5 and under 10 human commits in 30 days**: somebody warm is
+  asking and nobody is building
+
+Reads only commits and demand, the two things already derived. It says *"somebody is asking"*, never
+*"assign someone"* — Pavan asked for the squeeze without the board tracking people, so the read that
+the answer is a hire stays his.
+
+Thresholds checked against the real board rather than picked in the abstract: pull ≥ 5 is one
+contact at `verbal-commitment`; inv30 < 10 is under ~two commits a week. It fires on Attest (8/9),
+Steward (6/17) and Milestone (7/14) and nothing else — exactly the rows behind Pavan's own sentence,
+"the two products with warm agencies got 18 between them".
+
+- [x] `rowSignals()` extracted, both directions, with the reasoning at the definition
+- [x] `row.tsx` renders the mirror in accent, distinct from the amber over-invested warning
+- [x] Verified rendering live on Steward and Milestone (screenshot in the PR)
+- [x] Handoffs for the two read-only repos: `workflows/web-intelligence-retire.md`,
+      `workflows/bidpro-internal-not-product.md`
+
+**Corrected mid-task:** I checked `~/repos/Nexus` for a Dockerfile, found nothing, and nearly
+recorded "the API is not containerized". That path does not exist on the MacBook — Nexus is
+`~/infiniteai_platform` here (`~/repos/Nexus` is the *mini's* path). `deployment/docker/Dockerfile.api`
+exists, which flips the demo-API decision from a project into a deploy-target choice.
+
+**Verified:** 81/81 tests (was 75 at the start of the day), `tsc` clean, eslint clean, `--dry` lints
+clean at 13 rows / 66 milestones.
+
+**Still open:** the `pull` columns, the cleared Candor warning and Attest's new squeeze flag all
+land when the mini regenerates `_status.md` — `_` files are derived and this machine refuses to
+write them. The vendor for the demo API container is deliberately unpinned.
