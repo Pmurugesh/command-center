@@ -20,7 +20,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/empty-state'
 import { Card, CardContent } from '@/components/ui/card'
 import { RowCard } from '@/components/roadmap/row'
-import { StatePill } from '@/components/roadmap/milestone'
+import { StatePill, isNews } from '@/components/roadmap/milestone'
 import { Map as MapIcon, Boxes, Layers, Briefcase, Wrench, Globe, AlertTriangle, ArrowRight, HelpCircle } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -51,7 +51,7 @@ export default async function RoadmapPage() {
     m.state === 'slipped' || m.state === 'at-risk' || m.state === 'stranded').length
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Roadmap"
         description={
@@ -108,80 +108,96 @@ export default async function RoadmapPage() {
         />
       ) : (
         <>
-          {/* ── Build next ─────────────────────────────────────────────── */}
-          <Card>
-            <CardContent className="p-5">
-              <h2 className="flex items-center gap-2 text-lg font-semibold">
+          {/* ── Build next ────────────────────────────────────────────── */}
+          {/* A section, not a card. Three nested box layers (page → section →
+              tile) was most of what made this page feel heavy. */}
+          <section>
+            <div className="flex items-baseline gap-3 border-b border-border pb-2">
+              <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
                 <ArrowRight className="h-4 w-4" /> Build next
               </h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Ranked by how many open milestones each unlocks, weighted by the pull behind them,
-                plus urgency. Deterministic — no model call, and the same numbers the check printed.
+              <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                Open milestones ranked by reach through <span className="font-mono">unlocks</span>,
+                weighted by pull, plus urgency. Deterministic — no model call.
               </p>
-              {status.ranking.length === 0 ? (
-                <p className="mt-3 text-sm text-muted-foreground">
-                  No ranking yet — <code className="font-mono text-xs">roadmap-check</code> has not
-                  written one.
-                </p>
-              ) : (
-                <ol className="mt-3 space-y-1.5">
-                  {status.ranking.slice(0, 8).map((r, i) => {
-                    const m = bySlug.get(r.slug)
-                    return (
-                      <li key={r.slug} className="flex items-baseline gap-3">
-                        <span className="w-4 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                          {i + 1}
-                        </span>
-                        <Link
-                          href={`#${r.slug}`}
-                          className="text-sm font-medium underline-offset-2 hover:underline"
-                        >
-                          {r.name}
-                        </Link>
-                        {m && <StatePill state={m.state} />}
-                        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                          {r.reason}
-                        </span>
-                        <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
-                          {r.score.toFixed(1)}
-                        </span>
-                      </li>
-                    )
-                  })}
-                </ol>
-              )}
-            </CardContent>
-          </Card>
+            </div>
+            {status.ranking.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                No ranking yet — <code className="font-mono text-xs">roadmap-check</code> has not
+                written one.
+              </p>
+            ) : (
+              <ol className="mt-1 divide-y divide-border/60">
+                {status.ranking.slice(0, 8).map((r, i) => {
+                  const m = bySlug.get(r.slug)
+                  return (
+                    <li key={r.slug} className="flex items-baseline gap-3 py-2">
+                      <span className="w-4 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground/70">
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <Link
+                            href={`#${r.slug}`}
+                            className="text-sm font-medium underline-offset-4 hover:underline"
+                          >
+                            {r.name}
+                          </Link>
+                          {/* Only news gets a pill — see components/roadmap/milestone.tsx. */}
+                          {m && isNews(m.state) && <StatePill state={m.state} />}
+                          <span className="font-mono text-[10px] text-muted-foreground/70">{r.row}</span>
+                        </div>
+                        {/* Its own line: at any width this used to truncate
+                            mid-word, which reads as a bug rather than a summary. */}
+                        <p className="mt-0.5 text-xs text-muted-foreground">{r.reason}</p>
+                      </div>
+                      <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground/60">
+                        {r.score.toFixed(1)}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ol>
+            )}
+          </section>
 
-          {/* ── Decisions ──────────────────────────────────────────────── */}
+          {/* ── Decisions ─────────────────────────────────────────────── */}
+          {/* One line each. These run to five lines of prose apiece, and five of
+              them stacked was a wall between the reader and every row. */}
           {roadmapDecisions.length > 0 && (
-            <Card className="border-status-warning/30">
-              <CardContent className="p-5">
-                <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <section>
+              <div className="flex items-baseline gap-3 border-b border-border pb-2">
+                <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
                   <HelpCircle className="h-4 w-4" /> Decisions
                   <span className="font-mono text-sm tabular-nums text-muted-foreground">
                     {roadmapDecisions.length}
                   </span>
                 </h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Open <code className="font-mono">[DECISION]</code> lines raised by the roadmap
-                  itself. Nobody else can answer these, and none of them is code.
+                <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                  Raised by the roadmap itself. Nobody else can answer these, and none is code.
                 </p>
-                <ul className="mt-3 space-y-2">
-                  {roadmapDecisions.map((d, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-status-warning" />
-                      <span>
-                        {d.text}{' '}
-                        <Link href={`#${d.source}`} className="font-mono text-xs text-muted-foreground underline-offset-2 hover:underline">
+              </div>
+              <ul className="mt-1 divide-y divide-border/60">
+                {roadmapDecisions.map((d, i) => (
+                  <li key={i}>
+                    <details className="group py-2">
+                      <summary className="flex cursor-pointer list-none select-none items-baseline gap-2">
+                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-status-warning" />
+                        <span className="min-w-0 flex-1 truncate text-sm group-open:whitespace-normal">
+                          {d.text}
+                        </span>
+                        <Link
+                          href={`#${d.source}`}
+                          className="shrink-0 font-mono text-[10px] text-muted-foreground underline-offset-2 hover:underline"
+                        >
                           {d.source}
                         </Link>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
+                      </summary>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
 
           {/* ── Rows, grouped ──────────────────────────────────────────── */}
@@ -189,12 +205,12 @@ export default async function RoadmapPage() {
             const group = rows.filter((r: RoadmapRow) => r.group === g.key)
             if (group.length === 0) return null
             return (
-              <section key={g.key} className="space-y-4">
-                <div>
-                  <h2 className="flex items-center gap-2 text-lg font-semibold">
-                    <g.icon className="h-4 w-4" /> {g.label}
+              <section key={g.key} className="space-y-3 pt-2">
+                <div className="flex flex-wrap items-baseline gap-x-3">
+                  <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
+                    <g.icon className="h-4 w-4 text-muted-foreground" /> {g.label}
                   </h2>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{g.blurb}</p>
+                  <p className="text-xs text-muted-foreground">{g.blurb}</p>
                 </div>
                 {group.map(r => <RowCard key={r.slug} row={r} />)}
               </section>
