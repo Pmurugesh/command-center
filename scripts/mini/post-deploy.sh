@@ -17,9 +17,18 @@ INSTALLERS=(
   scripts/mini/install-cron-delivery.sh   # no cron may run with delivery "last" and no target
 )
 
-for inst in "${INSTALLERS[@]}"; do
-  out=$(bash "$inst" 2>&1); rc=$?
-  printf '%s\n' "$out" | sed "s|^|    [$(basename "$inst" .sh)] |"
+# Installers that need the gateway token and skip cleanly without it. Kept apart
+# only so the argument is visible; install-cron-delivery.sh above already proves
+# openclaw cron changes work from here under launchd.
+GATED_INSTALLERS=(
+  "scripts/mini/install-roadmap-check.sh --if-possible"  # the board goes stale unless this job runs
+)
+
+for inst in "${INSTALLERS[@]}" "${GATED_INSTALLERS[@]}"; do
+  # shellcheck disable=SC2086 — the gated entries carry their own flag.
+  out=$(bash $inst 2>&1); rc=$?
+  name=$(basename "${inst%% *}" .sh)
+  printf '%s\n' "$out" | sed "s|^|    [$name] |"
   if [ "$rc" -eq 0 ]; then
     echo "post-deploy: $inst ok"
   else

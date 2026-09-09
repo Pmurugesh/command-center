@@ -9,7 +9,7 @@
 import type { Meeting } from './calendar'
 import type { Opportunity } from './procurements'
 import type { Lead } from './leads'
-import type { RoadmapItem } from './roadmap'
+import type { RoadmapMilestone } from './roadmap'
 import type { Bid } from '@/types'
 
 export type ClockKind = 'meeting' | 'bid' | 'opportunity' | 'lead' | 'roadmap'
@@ -42,7 +42,7 @@ export function buildClock(
     bids: Bid[]
     opportunities: Opportunity[]
     leads: Lead[]
-    roadmap?: RoadmapItem[]
+    roadmap?: RoadmapMilestone[]
   },
   now = new Date()
 ): ClockItem[] {

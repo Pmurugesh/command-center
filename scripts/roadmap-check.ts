@@ -1,31 +1,37 @@
 /**
- * Weekly roadmap check — regenerate `operations/roadmap/_status.md` (Phase 12).
+ * Roadmap check — regenerate `operations/roadmap/_status.md` (Phases 12 + 13).
  *
- * Answers "are we on time?" for the ten tracked initiatives, from two numbers
- * per initiative: days to the target you set, and days since the last HUMAN
- * commit touching the evidence path. The second number is the whole trick — a
- * deadline approaching with nothing landing where the work should land is the
- * only honest slip signal available without status meetings.
+ * Phase 12 answered "are we on time?" from two numbers per initiative: days to
+ * the target you set, and days since the last HUMAN commit touching the evidence
+ * path. Phase 13 keeps both and adds the three things a direction layer needs:
  *
- * Three rules this script exists to obey, each learned from a real failure on
- * 2026-09-08:
+ *   proof       `demand` and `decision` milestones resolve against the CRM and
+ *               against facts typed once — nine checks, no tenth, no model call.
+ *   investment  human commits per ROW over 30 and 90 days, so "where is the
+ *               effort actually going" stops being a guess.
+ *   pull        contacts by stage and logged agency meetings per row, so the
+ *               ranking can weight unlocks by whether anyone is asking.
+ *
+ * Four rules this script exists to obey, each learned from a real failure:
  *
  *  1. **Read `origin`, never a working tree.** The mini's contract-management
  *     clone was 98 days behind its own origin; Nexus was 12 behind. A check
  *     against working trees declares live initiatives dead.
- *  2. **Exclude machine commits.** operations takes ~250 commits/90d of which
- *     the clear majority are janitor and cron writes (`auto:`, `crm: log touch`,
- *     Paladin). An evidence path under a machine-written tree is green forever.
- *     contract-management carries renovate[bot] for the same reason.
+ *  2. **Exclude machine commits — and machine CRM touches.** operations takes
+ *     ~250 commits/90d of which the clear majority are janitor and cron writes.
+ *     `crm/` is entirely machine-written, so a demand check filters by the log
+ *     line's `via`, never by commit author: filtering by author there would
+ *     exclude everything, and not filtering would count lead-sync as selling.
  *  3. **Absence renders unknown, never green.** A repo that will not fetch, a
  *     path that resolves to nothing — those are `error`, and `deriveState` turns
- *     them into `unknown`. Never `on-track`.
+ *     them into `unknown`. A DoD no check can express is `proof: manual`, which
+ *     renders needs-a-person. Neither is ever `on-track`.
+ *  4. **A partial board is worse than a stale board.** Refuse to write from a
+ *     machine missing any referenced repo, and exit 2.
  *
- * Runs weekly ON THE MINI (always-on since the 2026-08-24 pmset fix, holds all
- * the clones), NOT in the MacBook's `com.pavan.weekly-sync` — that job silently
- * missed its 2026-09-07 run, which is how `_registry.md` went 8 days stale.
- *
- * Writes only when content changed, like generate-registry.ts.
+ * Runs daily ON THE MINI (always-on since the 2026-08-24 pmset fix, holds all
+ * the clones). Writes only when a fingerprint of FACTS changes, so a daily cron
+ * does not produce a daily commit.
  *
  * Run:  node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/roadmap-check.ts [--dry]
  */
@@ -36,7 +42,17 @@ import crypto from 'crypto'
 import matter from 'gray-matter'
 import { PATHS, REPO_CANDIDATES } from '../src/lib/paths.ts'
 import { runCommandArgs } from '../src/lib/shell.ts'
-import { deriveState, type HandoffState } from '../src/lib/roadmap.ts'
+import {
+  readAuthored, lintRoadmap, deriveState, deriveStage, rankBuildNext, pullScore,
+  INVESTMENT_WINDOWS,
+  type HandoffState, type ProofCheck, type ProofResult, type RoadmapRow,
+  type RoadmapMilestone, type RowPull, type DerivedEntry,
+} from '../src/lib/roadmap.ts'
+import { stageAtLeast } from '../src/lib/config.ts'
+import {
+  evalCheck, readContacts, readMeetings,
+  type Contact, type Meeting, type ProofContext, type GitOps,
+} from '../src/lib/roadmap-proof.ts'
 
 const DRY = process.argv.includes('--dry')
 
@@ -85,29 +101,50 @@ const git = (repo: string, args: string[], timeout = 120_000) =>
   runCommandArgs('git', ['-C', repo, ...args], timeout)
 
 /** origin's default branch, not ours — `main` is the fallback, not the assumption. */
+const refCache = new Map<string, string>()
 async function originRef(repo: string): Promise<string> {
+  if (refCache.has(repo)) return refCache.get(repo)!
   const head = await git(repo, ['symbolic-ref', '-q', '--short', 'refs/remotes/origin/HEAD'])
-  return head.trim() || 'origin/main'
+  const ref = head.trim() || 'origin/main'
+  refCache.set(repo, ref)
+  return ref
 }
 
 const fetched = new Set<string>()
 async function fetchOnce(repo: string): Promise<boolean> {
   if (fetched.has(repo)) return true
   // --prune keeps deleted remote branches from resolving; 5 min for Nexus.
-  const out = await runCommandArgs(
-    'git', ['-C', repo, 'fetch', '-q', '--prune', 'origin'], 300_000
-  )
+  await runCommandArgs('git', ['-C', repo, 'fetch', '-q', '--prune', 'origin'], 300_000)
   // runCommandArgs returns '' on failure AND on quiet success, so probe the ref.
   const ok = Boolean((await git(repo, ['rev-parse', '--verify', '-q', await originRef(repo)])).trim())
   if (ok) fetched.add(repo)
-  void out
   return ok
+}
+
+/** Resolve, fetch and ref in one step — `null` when the repo is unusable here. */
+async function openRepo(name: string): Promise<{ dir: string; ref: string } | { error: string }> {
+  const dir = await resolveRepo(name)
+  if (!dir) return { error: `${name} ${NOT_CLONED}` }
+  if (!await fetchOnce(dir)) return { error: `${name} could not fetch origin` }
+  return { dir, ref: await originRef(dir) }
 }
 
 /** Field separator for git --format: a byte no commit subject or name contains. */
 const SEP = '\x1f'
 
-interface HumanCommit { at: string; author: string; subject: string }
+interface HumanCommit { at: string; author: string; subject: string; sha: string }
+
+function parseCommits(out: string): HumanCommit[] {
+  const rows: HumanCommit[] = []
+  for (const line of out.split('\n')) {
+    if (!line.trim()) continue
+    const [sha, at, author, subject = ''] = line.split(SEP)
+    if (!sha || !at || !author) continue
+    if (BOT_AUTHORS.has(author) || BOT_SUBJECTS.test(subject)) continue
+    rows.push({ sha, at, author: canonAuthor(author), subject })
+  }
+  return rows
+}
 
 /**
  * The last commit on `ref` touching `paths` that a person actually made.
@@ -118,16 +155,21 @@ interface HumanCommit { at: string; author: string; subject: string }
  */
 async function lastHumanCommit(repo: string, ref: string, paths: string[]): Promise<HumanCommit | null> {
   const out = await git(repo, [
-    'log', '-n', '300', '--no-merges', `--format=%aI${SEP}%an${SEP}%s`, ref, '--', ...paths,
+    'log', '-n', '300', '--no-merges', `--format=%H${SEP}%aI${SEP}%an${SEP}%s`, ref, '--', ...paths,
   ])
-  for (const line of out.split('\n')) {
-    if (!line.trim()) continue
-    const [at, author, subject = ''] = line.split(SEP)
-    if (!at || !author) continue
-    if (BOT_AUTHORS.has(author) || BOT_SUBJECTS.test(subject)) continue
-    return { at, author: canonAuthor(author), subject }
-  }
-  return null
+  return parseCommits(out)[0] ?? null
+}
+
+/** Human commit SHAs on `ref` in the last `window` days, optionally path-scoped. */
+async function humanCommitShas(
+  repo: string, ref: string, window: number, paths: string[] = []
+): Promise<Set<string>> {
+  const args = [
+    'log', '--no-merges', `--since=${window} days ago`, `--format=%H${SEP}%aI${SEP}%an${SEP}%s`, ref,
+  ]
+  if (paths.length) args.push('--', ...paths)
+  const out = await git(repo, args, 180_000)
+  return new Set(parseCommits(out).map(c => c.sha))
 }
 
 /**
@@ -143,7 +185,7 @@ async function grepAtRef(repo: string, ref: string, needle: string, sub?: string
   const args = ['-C', repo, 'grep', '-l', '--fixed-strings', needle, ref]
   if (sub) args.push('--', sub)
   return new Promise((resolve, reject) => {
-    execFile('git', args, { timeout: 120_000 }, (err, stdout) => {
+    execFile('git', args, { timeout: 120_000, maxBuffer: 32 * 1024 * 1024 }, (err, stdout) => {
       const code = (err as { code?: number } | null)?.code
       if (err && code !== 1) return reject(err)
       resolve(stdout.split('\n').filter(Boolean).length)
@@ -153,19 +195,34 @@ async function grepAtRef(repo: string, ref: string, needle: string, sub?: string
 
 /** When did `needle` first land on `ref`? Pickaxe over the whole history. */
 async function whenLanded(repo: string, ref: string, needle: string): Promise<string | null> {
-  const out = await git(repo, [
-    'log', '--reverse', '--format=%aI', '-S', needle, ref,
-  ], 180_000)
+  const out = await git(repo, ['log', '--reverse', '--format=%aI', '-S', needle, ref], 180_000)
   return out.split('\n').filter(Boolean)[0]?.trim() ?? null
 }
 
-interface Authored {
-  slug: string; name: string; group: string; kind: string
-  target?: string; done?: string
-  repos: string[]
-  evidence: { repo: string; path: string }[]
-  handoff: { spec?: string; landed?: string; consumed_by?: string; pr?: string }
+/** One file's contents at `ref` — for reading a flag default without checkout. */
+async function showAtRef(repo: string, ref: string, file: string): Promise<string | null> {
+  const out = await git(repo, ['show', `${ref}:${file}`], 60_000)
+  return out.trim() ? out : null
 }
+
+async function pathCount(repo: string, ref: string, paths: string[]): Promise<number> {
+  if (!paths.length) return 0
+  const out = await git(repo, ['ls-tree', '-r', '--name-only', ref, '--', ...paths])
+  return out.split('\n').filter(Boolean).length
+}
+
+/**
+ * Git, as the proof engine needs it — the real implementation of the seam that
+ * makes the nine checks testable. Everything reads `origin` after a fetch.
+ */
+const GIT: GitOps = {
+  open: openRepo,
+  pathCount,
+  grep: grepAtRef,
+  show: showAtRef,
+}
+
+// ── per-milestone checks ────────────────────────────────────────────────────
 
 interface Checked {
   slug: string
@@ -175,71 +232,34 @@ interface Checked {
   handoff_state?: HandoffState
   handoff_age_days?: number | null
   handoff_at?: string | null
+  proof_true?: number
+  proof_total?: number
+  proof_results?: ProofResult[]
+  proven_true?: number
+  proven_total?: number
   error?: string
 }
 
-/** One line per run, outside git — the page reads the last `ok` for freshness. */
-async function logRun(line: string): Promise<void> {
-  if (DRY) return
-  try {
-    await fs.mkdir(path.dirname(PATHS.roadmapCheckLog), { recursive: true })
-    await fs.appendFile(PATHS.roadmapCheckLog, `${new Date().toISOString()} ${line}\n`)
-  } catch { /* a logging failure must not fail a check */ }
-}
+type Milestone = Awaited<ReturnType<typeof readAuthored>>['milestones'][number]
 
-function ymd(v: unknown): string | undefined {
-  if (v instanceof Date && !isNaN(v.getTime())) return v.toISOString().slice(0, 10)
-  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) ? v.trim() : undefined
-}
-
-async function readAuthored(): Promise<Authored[]> {
-  const names = await fs.readdir(PATHS.roadmap).catch(() => [] as string[])
-  const out: Authored[] = []
-  for (const n of names) {
-    if (!n.endsWith('.md') || n.startsWith('_') || n.startsWith('.') || n === 'README.md') continue
-    const raw = await fs.readFile(path.join(PATHS.roadmap, n), 'utf-8')
-    const { data } = matter(raw)
-    const h = (data.handoff ?? {}) as Record<string, string>
-    out.push({
-      slug: String(data.slug ?? n.replace(/\.md$/, '')),
-      name: String(data.name ?? data.slug ?? n),
-      group: String(data.group ?? 'internal'),
-      kind: String(data.kind ?? 'build'),
-      target: ymd(data.target),
-      done: ymd(data.done),
-      repos: Array.isArray(data.repos) ? data.repos.map(String) : [],
-      evidence: Array.isArray(data.evidence)
-        ? data.evidence.filter(e => e?.repo && e?.path).map(e => ({ repo: String(e.repo), path: String(e.path) }))
-        : [],
-      handoff: {
-        spec: h.spec, landed: h.landed, consumed_by: h.consumed_by, pr: h.pr,
-      },
-    })
-  }
-  return out
-}
-
-async function checkBuild(a: Authored): Promise<Checked> {
+async function checkBuild(a: Milestone): Promise<Checked> {
   if (a.evidence.length === 0) return { slug: a.slug, error: 'No evidence path declared' }
 
   const byRepo = new Map<string, string[]>()
-  for (const e of a.evidence) {
-    byRepo.set(e.repo, [...(byRepo.get(e.repo) ?? []), e.path])
-  }
+  for (const e of a.evidence) byRepo.set(e.repo, [...(byRepo.get(e.repo) ?? []), e.path])
 
   let newest: HumanCommit | null = null
   const errors: string[] = []
   for (const [repoName, paths] of byRepo) {
-    const repo = await resolveRepo(repoName)
-    if (!repo) { errors.push(`${repoName} ${NOT_CLONED}`); continue }
-    if (!await fetchOnce(repo)) { errors.push(`${repoName} could not fetch origin`); continue }
-    const ref = await originRef(repo)
+    const r = await openRepo(repoName)
+    if ('error' in r) { errors.push(r.error); continue }
     // A path that matches nothing at the ref is a stale evidence pointer, which
-    // is a defect in the roadmap file — not an initiative with no activity.
-    const present = (await git(repo, ['ls-tree', '-r', '--name-only', ref, '--', ...paths]))
-      .split('\n').filter(Boolean).length
-    if (present === 0) { errors.push(`${repoName}: evidence path matches nothing at ${ref}`); continue }
-    const c = await lastHumanCommit(repo, ref, paths)
+    // is a defect in the roadmap file — not a milestone with no activity.
+    if (await pathCount(r.dir, r.ref, paths) === 0) {
+      errors.push(`${repoName}: evidence path matches nothing at ${r.ref}`)
+      continue
+    }
+    const c = await lastHumanCommit(r.dir, r.ref, paths)
     if (c && (!newest || c.at > newest.at)) newest = c
   }
 
@@ -251,7 +271,6 @@ async function checkBuild(a: Authored): Promise<Checked> {
     evidence_age_days: days(newest.at),
     last_evidence_at: newest.at,
     last_evidence_author: newest.author,
-    ...(errors.length ? { error: undefined } : {}),
   }
 }
 
@@ -260,33 +279,44 @@ async function checkBuild(a: Authored): Promise<Checked> {
  * in their code (a route, an export), not prose — this is the verify-claims
  * mechanic: a claim that cites evidence can be checked.
  */
-async function checkHandoff(a: Authored): Promise<Checked> {
-  const { spec, landed, consumed_by, pr } = a.handoff
-  const repoName = a.repos[0]
-  if (!repoName) return { slug: a.slug, error: 'No repo declared' }
+async function checkHandoff(a: Milestone, rowRepos: string[]): Promise<Checked> {
+  const { spec, landed, consumedBy, pr } = a.handoff ?? {}
+  const repoName = rowRepos[0]
+  if (!repoName) return { slug: a.slug, error: 'No repo declared on the row' }
 
   if (landed) {
     // Consumed? Ask OUR repo whether it actually references what they shipped.
-    if (consumed_by) {
-      const cc = await resolveRepo('command-center')
-      if (cc && await fetchOnce(cc)) {
-        const ref = await originRef(cc)
-        if (await grepAtRef(cc, ref, landed, consumed_by) > 0) {
-          return { slug: a.slug, handoff_state: 'consumed' }
-        }
+    if (consumedBy) {
+      const cc = await openRepo('command-center')
+      if (!('error' in cc) && await grepAtRef(cc.dir, cc.ref, landed, consumedBy) > 0) {
+        return { slug: a.slug, handoff_state: 'consumed' }
       }
     }
-    const repo = await resolveRepo(repoName)
-    if (!repo) return { slug: a.slug, error: `${repoName} ${NOT_CLONED}` }
-    if (!await fetchOnce(repo)) return { slug: a.slug, error: `${repoName} could not fetch origin` }
-    const ref = await originRef(repo)
-    if (await grepAtRef(repo, ref, landed) > 0) {
-      const at = await whenLanded(repo, ref, landed)
+    const r = await openRepo(repoName)
+    if ('error' in r) return { slug: a.slug, error: r.error }
+    if (await grepAtRef(r.dir, r.ref, landed) > 0) {
+      const at = await whenLanded(r.dir, r.ref, landed)
       return {
         slug: a.slug,
         handoff_state: 'merged',
         handoff_age_days: at ? days(at) : null,
         handoff_at: at,
+      }
+    }
+    // Not found — say WHERE we looked, because "not resolved" is a mystery and
+    // this is a fact. It matters here: the mini's qual_table_automations clone
+    // is single-branch (`+refs/heads/main:refs/remotes/origin/main`), so the
+    // five BidPro handoffs are checked against `main` while that team works on
+    // `staging`. The board must not imply the work is missing when the truth is
+    // that this machine cannot see the branch it is on.
+    if (!pr && !spec) {
+      const single = (await git(r.dir, ['config', '--get-all', 'remote.origin.fetch']))
+        .split('\n').filter(Boolean)
+      const narrow = single.length === 1 && !single[0].includes('/*')
+      return {
+        slug: a.slug,
+        error: `"${landed}" not found at ${r.ref} in ${repoName}` +
+          (narrow ? ` — and this clone tracks only ${r.ref}, so other branches were not searched` : ''),
       }
     }
   }
@@ -307,74 +337,280 @@ async function checkHandoff(a: Authored): Promise<Checked> {
   return { slug: a.slug, handoff_state: 'unknown' }
 }
 
-const STATE_MARK: Record<string, string> = {
-  slipped: '🔴', stranded: '🔴', 'at-risk': '🟠', unknown: '⚪',
-  idle: '🟡', 'no-target': '🟡', 'on-track': '🟢', active: '🟢', done: '✅',
+async function checkProof(a: Milestone, ctx: ProofContext): Promise<Checked> {
+  // `proof: manual` parses to null — nothing to evaluate, and that is the
+  // answer: needs-a-person. Zero of zero, never a pass.
+  if (a.proof === null) return { slug: a.slug, proof_true: 0, proof_total: 0, proof_results: [] }
+
+  const results: ProofResult[] = []
+  for (const c of a.proof) results.push(await evalCheck(c, ctx))
+
+  const proven: ProofResult[] = []
+  for (const c of a.proven) proven.push(await evalCheck(c, ctx))
+
+  return {
+    slug: a.slug,
+    proof_true: results.filter(r => r.ok).length,
+    proof_total: results.length,
+    proof_results: results,
+    ...(proven.length ? { proven_true: proven.filter(r => r.ok).length, proven_total: proven.length } : {}),
+  }
 }
 
+// ── per-row derivation ──────────────────────────────────────────────────────
+
+/**
+ * Investment: human commits on the row's evidence paths, per window.
+ *
+ * A `platform` row is the COMPLEMENT — every human commit in its repos that did
+ * NOT touch any product row's paths. Without that, the ~300 platform commits a
+ * quarter are invisible and every product row reads inflated by sweeps that
+ * merely passed through its files.
+ */
+async function rowInvestment(
+  row: RoadmapRow, productPaths: Map<string, string[]>
+): Promise<{ investment: Record<number, number>; errors: string[] }> {
+  const investment: Record<number, number> = {}
+  const errors: string[] = []
+
+  const byRepo = new Map<string, string[]>()
+  for (const e of row.evidence) byRepo.set(e.repo, [...(byRepo.get(e.repo) ?? []), e.path])
+
+  for (const w of INVESTMENT_WINDOWS) {
+    let total = 0
+    for (const [repoName, paths] of byRepo) {
+      const r = await openRepo(repoName)
+      if ('error' in r) { if (w === INVESTMENT_WINDOWS[0]) errors.push(r.error); continue }
+      if (row.kind === 'platform') {
+        const all = await humanCommitShas(r.dir, r.ref, w)
+        const product = await humanCommitShas(r.dir, r.ref, w, productPaths.get(repoName) ?? [])
+        for (const sha of product) all.delete(sha)
+        total += all.size
+      } else {
+        total += (await humanCommitShas(r.dir, r.ref, w, paths)).size
+      }
+    }
+    investment[w] = total
+  }
+  return { investment, errors }
+}
+
+/**
+ * Pull: is anyone asking for this?
+ *
+ * `byStage` is the honest inventory — every contact for the row's product,
+ * bucketed. The SCORE counts only human-worked contacts, because a stage set by
+ * lead-sync is an import, not interest, and `identified` is weighted zero
+ * because 95 of 104 contacts sit there. Meetings are the strongest signal in
+ * the set and are worth two stage-points each.
+ */
+function rowPull(row: RoadmapRow, contacts: Contact[], meetings: Meeting[], now: Date): RowPull {
+  const empty: RowPull = { byStage: {}, total: 0, warm: 0, meetings90: 0, score: 0 }
+  if (!row.product) return empty
+
+  const mine = contacts.filter(c => c.product === row.product)
+  const byStage: Record<string, number> = {}
+  for (const c of mine) byStage[c.stage] = (byStage[c.stage] ?? 0) + 1
+
+  const worked = mine.filter(c => c.worked)
+  const workedByStage: Record<string, number> = {}
+  for (const c of worked) workedByStage[c.stage] = (workedByStage[c.stage] ?? 0) + 1
+
+  const cutoff = new Date(now.getTime() - 90 * 86_400_000).toISOString().slice(0, 10)
+  const slugs = new Set(mine.map(c => c.slug))
+  const meetings90 = meetings.filter(m =>
+    m.category === 'agency' && m.date >= cutoff && m.contacts.some(s => slugs.has(s))).length
+
+  return {
+    byStage,
+    total: mine.length,
+    warm: worked.filter(c => stageAtLeast(c.stage, 'contacted')).length,
+    meetings90,
+    score: pullScore(workedByStage, meetings90),
+  }
+}
+
+// ── emit ────────────────────────────────────────────────────────────────────
+
+const STATE_MARK: Record<string, string> = {
+  slipped: '🔴', stranded: '🔴', 'at-risk': '🟠', unknown: '⚪',
+  idle: '🟡', 'no-target': '🟡', 'needs-person': '🔵',
+  'on-track': '🟢', active: '🟢', done: '✅',
+}
+const STAGE_DOTS = (stage: string) => {
+  const order = ['framed', 'committed', 'building', 'shipped', 'proven']
+  const i = order.indexOf(stage)
+  return '●'.repeat(i + 1) + '○'.repeat(Math.max(0, 4 - i))
+}
+
+/** One line per run, outside git — the page reads the last `ok` for freshness. */
+async function logRun(line: string): Promise<void> {
+  if (DRY) return
+  try {
+    await fs.mkdir(path.dirname(PATHS.roadmapCheckLog), { recursive: true })
+    await fs.appendFile(PATHS.roadmapCheckLog, `${new Date().toISOString()} ${line}\n`)
+  } catch { /* a logging failure must not fail a check */ }
+}
+
+const yaml = (v: unknown) => JSON.stringify(v)
+
 async function main() {
-  const authored = await readAuthored()
-  if (authored.length === 0) {
-    console.error(`No roadmap files in ${PATHS.roadmap}`)
+  const now = new Date()
+  const { rows, milestones } = await readAuthored()
+  if (rows.length === 0 || milestones.length === 0) {
+    console.error(`No roadmap rows/milestones in ${PATHS.roadmap}`)
     process.exit(1)
   }
 
-  const checked: Checked[] = []
-  for (const a of authored) {
-    checked.push(a.kind === 'handoff' ? await checkHandoff(a) : await checkBuild(a))
-  }
-  const byslug = new Map(checked.map(c => [c.slug, c]))
+  // ── lint first: a board with a dangling unlocks ranks the wrong work ──
+  const warnings: string[] = []
+  const lint = lintRoadmap(rows, milestones)
 
-  const rows = authored.map(a => {
-    const d = byslug.get(a.slug)!
-    const { state, reason } = deriveState(
-      { kind: a.kind as 'build' | 'handoff', target: a.target, done: a.done },
-      {
-        slug: a.slug,
-        evidenceAgeDays: d.evidence_age_days,
-        lastEvidenceAt: d.last_evidence_at,
-        handoffState: d.handoff_state,
-        handoffAgeDays: d.handoff_age_days,
-        error: d.error,
-      },
-      true
-    )
-    return { a, d, state, reason }
+  const contacts = await readContacts(PATHS.operationsRoot, s => warnings.push(s))
+  const meetings = await readMeetings(PATHS.operationsRoot)
+  const ctx: ProofContext = { contacts, meetings, root: PATHS.operationsRoot, git: GIT }
+
+  const rowBySlug = new Map(rows.map(r => [r.slug, r]))
+
+  const checked: Checked[] = []
+  for (const m of milestones) {
+    if (m.kind === 'handoff') {
+      checked.push(await checkHandoff(m, rowBySlug.get(m.row)?.repos ?? []))
+    } else if (m.kind === 'demand' || m.kind === 'decision') {
+      checked.push(await checkProof(m, ctx))
+    } else {
+      checked.push(await checkBuild(m))
+    }
+  }
+  const bySlug = new Map(checked.map(c => [c.slug, c]))
+
+  // Every product row's paths, per repo — the platform row subtracts these.
+  const productPaths = new Map<string, string[]>()
+  for (const r of rows) {
+    if (r.kind !== 'product') continue
+    for (const e of r.evidence) {
+      productPaths.set(e.repo, [...(productPaths.get(e.repo) ?? []), e.path])
+    }
+  }
+
+  const rowErrors: string[] = []
+  for (const r of rows) {
+    const { investment, errors } = await rowInvestment(r, productPaths)
+    r.investment = investment
+    r.pull = rowPull(r, contacts, meetings, now)
+    rowErrors.push(...errors)
+  }
+
+  // ── join: exactly what the page will compute, computed once here ──
+  const full: RoadmapMilestone[] = milestones.map(m => {
+    const d = bySlug.get(m.slug)!
+    const derived: DerivedEntry = {
+      slug: m.slug,
+      evidenceAgeDays: d.evidence_age_days,
+      lastEvidenceAt: d.last_evidence_at,
+      handoffState: d.handoff_state,
+      handoffAgeDays: d.handoff_age_days,
+      proofTrue: d.proof_true,
+      proofTotal: d.proof_total,
+      provenTrue: d.proven_true,
+      provenTotal: d.proven_total,
+      error: d.error,
+    }
+    const { state, reason, daysToTarget } = deriveState(m, derived, true, now)
+    // `derived` carries nulls (the on-disk shape distinguishes "checked, nothing
+    // found" from "not checked"); the rendered milestone carries undefined.
+    return {
+      ...m,
+      daysToTarget,
+      evidenceAgeDays: derived.evidenceAgeDays ?? undefined,
+      lastEvidenceAt: derived.lastEvidenceAt ?? undefined,
+      handoffState: derived.handoffState,
+      handoffAgeDays: derived.handoffAgeDays ?? undefined,
+      proofTrue: derived.proofTrue ?? undefined,
+      proofTotal: derived.proofTotal ?? undefined,
+      proofResults: d.proof_results,
+      provenTrue: derived.provenTrue ?? undefined,
+      provenTotal: derived.provenTotal ?? undefined,
+      state,
+      stage: deriveStage(m, derived, now),
+      reason,
+    }
   })
 
-  const order = ['slipped', 'stranded', 'at-risk', 'unknown', 'idle', 'no-target', 'on-track', 'active', 'done']
-  rows.sort((x, y) =>
+  for (const r of rows) r.milestones = full.filter(m => m.row === r.slug)
+  const ranking = rankBuildNext(rows, now, 10)
+
+  const order = ['slipped', 'stranded', 'at-risk', 'unknown', 'idle', 'no-target', 'needs-person', 'on-track', 'active', 'done']
+  const sorted = [...full].sort((x, y) =>
     order.indexOf(x.state) - order.indexOf(y.state) ||
-    (x.a.target ?? '9999').localeCompare(y.a.target ?? '9999') ||
-    x.a.name.localeCompare(y.a.name)
+    (x.target ?? '9999').localeCompare(y.target ?? '9999') ||
+    x.name.localeCompare(y.name)
   )
 
   // What counts as a change: a fact, not a day. The page recomputes ages from
   // the stored timestamps, so this file only needs rewriting when a human
-  // commit landed, a handoff moved, a repo stopped resolving, a target was
-  // edited, or a state crossed a threshold. Without this, a daily cron commits
-  // every day as every age ticks — and the Telegram announce becomes noise.
+  // commit landed, a handoff moved, a proof flipped, a repo stopped resolving,
+  // a target was edited, or a state crossed a threshold. Without this, a daily
+  // cron commits every day as every age ticks.
   const fingerprint = crypto.createHash('sha1').update(JSON.stringify(
-    [...rows].sort((x, y) => x.a.slug.localeCompare(y.a.slug)).map(r => [
-      r.a.slug, r.a.target ?? null, r.a.done ?? null, r.state,
-      r.d.last_evidence_at ?? null, r.d.handoff_state ?? null, r.d.handoff_at ?? null, r.d.error ?? null,
-    ])
+    [...full].sort((x, y) => x.slug.localeCompare(y.slug)).map(m => {
+      const d = bySlug.get(m.slug)!
+      return [
+        m.slug, m.target ?? null, m.done ?? null, m.state, m.stage,
+        d.last_evidence_at ?? null, d.handoff_state ?? null, d.handoff_at ?? null,
+        d.proof_true ?? null, d.proof_total ?? null, d.error ?? null,
+      ]
+    }).concat(
+      rows.map(r => [r.slug, JSON.stringify(r.investment ?? {}), JSON.stringify(r.pull ?? {})]) as never[]
+    ).concat([lint as never])
   )).digest('hex').slice(0, 12)
 
   const fm = [
     '---',
-    `generated_at: '${new Date().toISOString()}'`,
+    `generated_at: '${now.toISOString()}'`,
     `fingerprint: ${fingerprint}`,
+    ...(lint.length ? ['lint:', ...lint.map(e => `  - ${yaml(e)}`)] : ['lint: []']),
+    'rows:',
+    ...rows.flatMap(r => [
+      `  - slug: ${r.slug}`,
+      '    investment:',
+      ...INVESTMENT_WINDOWS.map(w => `      d${w}: ${r.investment?.[w] ?? 0}`),
+      '    pull:',
+      `      total: ${r.pull?.total ?? 0}`,
+      `      warm: ${r.pull?.warm ?? 0}`,
+      `      meetings_90: ${r.pull?.meetings90 ?? 0}`,
+      `      score: ${r.pull?.score ?? 0}`,
+      ...(Object.keys(r.pull?.byStage ?? {}).length
+        ? ['      by_stage:', ...Object.entries(r.pull!.byStage).map(([k, v]) => `        ${k}: ${v}`)]
+        : ['      by_stage: {}']),
+    ]),
+    'ranking:',
+    ...ranking.flatMap(x => [
+      `  - slug: ${x.slug}`,
+      `    name: ${yaml(x.name)}`,
+      `    row: ${x.row}`,
+      `    score: ${x.score.toFixed(3)}`,
+      `    reason: ${yaml(x.reason)}`,
+    ]),
     'checked:',
     ...checked.flatMap(c => [
       `  - slug: ${c.slug}`,
       ...(c.evidence_age_days != null ? [`    evidence_age_days: ${c.evidence_age_days}`] : []),
       ...(c.last_evidence_at ? [`    last_evidence_at: '${c.last_evidence_at}'`] : []),
-      ...(c.last_evidence_author ? [`    last_evidence_author: ${JSON.stringify(c.last_evidence_author)}`] : []),
+      ...(c.last_evidence_author ? [`    last_evidence_author: ${yaml(c.last_evidence_author)}`] : []),
       ...(c.handoff_state ? [`    handoff_state: ${c.handoff_state}`] : []),
       ...(c.handoff_age_days != null ? [`    handoff_age_days: ${c.handoff_age_days}`] : []),
       ...(c.handoff_at ? [`    handoff_at: '${c.handoff_at}'`] : []),
-      ...(c.error ? [`    error: ${JSON.stringify(c.error)}`] : []),
+      ...(c.proof_total != null ? [`    proof_true: ${c.proof_true}`, `    proof_total: ${c.proof_total}`] : []),
+      ...(c.proven_total != null ? [`    proven_true: ${c.proven_true}`, `    proven_total: ${c.proven_total}`] : []),
+      ...(c.proof_results?.length
+        ? ['    proof_results:', ...c.proof_results.flatMap(r => [
+            `      - check: ${r.check}`,
+            `        ok: ${r.ok}`,
+            `        detail: ${yaml(r.detail)}`,
+          ])]
+        : []),
+      ...(c.error ? [`    error: ${yaml(c.error)}`] : []),
     ]),
     '---',
   ].join('\n')
@@ -383,19 +619,43 @@ async function main() {
     '',
     '# Roadmap status — DERIVED. DO NOT HAND-EDIT.',
     '',
-    '<!-- Generated by command-center scripts/roadmap-check.ts, weekly on the mini.',
-    '     Authored commitments (target, evidence, definition of done) live in the',
-    '     per-initiative files beside this one; they are never written here. -->',
+    '<!-- Generated by command-center scripts/roadmap-check.ts, daily on the mini.',
+    '     Authored rows (north star, investment paths) and milestones (definition of',
+    '     done, proof) live beside this file; they are never written here. -->',
     '',
-    '| | initiative | group | target | state | why |',
-    '|---|---|---|---|---|---|',
+    ...(lint.length ? [
+      `## ⛔ Lint — ${lint.length} error${lint.length === 1 ? '' : 's'}`, '',
+      ...lint.map(e => `- ${e}`), '',
+    ] : []),
+    ...(warnings.length ? ['## Warnings', '', ...warnings.map(w => `- ${w}`), ''] : []),
+    '## Build next',
+    '',
+    '| # | milestone | row | score | why |',
+    '|---:|---|---|---:|---|',
+    ...ranking.map((x, i) => `| ${i + 1} | **${x.name}** | ${x.row} | ${x.score.toFixed(2)} | ${x.reason} |`),
+    '',
+    '## Rows',
+    '',
+    '| row | group | investment 30d / 90d | contacts | warm | meetings 90d | pull |',
+    '|---|---|---:|---:|---:|---:|---:|',
     ...rows.map(r =>
-      `| ${STATE_MARK[r.state] ?? '⚪'} | **${r.a.name}** | ${r.a.group} | ${r.a.target ?? '—'} | ${r.state} | ${r.reason} |`
+      `| **${r.name}** | ${r.group} | ${r.investment?.[30] ?? 0} / ${r.investment?.[90] ?? 0} | ` +
+      `${r.pull?.total ?? 0} | ${r.pull?.warm ?? 0} | ${r.pull?.meetings90 ?? 0} | ${r.pull?.score ?? 0} |`
     ),
     '',
-    `_${rows.length} initiatives. Evidence age counts only human commits on \`origin\` —`,
-    'bot and janitor commits are excluded, because a path a machine writes to is',
-    'green forever and tells you nothing._',
+    '## Milestones',
+    '',
+    '| | milestone | row | kind | horizon | stage | target | state | why |',
+    '|---|---|---|---|---|---|---|---|---|',
+    ...sorted.map(m =>
+      `| ${STATE_MARK[m.state] ?? '⚪'} | **${m.name}** | ${m.row} | ${m.kind} | ${m.horizon} | ` +
+      `\`${STAGE_DOTS(m.stage)}\` ${m.stage} | ${m.target ?? '—'} | ${m.state} | ${m.reason} |`
+    ),
+    '',
+    `_${rows.length} rows, ${sorted.length} milestones. Evidence age and investment count only`,
+    'human commits on `origin` — bot and janitor commits are excluded, because a path a',
+    'machine writes to is green forever and tells you nothing. Demand counts only contacts',
+    'with a human `via` log line, for the same reason: `crm/` is machine-written._',
     '',
   ].join('\n')
 
@@ -415,16 +675,31 @@ async function main() {
    * So refuse, name the repos, and leave what is there alone. `--dry` still
    * prints, which is all a developer on the wrong machine actually needs.
    */
-  const missing = checked.filter(c => c.error?.includes(NOT_CLONED))
-  if (missing.length > 0 && !DRY) {
+  const missingRepos = new Set<string>()
+  for (const c of checked) {
+    if (c.error?.includes(NOT_CLONED)) missingRepos.add(c.error)
+    for (const r of c.proof_results ?? []) if (r.detail.includes(NOT_CLONED)) missingRepos.add(r.detail)
+  }
+  for (const e of rowErrors) if (e.includes(NOT_CLONED)) missingRepos.add(e)
+
+  if (missingRepos.size > 0 && !DRY) {
     console.error(
-      `roadmap-check: refusing to write — ${missing.length} of ${checked.length} initiatives ` +
-      `reference repos this machine does not have:`
+      `roadmap-check: refusing to write — ${missingRepos.size} referenced repo(s) ` +
+      `are not on this machine:`
     )
-    for (const m of missing) console.error(`  ${m.slug}: ${m.error}`)
+    for (const m of missingRepos) console.error(`  ${m}`)
     console.error('Run this on the mini, which holds every clone. (--dry prints anyway.)')
-    await logRun(`refused missing=${missing.length}`)
+    await logRun(`refused missing=${missingRepos.size}`)
     process.exit(2)
+  }
+
+  // The lint is not advisory. A dangling `unlocks:` silently demotes real work
+  // in the ranking, so a board that fails it must not be published.
+  if (lint.length > 0 && !DRY) {
+    console.error(`roadmap-check: refusing to write — ${lint.length} lint error(s):`)
+    for (const e of lint) console.error(`  ${e}`)
+    await logRun(`refused lint=${lint.length}`)
+    process.exit(3)
   }
 
   // A file without a fingerprint is the pre-fingerprint format: rewrite once.
@@ -437,13 +712,18 @@ async function main() {
 
   if (DRY) {
     console.log(next)
+    if (lint.length) console.error(`\n⛔ ${lint.length} lint error(s) — a real run would refuse to write.`)
+    if (missingRepos.size) console.error(`\n(${missingRepos.size} repo(s) missing here; a real run would exit 2.)`)
     return
   }
+
   await fs.mkdir(PATHS.roadmap, { recursive: true })
   await fs.writeFile(PATHS.roadmapStatus, next, 'utf-8')
-  await logRun(`ok changed rows=${rows.length}`)
-  console.log(`roadmap-check: wrote ${rows.length} rows`)
-  for (const r of rows) console.log(`  ${STATE_MARK[r.state]} ${r.a.name}: ${r.state} — ${r.reason}`)
+  await logRun(`ok changed rows=${rows.length} milestones=${sorted.length}`)
+  console.log(`roadmap-check: wrote ${rows.length} rows, ${sorted.length} milestones`)
+  console.log('\nBuild next:')
+  ranking.forEach((x, i) => console.log(`  ${i + 1}. ${x.name} — ${x.reason}`))
+  for (const w of warnings) console.warn(`  warn: ${w}`)
 }
 
 await main().catch(async (e: unknown) => {

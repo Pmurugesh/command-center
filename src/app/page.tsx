@@ -28,7 +28,7 @@ import { getDecisionQueue } from '@/lib/decisions'
 import { getAgent24hSummary } from '@/lib/agents'
 import { listLeads } from '@/lib/leads'
 import { buildClock } from '@/lib/clock'
-import { listRoadmap, roadmapAlerts } from '@/lib/roadmap'
+import { listRoadmap, roadmapAlerts, allMilestones } from '@/lib/roadmap'
 import { PageHeader } from '@/components/shared/page-header'
 import { HealthDot } from '@/components/shared/status-badge'
 import { Scoreboard } from '@/components/today/scoreboard'
@@ -61,7 +61,7 @@ export default async function TodayPage() {
   // Fetch everything in parallel — each data source is independent.
   const [bids, score, cron, decisions, agentSummaries, strategic,
          channels, opportunities, freshness, buckets, insights, calendar, leads, contacts,
-         roadmap] = await Promise.all([
+         roadmapRows] = await Promise.all([
     listBids(),
     getCampaignScore().catch(() => ({ targets: null, meetingsHeld: 0, demosGiven: 0, daysLeft: null })),
     getNormalizedCronJobs().catch(() => ({ reachable: false, jobs: [] })),
@@ -78,6 +78,10 @@ export default async function TodayPage() {
     listContacts().catch(() => []),
     listRoadmap().catch(() => []),
   ])
+
+  // Today reads MILESTONES, not rows. A row is a north star and never moves;
+  // what slips, goes at-risk or sits stranded is always a milestone under it.
+  const roadmap = allMilestones(roadmapRows)
 
   // The merge that used to happen in Pavan's head: one ranked queue.
   const moves = buildMoves({

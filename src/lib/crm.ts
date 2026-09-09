@@ -315,7 +315,7 @@ function isInPipeline(c: CrmContact): boolean {
  * relationship and presents months of debt that was never owed. A board like that
  * is one you stop opening.
  */
-function hasBeenWorked(c: CrmContact): boolean {
+export function hasBeenWorked(c: CrmContact): boolean {
   return c.log.some(e => !e.via || !NON_HUMAN_VIA.has(e.via))
 }
 
