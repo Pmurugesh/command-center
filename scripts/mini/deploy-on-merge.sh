@@ -28,24 +28,63 @@ LOG="$HOME/.openclaw/logs/command-center-deploy.log"
 mkdir -p "$(dirname "$LOG")"
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$LOG"; }
 
+# Machine-readable twin of the log line above.
+#
+# The log has always recorded what happened; nothing READ it. So the failure this
+# script's own header describes — "BUILD FAILED … old bundle still serving" —
+# left the dashboard looking completely normal while serving stale code, and the
+# only trace was a line in a file nobody opens. This file is what makes that
+# state visible on /system.
+#
+# Written at EVERY exit path, including the skips: "did not deploy because the
+# tree was dirty" is exactly as important as "deployed", and a state file that
+# only records successes would go stale in precisely the situations it exists for.
+STATE="$HOME/.openclaw/state/command-center-deploy.json"
+state() { # result, sha, target, extra-json
+  mkdir -p "$(dirname "$STATE")"
+  cat > "$STATE" <<JSON
+{
+  "at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "result": "$1",
+  "sha": "$2",
+  "target": "$3",
+  "subject": $(git log -1 --format=%s "$2" 2>/dev/null | head -c 160 | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))' 2>/dev/null || echo '""'),
+  "host": "$(hostname -s)"${4:+,
+  $4}
+}
+JSON
+}
+
 cd "$REPO_DIR" || { log "FAIL: $REPO_DIR missing"; exit 0; }
 git fetch -q origin main 2>/dev/null || { log "fetch failed (offline?)"; exit 0; }
 
 local_sha=$(git rev-parse HEAD)
 remote_sha=$(git rev-parse origin/main)
-[ "$local_sha" = "$remote_sha" ] && exit 0
+if [ "$local_sha" = "$remote_sha" ]; then
+  # Nothing to do — but RECORD it, so "current" is a fresh fact rather than the
+  # absence of news. Without this the state file would age out and read stale on
+  # a perfectly healthy mini.
+  state "current" "$local_sha" "$remote_sha"
+  exit 0
+fi
 
 branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$branch" != "main" ]; then
   log "SKIP: checked out on $branch, not main — ${remote_sha:0:7} waiting"
+  state "skipped-branch" "$local_sha" "$remote_sha" "\"branch\": \"$branch\""
   exit 0
 fi
 if [ -n "$(git status --porcelain)" ]; then
   log "SKIP: working tree dirty — ${remote_sha:0:7} waiting"
+  state "skipped-dirty" "$local_sha" "$remote_sha"
   exit 0
 fi
 
-git pull -q --ff-only origin main || { log "pull --ff-only failed at ${local_sha:0:7}"; exit 0; }
+git pull -q --ff-only origin main || {
+  log "pull --ff-only failed at ${local_sha:0:7}"
+  state "pull-failed" "$local_sha" "$remote_sha"
+  exit 0
+}
 log "pulled ${local_sha:0:7} -> ${remote_sha:0:7}: $(git log -1 --format=%s | cut -c1-80)"
 
 if pnpm install --frozen-lockfile --silent >>"$LOG" 2>&1 && pnpm build >>"$LOG" 2>&1; then
@@ -55,8 +94,11 @@ if pnpm install --frozen-lockfile --silent >>"$LOG" 2>&1 && pnpm build >>"$LOG" 
   sleep 6
   code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://localhost:3000/ || echo 000)
   log "deployed ${remote_sha:0:7} — HTTP $code"
+  state "deployed" "$remote_sha" "$remote_sha" "\"http\": $code"
 else
   log "BUILD FAILED at ${remote_sha:0:7} — old bundle still serving; merge a fix"
+  # `sha` is what is SERVING, `target` is what should be. The gap is the point.
+  state "build-failed" "$local_sha" "$remote_sha"
 fi
 
 # Mini-side installers ride the same merge (see post-deploy.sh for the rule).

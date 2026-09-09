@@ -53,6 +53,18 @@ jobs:
       - name: Tests
         run: node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/roadmap-test.ts
 
+      # The mini's launchd job runs scripts/mini/deploy-on-merge.sh FROM THE REPO
+      # (install-deploy-on-merge.sh:15). So a syntax error in that file gets
+      # deployed by the still-working version and then kills auto-deploy: the
+      # next tick runs the broken script, nothing pulls, and the only fix needs
+      # someone physically at the mini. `bash -n` parses without executing, which
+      # is exactly enough to prevent that.
+      - name: Shell scripts parse
+        run: |
+          for f in $(git ls-files '*.sh'); do
+            bash -n "$f" || { echo "::error file=$f::does not parse"; exit 1; }
+          done
+
       # The step that matters most: this is exactly what the mini runs, and a
       # failure here is the one that leaves it serving a stale bundle.
       # Safe without the data directories — 19 of 22 pages are `force-dynamic`
