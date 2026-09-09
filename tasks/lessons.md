@@ -152,3 +152,24 @@
   the matches.** The ssh-safe way to ask the gateway anything is the dashboard's own API, which
   runs under launchd and can read the Keychain (`cronReachable: true`, 13 jobs); that path was
   already recorded in memory and I reached for the CLI anyway.
+- **[2026-09-08]** The board asserted "Candor: 165 human commits in 90 days and **no recorded
+  pull**" and "Attest: pull 0". Both were arithmetic, not findings: `product?: string` on a CRM
+  contact is single-valued, nobody in 104 contacts carried `plan-review`, and the OEIS CIO's own
+  log recorded her asking for two products she could not be filed under. **A derived metric can
+  only be as true as the schema underneath it can express. Before reporting a zero as a finding,
+  ask whether the field could have been non-zero at all** — a metric that is structurally
+  incapable of a value is a schema bug wearing the costume of a fact. The tell was available the
+  whole time: `plan-review` appeared in no contact anywhere, and a product-demand column where
+  one product is categorically absent should have read as broken, not as bad news.
+- **[2026-09-08]** Pavan's "yes they should" (make DWR and OEIS visible as demand) looked like a
+  two-record data-entry task. It was a schema change plus one record — OEIS already existed, and
+  the missing half for DWR was a name I did not have. **I stopped and asked rather than creating a
+  plausible contact**, and the name he gave then unlocked a real internal source
+  (`intelligence/priority-outreach.md:31` already had Jim Wang's email, the demo he organized, and
+  three more uncreated attendees) that was better evidence than the web lookup he offered.
+  Asking for the one fact I was missing was cheaper than inventing it and cheaper than guessing.
+- **[2026-09-08]** `title_match: '(?i)(demo|…)'` — a Python inline flag in a JavaScript RegExp.
+  The check returned "not a regex" instead of evaluating, and it was invisible because
+  `deriveState` reached `no-target` first for an unrelated reason. **Authoring errors and genuine
+  unknowns must not render the same.** Absence renders unknown by design; a pattern that cannot
+  compile now fails in `lintRoadmap`, loudly, before the board is generated.

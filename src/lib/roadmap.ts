@@ -32,7 +32,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import matter from 'gray-matter'
 import { PATHS } from './paths'
-import { stageAtLeast, CRM_STAGE_ORDER, type CrmStage } from './config'
+import { stageAtLeast, wantsProduct, CRM_STAGE_ORDER, type CrmStage } from './config'
 
 /** Evidence colder than this while a target is near means nobody is working. */
 export const EVIDENCE_WARN_DAYS = 14
@@ -828,6 +828,18 @@ export function lintRoadmap(
     if ((m.kind === 'demand' || m.kind === 'decision') && m.proof !== null && m.proof.length === 0) {
       errors.push(`${m.slug}: kind ${m.kind} with no proof (use \`proof: manual\` if none exists)`)
     }
+    // A pattern that will not compile is an AUTHORING error, not an unknown.
+    // Caught 2026-09-08: `attest-oeis-demo` carried `(?i)(demo|walkthrough…)`,
+    // a Python inline flag JavaScript rejects, so the milestone rendered
+    // `unknown` with the reason buried in `checked:` — indistinguishable from a
+    // repo that is not cloned. Absence renders unknown; a typo should render
+    // loud, at lint time, before the board ever shows it.
+    for (const c of m.proof ?? []) {
+      if (!('title_match' in c) || typeof c.title_match !== 'string') continue
+      try { new RegExp(c.title_match) } catch {
+        errors.push(`${m.slug}: title_match ${JSON.stringify(c.title_match)} is not a regex`)
+      }
+    }
   }
 
   // Cycles in `unlocks` would make `reachableThroughUnlocks` meaningless and the
@@ -939,7 +951,7 @@ export const DEMAND_FRESH_DAYS = 14
 export interface DemandSignal {
   row: string
   rowName: string
-  /** The warmest recently-touched contact for this row's product. */
+  /** The warmest recently-touched contact wanting this row's product. */
   contactName: string
   stage: CrmStage
   daysAgo: number
@@ -965,7 +977,10 @@ export interface DemandSignal {
  */
 export function roadmapDemandSignals(
   rows: RoadmapRow[],
-  contacts: { name: string; product?: string; stage: CrmStage; lastTouched?: string; worked: boolean }[],
+  contacts: {
+    name: string; product?: string; interestedIn?: string[]
+    stage: CrmStage; lastTouched?: string; worked: boolean
+  }[],
   now = new Date()
 ): DemandSignal[] {
   const out: DemandSignal[] = []
@@ -973,7 +988,7 @@ export function roadmapDemandSignals(
     if (!row.product) continue
     const warm = contacts
       .filter(c =>
-        c.product === row.product &&
+        wantsProduct(c, row.product!) &&
         c.worked &&
         stageAtLeast(c.stage, DEMAND_FLOOR) &&
         c.lastTouched &&

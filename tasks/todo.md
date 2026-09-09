@@ -1895,3 +1895,68 @@ reads green** — checked by expanding `candor-price` (both checks ✗ with audi
 **Not done, deliberately:** no targets were invented — the draft's dates say "suggested" and
 setting them is Pavan's. The retrofit of `verify-claims.ts` / `generate-registry.ts` onto
 `REPO_CANDIDATES` is still Phase 12's open item.
+
+---
+
+## Phase 13 addendum — one contact, several products (2026-09-08)
+
+**What Pavan asked:** "yes they should" (DWR and OEIS should show up as CRM demand), then
+"Jim Wang is the DWR contact… add interested in".
+
+**What the request turned out to be.** Not a missing-contacts problem. OEIS *was* already a
+contact — `crm/contacts/pindi-oeis.md`, `stage: verbal-commitment`, the warmest record in the
+book. The problem was that `product?: string` is single-valued, so her own log
+("requested follow-up demo of **WMP + PRA**", 08-26; "deeper dive… specifically **PRA**", 08-31)
+described three products while the record could claim one. Two consequences, both of which the
+board was stating as fact:
+
+- **Attest could not score pull at all.** Zero of 104 contacts carried `plan-review`, so `pull 0`
+  was arithmetic, not a finding.
+- **Candor's "165 human commits in 90 days and no recorded pull" was false.** A CIO was twice on
+  record asking for PRA, filed under `product: assistants`.
+
+**The change.** An additive `interested_in: [slug, …]`, never a replacement for `product`.
+`wantsProduct()` in `src/lib/config.ts` is the single place that answers "does this contact want
+X?", and the split it encodes is the point: things that measure **demand** (row `pull`, Today's
+demand signals, the `contacts_count` proof) read `product` OR `interested_in`; things that measure
+**attribution** (pipeline shape, owner load) keep reading `product` alone, so one person still
+counts once in the charts. Row demand totals deliberately no longer partition the book.
+
+- [x] `wantsProduct()` in `lib/config.ts`; `interestedIn` on `CrmContact` + `CrmContactUpdate`
+- [x] `crm.ts` reads, writes, creates and patches it (patch normalizes + dedupes like `altEmails`)
+- [x] `roadmap.ts` demand signals, `roadmap-proof.ts` `contacts_count`, `roadmap-check.ts` `rowPull`
+- [x] `crm/contacts/jim-wang.md` created — DWR Deputy CIO, `product: plan-review`,
+      `interested_in: [assistants]`, `stage: meeting-booked`
+- [x] `pindi-oeis.md` gains `interested_in: [prr, plan-review]`
+- [x] Logged in both row files, `attest-first-tenant`, and `roadmap/README.md`
+
+**Jim Wang, and what is evidence vs. lookup.** Email `Jim.Wang@water.ca.gov`, the ISI AI Demo he
+organized with Ganapathy, and the three uncreated DWR attendees (Mark Liu, Robert Crowell,
+Zachary Waller) all come from `intelligence/priority-outreach.md:31` — an internal record of a
+real thread, not a guess. The **title** (Deputy CIO) is from a public professional-profile lookup
+and the file says so; treat it as unverified. `stage: meeting-booked`, not `demo-given`, because
+the outreach item still carries "confirm demo outcome" and Pavan is explicit that DWR has not
+been shown Attest. Asking and being shown stay different signals.
+
+**Found while verifying, fixed:** `attest-oeis-demo` carried
+`title_match: '(?i)(demo|walkthrough|poc|pilot)'`. `(?i)` is a Python inline flag; JS RegExp
+throws on it, so the check returned "not a regex" rather than evaluating. It was masked —
+`deriveState` reached `no-target` first — but would have gone `unknown` the moment a target was
+set. Pattern fixed and `lintRoadmap` now rejects a proof pattern that will not compile: absence
+renders unknown, a typo should render loud, at lint time.
+
+**Verified, not assumed:** 80/80 tests (was 75; +4 for `wantsProduct`/`interested_in`, +1 for the
+regex lint), `tsc --noEmit` clean, `--dry` lints clean. Pull deltas on this MacBook, where the
+CRM is local and current:
+
+| row | before | after | why |
+|---|---:|---:|---|
+| Attest | 0 | **9** | Jim Wang (meeting-booked) + Pindy via `interested_in` + 1 agency meeting |
+| Candor | 0 | **7** | Pindy via `interested_in` + 1 agency meeting |
+| Steward | 15 | **17** | Jim Wang's `interested_in: assistants` — the demo he actually convened |
+
+Investment columns in that same `--dry` read 0/0 for BidPro, Contract Management and Web presence
+because those clones are not on this machine. That is the check working; the real numbers come
+from the mini.
+
+**Still open:** the three other DWR attendees are named but uncreated — Pavan named only Jim.

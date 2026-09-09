@@ -48,7 +48,7 @@ import {
   type HandoffState, type ProofCheck, type ProofResult, type RoadmapRow,
   type RoadmapMilestone, type RowPull, type DerivedEntry,
 } from '../src/lib/roadmap.ts'
-import { stageAtLeast } from '../src/lib/config.ts'
+import { stageAtLeast, wantsProduct } from '../src/lib/config.ts'
 import {
   evalCheck, readContacts, readMeetings,
   type Contact, type Meeting, type ProofContext, type GitOps,
@@ -398,17 +398,22 @@ async function rowInvestment(
 /**
  * Pull: is anyone asking for this?
  *
- * `byStage` is the honest inventory — every contact for the row's product,
+ * `byStage` is the honest inventory — every contact who WANTS the row's product,
  * bucketed. The SCORE counts only human-worked contacts, because a stage set by
  * lead-sync is an import, not interest, and `identified` is weighted zero
  * because 95 of 104 contacts sit there. Meetings are the strongest signal in
  * the set and are worth two stage-points each.
+ *
+ * "Wants" is `wantsProduct`, not `product ===`: one contact can ask for several
+ * products, so these row totals deliberately do NOT partition the book. A person
+ * asking for three things is demand for three rows, and counting them once would
+ * be the bug this replaced.
  */
 function rowPull(row: RoadmapRow, contacts: Contact[], meetings: Meeting[], now: Date): RowPull {
   const empty: RowPull = { byStage: {}, total: 0, warm: 0, meetings90: 0, score: 0 }
   if (!row.product) return empty
 
-  const mine = contacts.filter(c => c.product === row.product)
+  const mine = contacts.filter(c => wantsProduct(c, row.product!))
   const byStage: Record<string, number> = {}
   for (const c of mine) byStage[c.stage] = (byStage[c.stage] ?? 0) + 1
 

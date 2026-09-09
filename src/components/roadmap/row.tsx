@@ -37,11 +37,16 @@ export function RowCard({ row, ranks }: {
   // and it is only sayable because both halves are derived.
   //
   // Gated on `product`, and that gate is load-bearing: pull is measured from CRM
-  // contacts carrying `product: <slug>`, so a row without one scores 0 by
+  // contacts who want this row's product, so a row without one scores 0 by
   // construction, not by neglect. Ungated, this fired on BidPro, Contract
   // Management and the platform row — three rows where a demand column is
   // meaningless — and an alarm that cannot ever be true is one you learn to
   // ignore, which would have cost the three rows where it IS true.
+  //
+  // "Want" is `product` OR `interested_in` (2026-09-08). Before that it was
+  // `product` alone, and this warning fired on Candor — 165 human commits, pull
+  // 0 — while a CIO was on record asking for PRA under `product: assistants`.
+  // The alarm was right about the shape and wrong about the fact.
   const investedWithoutPull =
     Boolean(row.product) && (inv90 ?? 0) >= 20 && (pull?.score ?? 0) === 0
 

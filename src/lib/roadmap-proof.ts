@@ -25,7 +25,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import matter from 'gray-matter'
-import { CRM_STAGES, NON_HUMAN_VIA, stageAtLeast, type CrmStage } from './config'
+import { CRM_STAGES, NON_HUMAN_VIA, stageAtLeast, wantsProduct, type CrmStage } from './config'
 import type { ProofCheck, ProofResult } from './roadmap'
 
 /** Git, as the proof engine needs it. The script supplies the real one; the
@@ -41,6 +41,8 @@ export interface GitOps {
 export interface Contact {
   slug: string
   product?: string
+  /** Additional products this person asked for — see `wantsProduct` in config. */
+  interestedIn?: string[]
   stage: CrmStage
   /** A log line whose `via` is not machinery. `crm/` is janitor-written, so
    *  this — not commit authorship — is what distinguishes selling from import. */
@@ -143,6 +145,9 @@ export async function readContacts(root: string, warn: (s: string) => void): Pro
       out.push({
         slug,
         product: typeof data.product === 'string' ? data.product : undefined,
+        interestedIn: Array.isArray(data.interested_in)
+          ? data.interested_in.map(String)
+          : undefined,
         stage: raw as CrmStage,
         worked,
       })
@@ -285,7 +290,7 @@ export async function evalCheck(c: ProofCheck, ctx: ProofContext): Promise<Proof
     case 'contacts_count': {
       const floor = c.stage_at_least as CrmStage
       const hits = ctx.contacts.filter(x =>
-        x.product === c.product && x.worked && stageAtLeast(x.stage, floor))
+        wantsProduct(x, c.product) && x.worked && stageAtLeast(x.stage, floor))
       return {
         check: c.check,
         ok: hits.length >= c.count,

@@ -88,7 +88,7 @@ export default async function TodayPage() {
   const roadmapDemand = roadmapDemandSignals(
     roadmapRows,
     contacts.map(c => ({
-      name: c.name, product: c.product, stage: c.stage,
+      name: c.name, product: c.product, interestedIn: c.interestedIn, stage: c.stage,
       lastTouched: c.lastTouched, worked: hasBeenWorked(c),
     })),
   )

@@ -134,6 +134,7 @@ function serialize(c: CrmContact): string {
     agency: c.agency,
     agency_name: c.agencyName,
     product: c.product,
+    interested_in: c.interestedIn?.length ? c.interestedIn : undefined,
     owner: c.owner,
     tier: c.tier,
     stage: c.stage,
@@ -183,6 +184,9 @@ function hydrate(slug: string, raw: string): CrmContact {
     agency: data.agency ? String(data.agency) : undefined,
     agencyName: data.agency_name ? String(data.agency_name) : undefined,
     product: data.product ? String(data.product) : undefined,
+    interestedIn: Array.isArray(data.interested_in) && data.interested_in.length
+      ? data.interested_in.map(String)
+      : undefined,
     owner: data.owner ? String(data.owner) : undefined,
     tier: data.tier ? String(data.tier) : undefined,
     stage: normalizeCrmStage(data.stage) ?? 'identified',
@@ -421,6 +425,7 @@ export async function createContact(
       agency: input.agency,
       agencyName: input.agencyName,
       product: input.product,
+      interestedIn: input.interestedIn?.length ? input.interestedIn : undefined,
       owner: input.owner,
       tier: input.tier,
       servicesClient: input.servicesClient,
@@ -484,6 +489,16 @@ export async function updateContact(
     setStr('agency', 'agency', 'agency')
     setStr('agencyName', 'agencyName', 'agency_name')
     setStr('product', 'product', 'product')
+    if ('interestedIn' in patch && patch.interestedIn !== undefined) {
+      const cleaned = patch.interestedIn === null
+        ? undefined
+        : Array.from(new Set(patch.interestedIn.map(p => p.toLowerCase().trim()).filter(Boolean)))
+      const resolved = cleaned?.length ? cleaned : undefined
+      if (JSON.stringify(resolved) !== JSON.stringify(current.interestedIn)) {
+        next.interestedIn = resolved
+        changed.push(resolved ? `interested_in=${resolved.join(',')}` : 'cleared interested_in')
+      }
+    }
     setStr('owner', 'owner', 'owner')
     setStr('tier', 'tier', 'tier')
     setStr('servicesNote', 'servicesNote', 'services_note')
