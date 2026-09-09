@@ -225,21 +225,31 @@ async function humanCommitShas(
  * endpoint is unconsumed — so it must return quietly, not as an error. Any
  * exit code above 1 is a real failure and still throws.
  */
-async function grepAtRef(repo: string, ref: string, needle: string, sub?: string): Promise<number> {
+/** Files containing `needle` at `ref`, filtered by git pathspecs (`:!…` excludes). */
+async function grepFilesAtRef(repo: string, ref: string, needle: string, pathspec: string[] = []): Promise<string[]> {
   const args = ['-C', repo, 'grep', '-l', '--fixed-strings', needle, ref]
-  if (sub) args.push('--', sub)
+  if (pathspec.length) args.push('--', ...pathspec)
   return new Promise((resolve, reject) => {
     execFile('git', args, { timeout: 120_000, maxBuffer: 32 * 1024 * 1024 }, (err, stdout) => {
       const code = (err as { code?: number } | null)?.code
       if (err && code !== 1) return reject(err)
-      resolve(stdout.split('\n').filter(Boolean).length)
+      // `git grep <ref>` prefixes every path with `<ref>:`; strip it so the
+      // path can be recorded and read as a path.
+      resolve(stdout.split('\n').filter(Boolean)
+        .map(l => l.startsWith(`${ref}:`) ? l.slice(ref.length + 1) : l))
     })
   })
 }
 
-/** When did `needle` first land on `ref`? Pickaxe over the whole history. */
-async function whenLanded(repo: string, ref: string, needle: string): Promise<string | null> {
-  const out = await git(repo, ['log', '--reverse', '--format=%aI', '-S', needle, ref], 180_000)
+/** The count form the nine proof checks use — `sub` is one pathspec. */
+const grepAtRef = async (repo: string, ref: string, needle: string, sub?: string) =>
+  (await grepFilesAtRef(repo, ref, needle, sub ? [sub] : [])).length
+
+/** When did `needle` first land on `ref` within `pathspec`? Pickaxe over the whole history. */
+async function whenLanded(repo: string, ref: string, needle: string, pathspec: string[] = []): Promise<string | null> {
+  const args = ['log', '--reverse', '--format=%aI', '-S', needle, ref]
+  if (pathspec.length) args.push('--', ...pathspec)
+  const out = await git(repo, args, 180_000)
   return out.split('\n').filter(Boolean)[0]?.trim() ?? null
 }
 
@@ -283,7 +293,7 @@ const HANDOFF: HandoffOps = {
       narrow: specs.length > 0 && !specs.some(x => x.includes('/*')),
     }
   },
-  grep: grepAtRef,
+  grep: grepFilesAtRef,
   firstSeen: whenLanded,
   async specAt(relPath) {
     const abs = path.join(PATHS.operationsRoot, relPath.replace(/^operations\//, ''))
@@ -306,6 +316,8 @@ interface Checked {
   handoff_at?: string | null
   /** The ref the literal was found at — `origin/main` or an integration branch. */
   handoff_ref?: string | null
+  /** The code file it was found in at that ref. */
+  handoff_file?: string | null
   proof_true?: number
   proof_total?: number
   proof_results?: ProofResult[]
@@ -362,6 +374,7 @@ async function checkHandoff(a: Milestone, rowRepos: string[]): Promise<Checked> 
     ...(r.ageDays !== undefined ? { handoff_age_days: r.ageDays } : {}),
     ...(r.at !== undefined ? { handoff_at: r.at } : {}),
     ...(r.ref ? { handoff_ref: r.ref } : {}),
+    ...(r.file ? { handoff_file: r.file } : {}),
     ...(r.error ? { error: r.error } : {}),
   }
 }
@@ -596,7 +609,7 @@ async function main() {
       return [
         m.slug, m.target ?? null, m.done ?? null, m.state, m.stage,
         d.last_evidence_at ?? null, d.handoff_state ?? null, d.handoff_at ?? null,
-        d.handoff_ref ?? null,
+        d.handoff_ref ?? null, d.handoff_file ?? null,
         d.proof_true ?? null, d.proof_total ?? null, d.error ?? null,
       ]
     }).concat(
@@ -645,6 +658,7 @@ async function main() {
       ...(c.handoff_age_days != null ? [`    handoff_age_days: ${c.handoff_age_days}`] : []),
       ...(c.handoff_at ? [`    handoff_at: '${c.handoff_at}'`] : []),
       ...(c.handoff_ref ? [`    handoff_ref: ${c.handoff_ref}`] : []),
+      ...(c.handoff_file ? [`    handoff_file: ${yaml(c.handoff_file)}`] : []),
       ...(c.proof_total != null ? [`    proof_true: ${c.proof_true}`, `    proof_total: ${c.proof_total}`] : []),
       ...(c.proven_total != null ? [`    proven_true: ${c.proven_true}`, `    proven_total: ${c.proven_total}`] : []),
       ...(c.proof_results?.length

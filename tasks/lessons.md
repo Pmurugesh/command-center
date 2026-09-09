@@ -228,3 +228,14 @@
   gate that decides whether a bid appears on Today at all. **After fixing a bug, grep for its shape,
   not its line** — and rank the hits by what each one costs. A stale "last run" label is cosmetic; a
   bid deadline a day late is not.
+- **[2026-09-09]** Four BidPro handoffs read `merged` in the same second, and I explained it as
+  "under 24h, floor() rounds to 0" before asking why four unrelated literals would land
+  together at all. They were all matching `docs/unified-bid-system-plan.md` on their `staging` —
+  OUR plan, PR'd into THEIR repo the day before. A proof engine that greps for a literal will
+  always match the document that introduced the literal; the README rule ("in THEIR code, not
+  prose") was policy the engine never enforced. Two rules. **When several independent checks
+  flip at the same instant, that is one event, not several — find the commit before explaining
+  the number.** And **a check must exclude the artefact that named what it is checking for**:
+  the spec on their side, the placeholder wire type on ours. My first proposed fix (point
+  `consumed_by` at the file holding the type stub) would have turned a false red into a false
+  green — the re-audit caught it only because I read the stub's comment before believing the grep.

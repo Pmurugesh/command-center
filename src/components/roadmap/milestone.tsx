@@ -190,7 +190,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function EvidenceList({ item }: { item: RoadmapMilestone }) {
   if (item.kind === 'handoff') {
-    const { spec, landed, consumedBy, pr } = item.handoff ?? {}
+    const { spec, landed, landedIn, consumedBy, pr } = item.handoff ?? {}
     return (
       <div className="min-w-0 space-y-1 text-xs">
         {/* The ref is not decoration: `merged` on an integration branch is a
@@ -199,8 +199,10 @@ function EvidenceList({ item }: { item: RoadmapMilestone }) {
         <Field label="Handoff">
           {item.handoffState ?? 'unknown'}
           {item.handoffRef && <span className="text-muted-foreground"> at {item.handoffRef}</span>}
+          {item.handoffFile && <span className="text-muted-foreground"> · {item.handoffFile}</span>}
         </Field>
         {landed && <Field label="Landed">{landed}</Field>}
+        {landedIn && <Field label="Landed in">{landedIn}</Field>}
         {consumedBy && <Field label="Consumed by">{consumedBy}</Field>}
         {spec && <Field label="Spec">{spec}</Field>}
         {pr && <Field label="PR">{pr}</Field>}

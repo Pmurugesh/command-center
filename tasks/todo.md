@@ -2108,3 +2108,31 @@ branch, which is most of them. On this MacBook the probe never ran (the row repo
 `openRepo` errored first); the refactor routed `command-center` through the same path and exposed
 it. Now one `for-each-ref` listing intersected against `INTEGRATION_REFS` — no error path, no noise.
 A cron log that cries wolf every run is a log nobody reads when something real breaks.
+
+---
+
+## Phase 13 addendum — a spec is not a landing (2026-09-09)
+
+**What broke.** Four BidPro handoffs read red: *"Merged 0d ago, still not consumed here."* On the
+mini, all four `landed:` literals resolve at `origin/staging` to exactly one file —
+`docs/unified-bid-system-plan.md`, commit `1064ccde` by Pmurugesh at 12:29:59 — OUR plan, PR'd into
+THEIR repo. BidPro had shipped nothing; the check matched the document that named the tables.
+Three of the four had no `consumed_by:`, so "not consumed" was asserted without ever being tested.
+And `consumed` was decided from our repo alone, before theirs was read — a placeholder field in
+`RemoteBid` ("asked for in the handoff, not served yet") would have read as the handoff paying off.
+
+**The fix** — engine first, data after deploy (the data change is unsafe under the old engine).
+
+- [x] `landed` matches CODE only: `PROSE_PATHSPECS` excludes `*.md`/`docs` on both sides; optional
+      `landed_in:` narrows further. The matching file is recorded (`handoff_file`) and shown.
+- [x] `consumed` implies `merged`: their side first, ours only on top of it; consumed carries their
+      ref and file.
+- [x] `merged` with no `consumed_by` renders `active` ("no consumer declared"), never `stranded`.
+- [x] Not-found names what it saw: "appears only in prose at … (file)" / "only outside landed_in".
+- [x] Found on the way: `handoffRef` was parsed from `_status.md` but never joined onto the
+      milestone, so "at origin/staging" never rendered. Joined, with `handoffFile`.
+- [x] Tests for each; tsc, lint, build clean; the real git invocations proved against the mini's
+      clone over ssh (read-only).
+- [ ] AFTER merge + deploy: operations — `spec:` on p1–p3, p0 `consumed_by → src/lib/bid-sync.ts`,
+      README schema, Log lines. `bidpro-won-signal` stays as is (`awarded_at` is in no spec yet).
+- [ ] Trigger roadmap-check on the mini and read the board back.

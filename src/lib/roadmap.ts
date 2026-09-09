@@ -117,7 +117,7 @@ export interface RoadmapMilestone {
   unlocks: string[]
   blockedOn: string[]
   evidence: EvidencePath[]
-  handoff?: { spec?: string; landed?: string; consumedBy?: string; pr?: string }
+  handoff?: { spec?: string; landed?: string; landedIn?: string; consumedBy?: string; pr?: string }
   /** `null` when the file says `proof: manual`; `[]` when it declares none. */
   proof: ProofCheck[] | null
   proven: ProofCheck[]
@@ -132,6 +132,8 @@ export interface RoadmapMilestone {
   /** Which ref the handoff literal was found at — `origin/main` or an
    *  integration branch. Shown, so `merged` on staging is never read as main. */
   handoffRef?: string
+  /** The code file it was found in — a migration reads differently from a fixture. */
+  handoffFile?: string
   handoffAgeDays?: number
   proofTrue?: number
   proofTotal?: number
@@ -203,6 +205,7 @@ export interface DerivedEntry {
   handoffState?: HandoffState
   /** Which ref the literal was found at. Present only when merged/consumed. */
   handoffRef?: string
+  handoffFile?: string
   handoffAgeDays?: number | null
   handoffAt?: string | null
   proofTrue?: number | null
@@ -280,7 +283,7 @@ export function daysBetween(from: Date, toDate: string): number {
  * cases are pinned by tests. `demand` and `decision` are Phase 13's addition.
  */
 export function deriveState(
-  item: Pick<RoadmapMilestone, 'kind' | 'target' | 'done'>,
+  item: Pick<RoadmapMilestone, 'kind' | 'target' | 'done' | 'handoff'>,
   derived: DerivedEntry | undefined,
   statusRan: boolean,
   now = new Date()
@@ -310,20 +313,25 @@ export function deriveState(
     if (hs === 'unknown') return { state: 'unknown', reason: 'Handoff state not resolved', daysToTarget }
     if (hs === 'consumed') return { state: 'done', reason: 'Landed and consumed', daysToTarget }
     const age = derived?.handoffAgeDays
+    const at = derived?.handoffRef ? ` at ${derived.handoffRef}` : ''
     // Shipped on their side and unused on ours is the worst handoff outcome:
-    // it looks finished from every angle except the one that matters.
-    if (hs === 'merged') {
+    // it looks finished from every angle except the one that matters. But
+    // "unused on ours" is a finding only when something was asked — a
+    // milestone that declares no `consumed_by` was never tested for it, and
+    // red for an untested claim is the lie this board exists to refuse.
+    if (hs === 'merged' && item.handoff?.consumedBy) {
       return {
         state: 'stranded',
         reason: age != null
-          ? `Merged ${age}d ago, still not consumed here`
-          : 'Merged, still not consumed here',
+          ? `Merged${at} ${age}d ago, still not consumed here`
+          : `Merged${at}, still not consumed here`,
         daysToTarget,
       }
     }
+    const label = hs === 'merged' ? `merged${at}, no consumer declared` : hs.replace('-', ' ')
     return {
       state: age != null && age >= EVIDENCE_IDLE_DAYS ? 'idle' : 'active',
-      reason: age != null ? `${hs.replace('-', ' ')} — ${age}d ago` : hs.replace('-', ' '),
+      reason: age != null ? `${label} — ${age}d ago` : label,
       daysToTarget,
     }
   }
@@ -684,6 +692,7 @@ export async function readStatus(): Promise<RoadmapStatus> {
         lastEvidenceAt: str(r.last_evidence_at) ?? null,
         handoffState: str(r.handoff_state) as HandoffState | undefined,
         handoffRef: str(r.handoff_ref),
+        handoffFile: str(r.handoff_file),
         handoffAgeDays: num(r.handoff_age_days),
         handoffAt: str(r.handoff_at) ?? null,
         proofTrue: num(r.proof_true),
@@ -813,7 +822,7 @@ export function parseMilestone(filename: string, raw: string): Omit<
     blockedOn: strList(data.blocked_on),
     evidence: parseEvidence(data.evidence),
     handoff: kind === 'handoff'
-      ? { spec: str(h.spec), landed: str(h.landed), consumedBy: str(h.consumed_by), pr: str(h.pr) }
+      ? { spec: str(h.spec), landed: str(h.landed), landedIn: str(h.landed_in), consumedBy: str(h.consumed_by), pr: str(h.pr) }
       : undefined,
     proof: parseProof(data.proof),
     proven: parseProof(data.proven) ?? [],
@@ -959,6 +968,10 @@ export async function listRoadmap(now = new Date()): Promise<RoadmapRow[]> {
       evidenceAgeDays: derived?.evidenceAgeDays ?? undefined,
       lastEvidenceAt: derived?.lastEvidenceAt ?? undefined,
       handoffState: derived?.handoffState,
+      // Parsed since 2026-09-08 and never joined — so "at origin/staging" never
+      // actually rendered, and the board could not show WHERE a match came from.
+      handoffRef: derived?.handoffRef,
+      handoffFile: derived?.handoffFile,
       handoffAgeDays: derived?.handoffAgeDays ?? undefined,
       proofTrue: derived?.proofTrue ?? undefined,
       proofTotal: derived?.proofTotal ?? undefined,
