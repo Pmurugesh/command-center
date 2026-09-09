@@ -1,0 +1,62 @@
+# The check that should have existed before tonight.
+#
+# Why this matters more here than in a normal repo: the Mac mini runs
+# `scripts/mini/deploy-on-merge.sh`, which pulls every time origin/main moves and
+# rebuilds. When that build FAILS it logs one line and keeps the old bundle
+# serving (deploy-on-merge.sh:59). So a broken `main` does not take the dashboard
+# down — it silently freezes it on old code, and the only trace is a log nobody
+# opens. The failure mode is a dashboard that looks completely normal and is
+# lying about how current it is.
+#
+# CI is the fix, because the cheapest place to catch that is before the merge.
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push makes an in-flight run irrelevant. Never cancel on main, though:
+# that run is the record of whether the mini can deploy this commit.
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      # 22 is the floor CLAUDE.md declares for this project. Pinning the floor
+      # rather than the newest runtime is deliberate: if something stops working
+      # on 22, either the code or that contract is wrong, and CI should say which.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Ordered cheapest-first so an obvious break reports in seconds.
+      - name: Types
+        run: pnpm exec tsc --noEmit
+
+      - name: Lint
+        run: pnpm exec next lint
+
+      # The 95 unit tests. `--experimental-strip-types` runs the TypeScript
+      # directly; scripts/run-ts.mjs resolves the `.ts` imports shared with src/.
+      - name: Tests
+        run: node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/roadmap-test.ts
+
+      # The step that matters most: this is exactly what the mini runs, and a
+      # failure here is the one that leaves it serving a stale bundle.
+      # Safe without the data directories — 19 of 22 pages are `force-dynamic`
+      # and the other three are placeholders, so nothing reads operations/ or
+      # Nexus at build time.
+      - name: Build
+        run: pnpm build
