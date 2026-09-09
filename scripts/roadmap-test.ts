@@ -75,10 +75,20 @@ test('deriveState: handoff consumed is the only handoff that means value', () =>
   assert.equal(st({ kind: 'handoff' }, { slug: 'x', handoffState: 'consumed' }), 'done')
 })
 
-test('deriveState: handoff merged but unconsumed is stranded — the worst outcome', () => {
-  const r = deriveState({ kind: 'handoff' }, { slug: 'x', handoffState: 'merged', handoffAgeDays: 98 }, true, NOW)
+test('deriveState: handoff merged with a consumer declared and absent is stranded — the worst outcome', () => {
+  const r = deriveState({ kind: 'handoff', handoff: { consumedBy: 'src/lib/bid-sync.ts' } },
+    { slug: 'x', handoffState: 'merged', handoffAgeDays: 98 }, true, NOW)
   assert.equal(r.state, 'stranded')
   assert.match(r.reason, /Merged 98d ago, still not consumed here/)
+})
+
+test('deriveState: handoff merged with NO consumer declared is not stranded — nothing was tested', () => {
+  // 2026-09-09: three BidPro milestones read red "still not consumed here" and
+  // none of them declared a consumed_by. The check never ran; the board asserted.
+  const r = deriveState({ kind: 'handoff' },
+    { slug: 'x', handoffState: 'merged', handoffRef: 'origin/staging', handoffAgeDays: 1 }, true, NOW)
+  assert.equal(r.state, 'active')
+  assert.match(r.reason, /merged at origin\/staging, no consumer declared — 1d ago/)
 })
 
 test('deriveState: handoff spec-sent long ago is idle', () => {
@@ -787,12 +797,24 @@ test('demand: interest in some OTHER product is still not demand for this row', 
 interface FakeCfg {
   /** repo name → what `open` answers. */
   repos?: Record<string, { refs: string[]; narrow?: boolean } | { error: string }>
-  /** `dir@ref` → needles present. A needle scoped to a sub-path is `needle#sub`. */
+  /** `dir@ref` → needles present. A bare needle is "in some code file";
+   *  `needle#path` says exactly where, so pathspecs can be exercised. */
   hits?: Record<string, string[]>
   /** `dir@ref@needle` → ISO instant it first appeared. */
   first?: Record<string, string>
   /** spec path → ISO instant. Absent key means the file does not exist. */
   specs?: Record<string, string>
+}
+
+/** A toy git pathspec: positive entries are prefixes; `:!x` excludes — `*.md`
+ *  by suffix, a directory by prefix. Enough to prove the logic composes them. */
+const inPathspec = (file: string, specs: string[] = []) => {
+  const hit = (p: string) => p.startsWith('*')
+    ? file.endsWith(p.slice(1))
+    : file === p || file.startsWith(p.replace(/\/$/, '') + '/')
+  const pos = specs.filter(s => !s.startsWith(':!'))
+  const neg = specs.filter(s => s.startsWith(':!')).map(s => s.slice(2))
+  return (pos.length === 0 || pos.some(hit)) && !neg.some(hit)
 }
 
 const fakeOps = (cfg: FakeCfg): HandoffOps => ({
@@ -802,9 +824,11 @@ const fakeOps = (cfg: FakeCfg): HandoffOps => ({
     if ('error' in r) return r
     return { dir: name, refs: r.refs, narrow: r.narrow ?? false }
   },
-  async grep(dir, ref, needle, sub) {
-    const present = cfg.hits?.[`${dir}@${ref}`] ?? []
-    return present.includes(sub ? `${needle}#${sub}` : needle) ? 1 : 0
+  async grep(dir, ref, needle, pathspec) {
+    return (cfg.hits?.[`${dir}@${ref}`] ?? [])
+      .filter(h => h === needle || h.startsWith(`${needle}#`))
+      .map(h => h.includes('#') ? h.slice(needle.length + 1) : 'src/somewhere.ts')
+      .filter(f => inPathspec(f, pathspec))
   },
   async firstSeen(dir, ref, needle) {
     return cfg.first?.[`${dir}@${ref}@${needle}`] ?? null
@@ -857,7 +881,7 @@ test('handoff: not found names every ref searched, and flags a single-branch clo
   const narrow = await evalHandoff({ landed: 'awarded_at' }, ['qual_table_automations'], fakeOps({
     repos: { qual_table_automations: { refs: ['origin/main'], narrow: true } },
   }), NOW)
-  assert.match(narrow.error!, /"awarded_at" not found at origin\/main/)
+  assert.match(narrow.error!, /"awarded_at" not found in code at origin\/main/)
   assert.match(narrow.error!, /single-branch/)
 
   const wide = await evalHandoff({ landed: 'awarded_at' }, ['qual_table_automations'], fakeOps({
@@ -869,7 +893,8 @@ test('handoff: not found names every ref searched, and flags a single-branch clo
 
 test('handoff: consumed outranks merged — value, not motion', async () => {
   // Merged-but-unconsumed is the worst outcome on this board: they did the work
-  // and nothing picked it up. The two must never blur.
+  // and nothing picked it up. The two must never blur. Both sides are present
+  // here; the case where only ours is comes two tests down.
   const got = await evalHandoff(
     { landed: 'status_changed_at', consumedBy: 'scripts/sync-bids.ts' },
     ['qual_table_automations'],
@@ -884,7 +909,7 @@ test('handoff: consumed outranks merged — value, not motion', async () => {
       },
     }), NOW)
   assert.equal(got.state, 'consumed')
-  assert.equal(got.ref, undefined, 'consumed is about OUR repo, so their ref does not apply')
+  assert.equal(got.ref, 'origin/main', 'consumed is merged plus a reference here, so their ref still applies')
 })
 
 test('handoff: a reference OUTSIDE consumed_by does not count as consumed', async () => {
@@ -910,6 +935,94 @@ test('handoff: an unreachable command-center does not block the merged answer', 
       hits: { 'qual_table_automations@origin/main': ['x'] },
     }), NOW)
   assert.equal(got.state, 'merged')
+})
+
+test('handoff: a literal that appears only in prose is NOT landed — the spec is not the table', async () => {
+  // 2026-09-08: all four BidPro literals read `merged` on staging in the same
+  // second. Each was matching docs/unified-bid-system-plan.md — our own plan,
+  // PR'd into their repo. The board said they had shipped; they had received.
+  const ops = fakeOps({
+    ...QT,
+    hits: { 'qual_table_automations@origin/staging': ['bid_plan_items#docs/unified-bid-system-plan.md'] },
+    first: { 'qual_table_automations@origin/staging@bid_plan_items': ago(1) },
+    specs: { 'operations/workflows/bidpro-docs/unified-bid-system-plan.md': ago(1) },
+  })
+  const bare = await evalHandoff({ landed: 'bid_plan_items' }, ['qual_table_automations'], ops, NOW)
+  assert.equal(bare.state, undefined)
+  assert.match(bare.error!, /only in prose at origin\/staging .*docs\/unified-bid-system-plan\.md/)
+
+  // With the spec declared, the honest state is the one below merged.
+  const spec = await evalHandoff(
+    { landed: 'bid_plan_items', spec: 'operations/workflows/bidpro-docs/unified-bid-system-plan.md' },
+    ['qual_table_automations'], ops, NOW)
+  assert.equal(spec.state, 'spec-sent')
+  assert.equal(spec.ageDays, 1)
+})
+
+test('handoff: consumed requires merged — a placeholder on our side proves nothing', async () => {
+  // Our wire type declares every field we ASKED for (`status_changed_at?:`
+  // under "asked for in the handoff, not served yet"). Deciding `consumed` from
+  // our repo alone would have gone green the day the request was typed.
+  const got = await evalHandoff(
+    { landed: 'status_changed_at', consumedBy: 'src/lib/bid-sync.ts' },
+    ['qual_table_automations'],
+    fakeOps({
+      repos: { ...QT.repos, 'command-center': { refs: ['origin/main'] } },
+      hits: { 'command-center@origin/main': ['status_changed_at#src/lib/bid-sync.ts'] },
+    }), NOW)
+  assert.notEqual(got.state, 'consumed')
+  assert.match(got.error!, /not found in code/)
+})
+
+test('handoff: consumed carries their ref and file — it is merged plus a reference here', async () => {
+  const got = await evalHandoff(
+    { landed: 'status_changed_at', consumedBy: 'src/lib/bid-sync.ts' },
+    ['qual_table_automations'],
+    fakeOps({
+      repos: { ...QT.repos, 'command-center': { refs: ['origin/main'] } },
+      hits: {
+        'command-center@origin/main': ['status_changed_at#src/lib/bid-sync.ts'],
+        'qual_table_automations@origin/staging': ['status_changed_at#alembic/versions/085_status_changed_at.py'],
+      },
+    }), NOW)
+  assert.equal(got.state, 'consumed')
+  assert.equal(got.ref, 'origin/staging')
+  assert.equal(got.file, 'alembic/versions/085_status_changed_at.py')
+})
+
+test('handoff: a reference in OUR prose does not count as consumed either', async () => {
+  const got = await evalHandoff(
+    { landed: 'status_changed_at', consumedBy: 'docs' },
+    ['qual_table_automations'],
+    fakeOps({
+      repos: { ...QT.repos, 'command-center': { refs: ['origin/main'] } },
+      hits: {
+        'command-center@origin/main': ['status_changed_at#docs/handoff.md'],
+        'qual_table_automations@origin/main': ['status_changed_at#app/models.py'],
+      },
+    }), NOW)
+  assert.equal(got.state, 'merged')
+})
+
+test('handoff: landed_in narrows the search, and a match outside it is named', async () => {
+  const fixtureOnly = fakeOps({
+    ...QT,
+    hits: { 'qual_table_automations@origin/main': ['bid_plan_items#tests/fixtures/plan.json'] },
+  })
+  const out = await evalHandoff({ landed: 'bid_plan_items', landedIn: 'alembic/' },
+    ['qual_table_automations'], fixtureOnly, NOW)
+  assert.equal(out.state, undefined)
+  assert.match(out.error!, /only outside alembic\/ .*tests\/fixtures\/plan\.json/)
+
+  const migration = fakeOps({
+    ...QT,
+    hits: { 'qual_table_automations@origin/main': [
+      'bid_plan_items#tests/fixtures/plan.json', 'bid_plan_items#alembic/versions/086.py'] },
+  })
+  const got = await evalHandoff({ landed: 'bid_plan_items', landedIn: 'alembic/' },
+    ['qual_table_automations'], migration, NOW)
+  assert.equal(got.state, 'merged')
+  assert.equal(got.file, 'alembic/versions/086.py')
 })
 
 test('handoff: pr and spec fall through in order, and each carries its age', async () => {

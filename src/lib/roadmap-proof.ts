@@ -348,10 +348,11 @@ export interface HandoffOps {
    * single-branch and other branches were never fetched.
    */
   open(repo: string): Promise<{ dir: string; refs: string[]; narrow: boolean } | { error: string }>
-  /** Files containing `needle` at `ref`, optionally restricted to `sub`. */
-  grep(dir: string, ref: string, needle: string, sub?: string): Promise<number>
-  /** ISO instant when `needle` FIRST appeared at `ref`, or null. */
-  firstSeen(dir: string, ref: string, needle: string): Promise<string | null>
+  /** Files containing `needle` at `ref`, filtered by git pathspecs — a path to
+   *  look under, `:!…` exclusions, or both. Absent means the whole tree. */
+  grep(dir: string, ref: string, needle: string, pathspec?: string[]): Promise<string[]>
+  /** ISO instant when `needle` FIRST appeared at `ref` within `pathspec`, or null. */
+  firstSeen(dir: string, ref: string, needle: string, pathspec?: string[]): Promise<string | null>
   /** Last-commit ISO instant of a spec path in operations; null when absent. */
   specAt(relPath: string): Promise<string | null>
 }
@@ -360,8 +361,12 @@ export interface HandoffCheck {
   state?: HandoffState
   ageDays?: number | null
   at?: string | null
-  /** Which ref the literal was found at. Only set with `state: 'merged'`. */
+  /** Which ref the literal was found at. Set with `merged` and `consumed` —
+   *  consumed is merged plus a reference here, so their ref still applies. */
   ref?: string | null
+  /** The first CODE file the literal was found in at `ref`. Shown, so a match
+   *  can be read for what it is — a migration is landed, a fixture is not. */
+  file?: string | null
   error?: string
 }
 
@@ -369,9 +374,27 @@ export interface HandoffCheck {
 export interface HandoffSpec {
   spec?: string
   landed?: string
+  /** A path prefix on THEIR side that `landed` must appear under. */
+  landedIn?: string
   consumedBy?: string
   pr?: string
 }
+
+/**
+ * Prose never counts as landed.
+ *
+ * On 2026-09-08 all four BidPro handoff literals — `status_changed_at`,
+ * `bid_plan_items`, `response_blocks`, `claim_gate_runs` — read `merged` on
+ * their `staging`, in the same second. Every one was matching
+ * `docs/unified-bid-system-plan.md`: OUR plan, PR'd into THEIR repo. The spec
+ * that names a table is not the table. The README already said "a LITERAL
+ * string in THEIR code, not prose"; this is the engine enforcing it. `landed_in`
+ * narrows further when a repo's fixtures or seeds also name the thing.
+ */
+export const PROSE_PATHSPECS: readonly string[] = [':!*.md', ':!*.mdx', ':!*.txt', ':!*.rst', ':!docs']
+
+export const codePathspec = (within?: string): string[] =>
+  within ? [within, ...PROSE_PATHSPECS] : [...PROSE_PATHSPECS]
 
 const ageInDays = (iso: string, now: Date) =>
   Math.floor((now.getTime() - new Date(iso).getTime()) / 86_400_000)
@@ -381,14 +404,19 @@ const ageInDays = (iso: string, now: Date) =>
  * their code (a route, an export, a table name), never prose — a claim that
  * cites evidence can be checked.
  *
- * Order is the whole design, strongest evidence first:
+ * Order is the whole design, strongest evidence first — and each state implies
+ * the one below it:
  *
- *   consumed  OUR repo references what they shipped. The only state that means
- *             the handoff produced value rather than motion.
- *   merged    the literal exists on one of their integration refs.
+ *   consumed  merged, AND our repo references what they shipped. The only
+ *             state that means the handoff produced value rather than motion.
+ *   merged    the literal exists in CODE on one of their integration refs.
  *   pr-opened they have a PR out.
  *   spec-sent we wrote the spec and nothing has come back.
  *   unknown   nothing is resolvable — never green.
+ *
+ * `consumed` used to be decided from our repo alone, before theirs was looked
+ * at. Our wire type declares every field we ASKED for, so a placeholder typed
+ * on day zero would have read as the handoff paying off.
  */
 export async function evalHandoff(
   h: HandoffSpec,
@@ -396,40 +424,57 @@ export async function evalHandoff(
   ops: HandoffOps,
   now: Date = new Date(),
 ): Promise<HandoffCheck> {
-  const { spec, landed, consumedBy, pr } = h
+  const { spec, landed, landedIn, consumedBy, pr } = h
   const repoName = rowRepos[0]
   if (!repoName) return { error: 'No repo declared on the row' }
 
   if (landed) {
-    // Consumed outranks merged: ask OUR repo whether it actually references what
-    // they shipped. Merged-but-unconsumed is the worst outcome on this board —
-    // they did the work and nothing picked it up — so the two must not blur.
-    if (consumedBy) {
-      const cc = await ops.open('command-center')
-      if (!('error' in cc)) {
-        for (const ref of cc.refs) {
-          if (await ops.grep(cc.dir, ref, landed, consumedBy) > 0) return { state: 'consumed' }
-        }
-      }
-    }
-
     const r = await ops.open(repoName)
     if ('error' in r) return { error: r.error }
 
+    const where = codePathspec(landedIn)
     for (const ref of r.refs) {
-      if (await ops.grep(r.dir, ref, landed) === 0) continue
-      const at = await ops.firstSeen(r.dir, ref, landed)
-      return { state: 'merged', ageDays: at ? ageInDays(at, now) : null, at, ref }
+      const files = await ops.grep(r.dir, ref, landed, where)
+      if (files.length === 0) continue
+      const at = await ops.firstSeen(r.dir, ref, landed, where)
+      const found = { ageDays: at ? ageInDays(at, now) : null, at, ref, file: files[0] }
+
+      // Merged is the floor; consumed is only ever claimed on top of it. Ask
+      // OUR repo whether it references what they shipped — under the declared
+      // path, and never in prose there either. Merged-but-unconsumed is the
+      // worst outcome on this board — they did the work and nothing picked it
+      // up — so the two must not blur.
+      if (consumedBy) {
+        const cc = await ops.open('command-center')
+        if (!('error' in cc)) {
+          for (const ours of cc.refs) {
+            if ((await ops.grep(cc.dir, ours, landed, codePathspec(consumedBy))).length > 0) {
+              return { state: 'consumed', ...found }
+            }
+          }
+        }
+      }
+      return { state: 'merged', ...found }
     }
 
-    // Not found. Say WHERE we looked: "not resolved" is a mystery, this is a
-    // fact. It matters — the mini's qual_table_automations clone was
-    // single-branch on `main` while that team works on `staging`, and the board
-    // must not imply work is missing when the truth is that this machine could
-    // not see the branch it is on.
+    // Not in code. Say WHERE we looked: "not resolved" is a mystery, this is a
+    // fact. It matters twice over — the mini's qual_table_automations clone was
+    // single-branch on `main` while that team works on `staging`; and a literal
+    // that IS present, but only in prose, is the exact false positive this
+    // check exists to refuse, so it gets named rather than folded into absence.
     if (!pr && !spec) {
+      for (const ref of r.refs) {
+        const elsewhere = await ops.grep(r.dir, ref, landed)
+        if (elsewhere.length === 0) continue
+        return {
+          error: landedIn
+            ? `"${landed}" found at ${ref} in ${repoName} only outside ${landedIn} (${elsewhere[0]})`
+            : `"${landed}" appears only in prose at ${ref} in ${repoName} (${elsewhere[0]}) — ` +
+              'a document that names it is not a landing',
+        }
+      }
       return {
-        error: `"${landed}" not found at ${r.refs.join(' or ')} in ${repoName}` +
+        error: `"${landed}" not found in code at ${r.refs.join(' or ')} in ${repoName}` +
           (r.narrow ? ' — and this clone is single-branch, so no other branch was searched' : ''),
       }
     }
