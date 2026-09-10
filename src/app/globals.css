@@ -40,10 +40,45 @@
   }
 }
 
+/* ── Markdown measure policy ─────────────────────────────────────────────────
+   Width used to be whatever the call site happened to give it: 768px in
+   /library and /bids/[id] (which squeezed 42-row tables), ~160ch in /gtm and
+   ~180ch in /meetings/[slug] (unreadable). Three call sites, three measures,
+   none deliberate.
+
+   The rule: PROSE is capped at a readable measure; TABLES, code and images are
+   data and take all the width there is. This is why "fill the page" could never
+   be applied uniformly — the two content types want opposite things.
+   Call sites must NOT wrap this in their own max-w-*. */
+.markdown-content > p,
+.markdown-content > ul,
+.markdown-content > ol,
+.markdown-content > blockquote,
+.markdown-content > h1,
+.markdown-content > h2,
+.markdown-content > h3,
+.markdown-content > h4,
+.markdown-content > h5,
+.markdown-content > h6 {
+  max-width: 78ch;
+}
+/* Data breaks out of the prose measure. */
+.markdown-content > table,
+.markdown-content > pre,
+.markdown-content > img {
+  max-width: 100%;
+}
+/* A table wider than the pane scrolls itself rather than the page. */
+.markdown-content table {
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
 /* Markdown content styling */
-.markdown-content h1 { @apply text-2xl font-bold mb-4 mt-6; }
-.markdown-content h2 { @apply text-xl font-semibold mb-3 mt-5; }
-.markdown-content h3 { @apply text-lg font-semibold mb-2 mt-4; }
+.markdown-content h1 { @apply text-xl font-bold mb-3 mt-5; }
+.markdown-content h2 { @apply text-lg font-semibold mb-2 mt-4; }
+.markdown-content h3 { @apply text-base font-semibold mb-2 mt-3; }
 .markdown-content h4 { @apply text-base font-semibold mb-2 mt-3; }
 .markdown-content h5 { @apply text-sm font-semibold mb-1 mt-2; }
 .markdown-content p { @apply mb-3 leading-relaxed; }

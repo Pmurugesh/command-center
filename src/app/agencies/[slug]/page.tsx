@@ -89,8 +89,8 @@ export default async function AgencyDetailPage({ params }: { params: { slug: str
         </div>
 
         <Card className="lg:col-span-3">
-          <CardContent className="p-6">
-            <div className="max-w-3xl">
+          <CardContent className="p-4">
+            <div>
               <MarkdownRenderer content={agency.content} linkifyContacts />
             </div>
           </CardContent>

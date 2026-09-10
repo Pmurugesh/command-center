@@ -6,20 +6,13 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { PATHS } from '@/lib/paths'
-import { extractFirstHeading } from '@/lib/markdown'
+import { extractFirstHeading, countFlags } from '@/lib/markdown'
 import { PageHeader } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/empty-state'
-import { Card, CardContent } from '@/components/ui/card'
-import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
+import { GtmReader, type GtmDoc } from './gtm-reader'
 import { Compass } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
-
-interface GtmDoc {
-  slug: string // filename without .md — the anchor strategic moves point at
-  title: string
-  content: string
-}
 
 async function listGtmDocs(): Promise<GtmDoc[]> {
   let names: string[]
@@ -35,7 +28,10 @@ async function listGtmDocs(): Promise<GtmDoc[]> {
         try {
           const content = await fs.readFile(path.join(PATHS.gtm, n), 'utf-8')
           const slug = n.replace(/\.md$/, '')
-          return { slug, title: extractFirstHeading(content) || slug, content }
+          const date = slug.match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
+          // The index says which doc needs the founder. countFlags already
+          // backs getStrategicDecisions over these same files.
+          return { slug, title: extractFirstHeading(content) || slug, content, date, openDecisions: countFlags(content) }
         } catch {
           return null
         }
@@ -54,11 +50,13 @@ async function listGtmDocs(): Promise<GtmDoc[]> {
 export default async function GtmPage() {
   const docs = await listGtmDocs()
 
+  const openTotal = docs.reduce((n, d) => n + d.openDecisions, 0)
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
         title="GTM"
-        description={`Strategy docs from ~/repos/operations/gtm — ${docs.length} file${docs.length === 1 ? '' : 's'}`}
+        description={`${docs.length} doc${docs.length === 1 ? '' : 's'}${openTotal > 0 ? ` · ${openTotal} open decisions` : ''}`}
       />
       {docs.length === 0 ? (
         <EmptyState
@@ -67,22 +65,7 @@ export default async function GtmPage() {
           description="Add markdown files to ~/repos/operations/gtm/ to see them here"
         />
       ) : (
-        docs.map((doc, i) => (
-          // scroll-mt keeps the anchored card clear of the sticky-ish top bar
-          <Card key={doc.slug} id={doc.slug} className="scroll-mt-16">
-            <CardContent className="p-6">
-              <details open={i === 0}>
-                <summary className="cursor-pointer select-none text-base font-semibold transition-colors hover:text-blue-400">
-                  {doc.title}
-                  <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">{doc.slug}.md</span>
-                </summary>
-                <div className="mt-4 border-t border-border pt-4">
-                  <MarkdownRenderer content={doc.content} />
-                </div>
-              </details>
-            </CardContent>
-          </Card>
-        ))
+        <GtmReader docs={docs} />
       )}
     </div>
   )

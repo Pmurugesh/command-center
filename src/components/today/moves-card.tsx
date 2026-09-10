@@ -52,17 +52,21 @@ function MoveRow({ move, working, drafting, onLogTouch, onResolve, onDraft }: {
   return (
     // Meta stacks under the action on phones — chips must never eat the verb.
     <li className="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0 md:flex-row md:items-start md:gap-3">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <Link href={move.href} className="group flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-sm font-medium group-hover:text-blue-400">
-              {move.action}
-            </span>
-            <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground group-hover:text-blue-400" />
-          </Link>
-        </div>
+      {/* Action and detail share ONE line from md up. Stacking them put the
+          detail on its own row and left the row's middle empty — measured at
+          612px of dead space per row even after the column split. Inline, the
+          detail fills that space and each row costs one line instead of two. */}
+      <div className="min-w-0 flex-1 md:flex md:items-baseline md:gap-2">
+        <Link href={move.href} className="group flex min-w-0 max-w-full items-center gap-1.5 md:shrink-0">
+          <span className="truncate text-sm font-medium group-hover:text-blue-400">
+            {move.action}
+          </span>
+          <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground group-hover:text-blue-400" />
+        </Link>
         {move.detail && (
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">{move.detail}</p>
+          <p className="mt-0.5 min-w-0 flex-1 truncate text-xs text-muted-foreground md:mt-0">
+            {move.detail}
+          </p>
         )}
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">

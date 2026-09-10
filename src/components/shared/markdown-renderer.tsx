@@ -19,6 +19,14 @@ function urlTransform(url: string, key: string, node: { tagName?: string }): str
   return defaultUrlTransform(url)
 }
 
+/** Slug for a heading, matching the ids the /library outline links to. */
+function headingId(children: React.ReactNode): string {
+  const text = React.Children.toArray(children)
+    .map(c => (typeof c === 'string' ? c : typeof c === 'number' ? String(c) : ''))
+    .join('')
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
 export function MarkdownRenderer({ content, className, linkifyContacts: shouldLinkify = false }: MarkdownRendererProps) {
   // Pre-process: replace [HUMAN DECISION NEEDED] with HTML badge
   let processed = content.replace(
@@ -33,6 +41,12 @@ export function MarkdownRenderer({ content, className, linkifyContacts: shouldLi
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw]}
         urlTransform={urlTransform}
+        components={{
+          // Anchors so an outline can link into the document. scroll-mt keeps
+          // the target clear of the pane's top edge.
+          h2: ({ children }) => <h2 id={headingId(children)} className="scroll-mt-4">{children}</h2>,
+          h3: ({ children }) => <h3 id={headingId(children)} className="scroll-mt-4">{children}</h3>,
+        }}
       >
         {processed}
       </ReactMarkdown>

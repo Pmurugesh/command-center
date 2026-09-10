@@ -56,7 +56,7 @@ export default async function RoadmapPage() {
     m.state === 'slipped' || m.state === 'at-risk' || m.state === 'stranded').length
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <FocusOnHash />
       <PageHeader
         title="Roadmap"
@@ -116,6 +116,10 @@ export default async function RoadmapPage() {
         />
       ) : (
         <>
+          {/* Build next and Decisions are both narrow one-line lists. Stacked,
+              each took a full-width band and pushed the rows further down; side
+              by side they cost one band between them. See todo.md Phase 14. */}
+          <div className="grid gap-x-8 gap-y-4 2xl:grid-cols-2">
           {/* ── Build next ────────────────────────────────────────────── */}
           {/* A section, not a card. Three nested box layers (page → section →
               tile) was most of what made this page feel heavy. */}
@@ -137,8 +141,11 @@ export default async function RoadmapPage() {
                 written one.
               </p>
             ) : (
-              <ol className="mt-1 divide-y divide-border/60">
-                {status.ranking.slice(0, 8).map((r, i) => {
+              /* The ranking holds ~75 scored items and the page showed 8. In a
+                 half-width column with its own scroll it shows far more of what
+                 was already computed, at no cost in page height. */
+              <ol className="mt-1 max-h-[26rem] divide-y divide-border/60 overflow-y-auto pr-1">
+                {status.ranking.slice(0, 20).map((r, i) => {
                   const m = bySlug.get(r.slug)
                   return (
                     <li key={r.slug} className="flex items-baseline gap-3 py-2">
@@ -209,6 +216,7 @@ export default async function RoadmapPage() {
               </ul>
             </section>
           )}
+          </div>
 
           {/* ── Rows, grouped ──────────────────────────────────────────── */}
           {GROUPS.map(g => {
@@ -222,7 +230,9 @@ export default async function RoadmapPage() {
                   </h2>
                   <p className="text-xs text-muted-foreground">{g.blurb}</p>
                 </div>
-                {group.map(r => <RowCard key={r.slug} row={r} ranks={ranks} />)}
+                <div className="grid gap-3 2xl:grid-cols-2">
+                  {group.map(r => <RowCard key={r.slug} row={r} ranks={ranks} />)}
+                </div>
               </section>
             )
           })}

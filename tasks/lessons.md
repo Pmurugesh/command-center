@@ -239,3 +239,52 @@
   the spec on their side, the placeholder wire type on ours. My first proposed fix (point
   `consumed_by` at the file holding the type stub) would have turned a false red into a false
   green — the re-audit caught it only because I read the stub's comment before believing the grep.
+- **[2026-09-09]** Destroyed ~30 files of finished, verified, uncommitted work by
+  running `git worktree remove --force` over a list filtered with
+  `grep -v "<dirname>$"`. `git worktree list` prints the SHA and branch AFTER the
+  path, so no line ends with the directory name, the filter matched nothing, and
+  the loop deleted the worktree it was running in. **Never build a destructive
+  target list from a pattern without printing the list first**, and never run
+  `--force` against a set you have not seen. To prove a commit builds in
+  isolation, clone to a temp dir — do not add a worktree to the repo you are
+  working in. The deeper failure was upstream: that work had been sitting
+  uncommitted for hours because I was batching the commit until asked. **Commit
+  each coherent piece as it lands.** An uncommitted hour is an hour you can lose.
+- **[2026-09-09]** A dashboard pasted CRM `next_action` / `blocked_on` verbatim
+  into customer-facing follow-up emails for months — values like "Personal
+  follow-up — upsell" and "product one-pager does not exist" — and one such email
+  was sent to a state CIO's office. The sanitiser meant to prevent this
+  (`externalSafe`) screened only for repo paths, and the two most dangerous
+  fields did not call it. **A field written for an internal reader must never be
+  interpolated into external prose**, and that rule has to be enforced by code,
+  not stated in a comment above the function that breaks it. The structural fix
+  (interpolate nothing; put internal facts in frontmatter the UI shows
+  separately) beats any regex sanitiser, because it removes the channel rather
+  than filtering it.
+- **[2026-09-09]** `edited: false` meant two different things: "machine
+  scaffolding, safe to regenerate" and "nobody has touched it yet". The best
+  hand-written draft in the store carried it and was one migration away from
+  being destroyed. **When a flag guards destruction, verify what actually carries
+  it** — do not assume every writer agreed on its meaning.
+- **[2026-09-09]** Traced authorship of generated content through the git commit
+  *trailer* (`via: dashboard`), not the committer identity — every commit in
+  operations is authored by the janitor, so `%an` says nothing. **Design
+  automated commits so their message identifies the writer**; it is the only
+  forensic trail when everything commits as the same user.
+- **[2026-09-09]** "There's too much whitespace" read as one defect and was four:
+  the container cap, dead space *inside* stretched rows, vertical bloat from
+  shadcn's landing-page card defaults, and an unowned markdown measure. They
+  interact — removing `max-w-7xl` alone makes the row problem WORSE, because
+  every list row is `flex justify-between` and more width means a bigger hole in
+  the middle. **Measure the row, not just the page.** A Range-based probe of
+  painted text extent found a median 873px dead gap that no amount of container
+  widening would have fixed; columns did.
+- **[2026-09-09]** Ran `pnpm build` while `next dev` served the same `.next`
+  directory. The dev server's CSS silently degraded — `h-screen` and
+  `overflow-auto` stopped applying — and the measurements taken next were garbage
+  (`/agencies` read 6,404px when it was really 2,260px). The tell was a
+  *physically impossible* reading: `main` had `overflow-y: visible` when its class
+  says `overflow-auto`. **Never build against a live dev server's `.next`**, and
+  when a measurement contradicts the source, suspect the apparatus before
+  rewriting the code. Corollary seen twice since: a measurement taken while a
+  route is still compiling reads short — re-measure before believing a regression.

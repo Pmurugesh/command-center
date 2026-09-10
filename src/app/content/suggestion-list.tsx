@@ -66,7 +66,7 @@ export function SuggestionList({ initial }: { initial: ContentSuggestion[] }) {
 
         return (
           <Card key={s.id} className={cn(decided && 'opacity-90')}>
-            <CardContent className="p-5 space-y-3">
+            <CardContent className="p-3 space-y-2">
               {/* Header — entity, day, decision state */}
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2 min-w-0 flex-wrap">

@@ -1,6 +1,5 @@
 import { listScanReports, currentScanReports } from '@/lib/files'
 import { extractDeltaIndicators, extractCriticalCount } from '@/lib/markdown'
-import { DataCard } from '@/components/shared/data-card'
 import { PageHeader } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/empty-state'
 import { HealthReportList } from './health-report-list'
@@ -26,20 +25,18 @@ export default async function HealthPage() {
   const totalCritical = currentWithDeltas.reduce((s, r) => s + r.criticalCount, 0)
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Codebase Health" description="Automated scan reports and findings · stats reflect the latest run of each scan" />
+    <div className="space-y-3">
+      <PageHeader
+        title="Codebase Health"
+        description={`${current.size} current scans · ${totalNew} new · ${totalResolved} resolved${totalCritical > 0 ? ` · ${totalCritical} critical` : ''}`}
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <DataCard label="Reports" value={reports.length} subtitle={`${current.size} current scans`} />
-        <DataCard label="New Findings" value={totalNew} valueColor="text-red-400" />
-        <DataCard label="Resolved" value={totalResolved} valueColor="text-emerald-400" />
-        <DataCard label="Critical" value={totalCritical} valueColor={totalCritical > 0 ? 'text-red-400' : 'text-emerald-400'} />
-      </div>
-
+      {/* The four DataCards that were here rendered one integer each at
+          text-4xl across 1,489px. The same numbers now ride in the header. */}
       {reports.length === 0 ? (
         <EmptyState icon={Shield} title="No scan reports found" description="Reports will appear here when scans are run" />
       ) : (
-        <HealthReportList reports={reportsWithDeltas} />
+        <HealthReportList reports={reportsWithDeltas} currentNames={Array.from(current)} />
       )}
     </div>
   )

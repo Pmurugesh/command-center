@@ -7,6 +7,8 @@
  * intelligence/partnerships/ — auto-discovered, no manual wiring.
  */
 import { listChannels, CHANNEL_WARN_DAYS, CHANNEL_COLD_DAYS, type Channel } from '@/lib/channels'
+import { Board } from '@/components/layout/board'
+import { StalenessStrip } from './staleness-strip'
 import { PageHeader } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/empty-state'
 import { Card, CardContent } from '@/components/ui/card'
@@ -51,7 +53,7 @@ function ChannelCard({ channel }: { channel: Channel }) {
       id={channel.slug}
       className={cn('scroll-mt-16', alerting && 'border-status-warning/30')}
     >
-      <CardContent className="p-6">
+      <CardContent className="p-4">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-base font-semibold">{channel.name}</h3>
           <Badge variant={STATUS_BADGE[channel.status] ?? 'outline'} className="text-[10px]">
@@ -103,15 +105,14 @@ export default async function ChannelsPage() {
   const alerting = channels.filter(c => c.status === 'blocked' || c.staleness === 'cold').length
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
         title="Channels"
         description={
           channels.length === 0
             ? 'Vehicles, resellers, and alliances will appear when added to ~/repos/operations/intelligence/partnerships/'
             : `${vehicles.length} vehicle${vehicles.length === 1 ? '' : 's'} · ${partners.length} partner${partners.length === 1 ? '' : 's'}` +
-              (alerting > 0 ? ` · ${alerting} need attention` : '') +
-              ` — clocks: ${CHANNEL_WARN_DAYS}d warn / ${CHANNEL_COLD_DAYS}d cold`
+              (alerting > 0 ? ` · ${alerting} need attention` : '')
         }
       />
 
@@ -123,20 +124,28 @@ export default async function ChannelsPage() {
         />
       ) : (
         <>
+          {/* The finding this page exists for, as one glance rather than
+              fourteen pills scattered over three screens. */}
+          <StalenessStrip channels={channels} />
+
           {vehicles.length > 0 && (
-            <section className="space-y-4">
-              <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <section>
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
                 <Landmark className="h-4 w-4" /> Contract vehicles
+                <span className="font-mono text-xs text-muted-foreground">{vehicles.length}</span>
               </h2>
-              {vehicles.map(c => <ChannelCard key={c.slug} channel={c} />)}
+              {/* Board: each card carried ~500px of content in a 1,489px band,
+                  with a 400-500px void in the middle of every header row. */}
+              <Board>{vehicles.map(c => <ChannelCard key={c.slug} channel={c} />)}</Board>
             </section>
           )}
           {partners.length > 0 && (
-            <section className="space-y-4">
-              <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <section>
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
                 <Handshake className="h-4 w-4" /> Partners
+                <span className="font-mono text-xs text-muted-foreground">{partners.length}</span>
               </h2>
-              {partners.map(c => <ChannelCard key={c.slug} channel={c} />)}
+              <Board>{partners.map(c => <ChannelCard key={c.slug} channel={c} />)}</Board>
             </section>
           )}
         </>
