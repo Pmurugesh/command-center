@@ -95,8 +95,11 @@ function StageDots({ stage }: { stage: Stage }) {
 function compactFact(item: RoadmapMilestone): string | null {
   if (item.done) return `done ${item.done}`
   switch (item.kind) {
-    case 'build':
-      return item.evidenceAgeDays == null ? null : `${item.evidenceAgeDays}d`
+    case 'build': {
+      const age = item.evidenceAgeDays == null ? null : `${item.evidenceAgeDays}d`
+      const proof = item.proofTotal ? `proof ${item.proofTrue ?? 0}/${item.proofTotal}` : null
+      return [age, proof].filter(Boolean).join(' · ') || null
+    }
     case 'handoff':
       return item.handoffState && item.handoffState !== 'unknown' ? item.handoffState : null
     case 'demand':
@@ -217,6 +220,11 @@ function EvidenceList({ item }: { item: RoadmapMilestone }) {
         {item.lastEvidenceAt && (
           <span className="ml-1.5 text-muted-foreground">{item.lastEvidenceAt.slice(0, 10)}</span>
         )}
+        {/* A branch is movement, not a landing — say which, so "0d ago" on
+            claude/x is never read as merged. */}
+        {item.lastEvidenceRef && (
+          <span className="ml-1.5 text-status-warning/90">on {item.lastEvidenceRef}</span>
+        )}
       </Field>
       <Field label="Evidence">
         {item.evidence.length === 0
@@ -324,7 +332,7 @@ export function MilestoneCard({ item, rank, isNext }: {
           </div>
 
           <div className="min-w-0 space-y-3">
-            {(item.kind === 'demand' || item.kind === 'decision') && (
+            {(item.kind === 'demand' || item.kind === 'decision' || (item.proof?.length ?? 0) > 0) && (
               <div>
                 <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Proof</h4>
                 <ProofList item={item} />

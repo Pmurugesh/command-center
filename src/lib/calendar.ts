@@ -39,6 +39,10 @@ export interface Meeting {
   location?: string
   calendar: string // X-WR-CALNAME, or "calendar N" when the feed omits it
   isDemo: boolean
+  /** Lower-cased e-mail addresses from ATTENDEE and ORGANIZER (`mailto:` values).
+   *  The roadmap's `calendar_event` proof matches on the domain: an invite with
+   *  someone @calhr.ca.gov on it is a stronger fact than a title. */
+  attendees: string[]
 }
 
 export interface CalendarResult {
@@ -80,7 +84,7 @@ export function parseFeedConfigs(entries: unknown): FeedConfig[] {
     .filter((f): f is FeedConfig => Boolean(f?.url))
 }
 
-async function loadFeedConfigs(): Promise<FeedConfig[]> {
+export async function loadFeedConfigs(): Promise<FeedConfig[]> {
   const env = process.env.CALENDAR_ICS_URLS
   if (env?.trim()) return parseFeedConfigs(env.split(','))
   try {
@@ -334,6 +338,9 @@ export function parseIcsFeed(ics: string, feedIndex: number, windowStartMs: numb
 
     const title = icsText(first(ev, 'SUMMARY')?.value ?? '(untitled)')
     const location = first(ev, 'LOCATION') ? icsText(first(ev, 'LOCATION')!.value) : undefined
+    const attendees = [...(ev['ATTENDEE'] ?? []), ...(ev['ORGANIZER'] ?? [])]
+      .map(p => p.value.replace(/^mailto:/i, '').trim().toLowerCase())
+      .filter(v => v.includes('@'))
     const isOverride = Boolean(first(ev, 'RECURRENCE-ID'))
 
     const rruleProp = first(ev, 'RRULE')
@@ -370,6 +377,7 @@ export function parseIcsFeed(ics: string, feedIndex: number, windowStartMs: numb
         location,
         calendar,
         isDemo: DEMO_RE.test(title),
+        attendees,
       })
     }
   }
@@ -377,11 +385,20 @@ export function parseIcsFeed(ics: string, feedIndex: number, windowStartMs: numb
 }
 
 export async function getUpcomingMeetings(): Promise<CalendarResult> {
+  const now = Date.now()
+  return getMeetingsInWindow(now, now + LOOKAHEAD_DAYS * DAY_MS)
+}
+
+/**
+ * Every event in [windowStartMs, windowEndMs) across the configured feeds.
+ * The dashboard's two-week lookahead is one caller; the roadmap check's
+ * `calendar_event` proof is the other, with a window wide enough to see a demo
+ * booked last quarter or next.
+ */
+export async function getMeetingsInWindow(windowStartMs: number, windowEndMs: number): Promise<CalendarResult> {
   const feeds = await loadFeedConfigs()
   if (feeds.length === 0) return { configured: false, meetings: [], errors: [] }
 
-  const now = Date.now()
-  const windowEnd = now + LOOKAHEAD_DAYS * DAY_MS
   const errors: string[] = []
   const meetings: Meeting[] = []
 
@@ -389,7 +406,7 @@ export async function getUpcomingMeetings(): Promise<CalendarResult> {
     try {
       const res = await fetch(feed.url, { next: { revalidate: 600 } })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      meetings.push(...parseIcsFeed(await res.text(), i, now, windowEnd, feed.name))
+      meetings.push(...parseIcsFeed(await res.text(), i, windowStartMs, windowEndMs, feed.name))
     } catch (e) {
       errors.push(`${feed.name ?? `calendar ${i + 1}`}: ${e instanceof Error ? e.message : 'fetch failed'}`)
     }

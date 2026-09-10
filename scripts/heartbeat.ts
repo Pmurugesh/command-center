@@ -95,6 +95,13 @@ const PIPELINES: Pipeline[] = [
     probes: [{ kind: 'mtime', path: ops('intelligence/priority-outreach.md') }],
   },
   {
+    key: 'roadmap-watch', name: 'Roadmap watch',
+    produces: 'a roadmap-check run within minutes of any push to any repo (the board follows the repos)',
+    // launchd every 5 min; a quiet hour means the tick itself stopped.
+    declaredHours: 1, runsOn: 'mini',
+    probes: [{ kind: 'log-ok', path: path.join(HOME, '.openclaw/logs/roadmap-watch.log'), pattern: '^(\\S+) (quiet|triggered)\\b' }],
+  },
+  {
     key: 'nexus-sync', name: 'Nexus clone sync',
     produces: 'the read-only Nexus clone every health scan and roadmap check reads',
     declaredHours: 24, runsOn: 'mini',

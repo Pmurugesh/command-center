@@ -1208,3 +1208,103 @@ test('viewDeploy: a failed build serving old code is DANGER, a skip is only a wa
   assert.equal(viewDeploy({ ...base, result: 'current' }, NOW).severity, 'ok')
 })
 
+
+// ── Phase 14: proof on every kind, movement on every branch, the tenth check ─
+
+test('deriveState: a build whose proof is fully true is done without a typed date', () => {
+  const r = deriveState({ kind: 'build' }, { slug: 'x', evidenceAgeDays: 40, proofTrue: 2, proofTotal: 2 }, true, NOW)
+  assert.equal(r.state, 'done')
+  assert.equal(r.reason, 'Proof satisfied (2/2)')
+  // Idle for 40 days would have been `idle`; proof outranks activity.
+  assert.equal(st({ kind: 'build' }, { slug: 'x', evidenceAgeDays: 40 }), 'idle')
+})
+
+test('deriveState: partial proof on a build is shown, and does not change the state', () => {
+  const r = deriveState({ kind: 'build', target: ahead(30) }, { slug: 'x', evidenceAgeDays: 3, proofTrue: 1, proofTotal: 3 }, true, NOW)
+  assert.equal(r.state, 'active')
+  assert.match(r.reason, /proof 1\/3$/)
+  const none = deriveState({ kind: 'build', target: ahead(30) }, { slug: 'x', evidenceAgeDays: 3 }, true, NOW)
+  assert.doesNotMatch(none.reason, /proof/)
+})
+
+test('deriveState: a handoff with a fully true proof is done even while merely merged', () => {
+  const r = deriveState(
+    { kind: 'handoff', handoff: { consumedBy: 'src/x.ts' } },
+    { slug: 'x', handoffState: 'merged', handoffAgeDays: 5, proofTrue: 1, proofTotal: 1 }, true, NOW)
+  assert.equal(r.state, 'done')
+  // Without the proof the same facts are `stranded` — the Phase 13 reading, untouched.
+  assert.equal(st({ kind: 'handoff', handoff: { consumedBy: 'src/x.ts' } } as Item,
+    { slug: 'x', handoffState: 'merged', handoffAgeDays: 5 }), 'stranded')
+})
+
+test('deriveState: movement on a branch names the branch, and never reads as a landing', () => {
+  const onBranch = deriveState({ kind: 'build' }, { slug: 'x', evidenceAgeDays: 0, lastEvidenceRef: 'origin/claude/mailbox' }, true, NOW)
+  assert.equal(onBranch.state, 'no-target')
+  assert.match(onBranch.reason, /last commit 0d ago on origin\/claude\/mailbox/)
+  const onMain = deriveState({ kind: 'build' }, { slug: 'x', evidenceAgeDays: 0 }, true, NOW)
+  assert.doesNotMatch(onMain.reason, / on /)
+  // Near a target the branch still shows; at-risk does not (nothing moved to name).
+  const near = deriveState({ kind: 'build', target: ahead(5) }, { slug: 'x', evidenceAgeDays: 1, lastEvidenceRef: 'origin/staging' }, true, NOW)
+  assert.equal(near.state, 'on-track')
+  assert.match(near.reason, /on origin\/staging/)
+})
+
+test('deriveStage: a build with a fully true proof is shipped, then proven after the clean window', () => {
+  assert.equal(deriveStage({ kind: 'build' }, { slug: 'x', proofTrue: 2, proofTotal: 2 }, NOW), 'shipped')
+  assert.equal(deriveStage({ kind: 'build' }, { slug: 'x', proofTrue: 2, proofTotal: 2, provenTrue: 1, provenTotal: 1 }, NOW), 'proven')
+})
+
+test('parseProof: calendar_event is in the vocabulary; an eleventh check is not', () => {
+  const p = parseProof([
+    { check: 'calendar_event', title_match: 'demo', after: '2026-09-01' },
+    { check: 'url_reachable', url: 'https://x' },
+  ])
+  assert.equal(p?.length, 1)
+  assert.equal(p?.[0].check, 'calendar_event')
+})
+
+test('calendar_event: not read, unreachable, hit, miss, window — and never a confident red for a feed that failed', async () => {
+  const ev = (title: string, day: string, attendees: string[] = []) =>
+    ({ uid: title, title, startAt: `${day}T10:00:00-07:00`, allDay: false, calendar: 'Work', isDemo: false, attendees })
+  const check = { check: 'calendar_event' as const, title_match: 'OEIS.*demo', after: '2026-09-01', before: '2026-10-01' }
+
+  const unread = await evalCheck(check, ctx())
+  assert.equal(unread.ok, false); assert.match(unread.detail, /not read/)
+
+  const down = await evalCheck(check, ctx({ calendar: [], calendarErrors: ['Work: HTTP 401'] }))
+  assert.equal(down.ok, false); assert.match(down.detail, /unreachable.*HTTP 401/)
+
+  const empty = await evalCheck(check, ctx({ calendar: [], calendarErrors: [] }))
+  assert.equal(empty.ok, false); assert.match(empty.detail, /^no calendar event/)
+
+  const hit = await evalCheck(check, ctx({ calendar: [ev('OEIS follow-up demo', '2026-09-19'), ev('Dentist', '2026-09-19')] }))
+  assert.equal(hit.ok, true); assert.match(hit.detail, /1 calendar event.*2026-09-19 OEIS follow-up demo/)
+
+  // Outside the window: before `after`, or on/after `before`.
+  const early = await evalCheck(check, ctx({ calendar: [ev('OEIS demo', '2026-08-30')] }))
+  assert.equal(early.ok, false)
+  const late = await evalCheck(check, ctx({ calendar: [ev('OEIS demo', '2026-10-01')] }))
+  assert.equal(late.ok, false)
+
+  const bad = await evalCheck({ ...check, title_match: '(?i)demo' }, ctx({ calendar: [] }))
+  assert.equal(bad.ok, false); assert.match(bad.detail, /not a regex/)
+
+  // Attendee domain: the invite has to have THEM on it, not just their name in the title.
+  const withDomain = { check: 'calendar_event' as const, title_match: '.', attendee_domain: 'calhr.ca.gov' }
+  const theirs = await evalCheck(withDomain, ctx({ calendar: [ev('Intro call', '2026-09-20', ['Pat.Lee@CalHR.ca.gov'])] }))
+  assert.equal(theirs.ok, true)
+  const ours = await evalCheck(withDomain, ctx({ calendar: [ev('CalHR prep', '2026-09-20', ['pavan@novaera.ai'])] }))
+  assert.equal(ours.ok, false); assert.match(ours.detail, /with @calhr\.ca\.gov/)
+})
+
+test('git checks: absent inverts the answer, and a repo that will not open is never "absent"', async () => {
+  const git = fakeGit({ missing: ['Nowhere'], paths: { Nexus: ['src/a.ts', 'src/b.ts'] }, files: { 'src/a.ts': 'const NEW_FLAG = true' } })
+  const gone = await evalCheck({ check: 'git_path_exists', repo: 'Nexus', path: 'legacy/', absent: true }, ctx({ git }))
+  assert.equal(gone.ok, true); assert.match(gone.detail, /want none/)
+  const still = await evalCheck({ check: 'git_path_exists', repo: 'Nexus', path: 'src/', absent: true }, ctx({ git }))
+  assert.equal(still.ok, false)
+  assert.equal((await evalCheck({ check: 'git_grep', repo: 'Nexus', pattern: 'OLD_FLAG', absent: true }, ctx({ git }))).ok, true)
+  assert.equal((await evalCheck({ check: 'git_grep', repo: 'Nexus', pattern: 'NEW_FLAG', absent: true }, ctx({ git }))).ok, false)
+  const noRepo = await evalCheck({ check: 'git_grep', repo: 'Nowhere', pattern: 'OLD_FLAG', absent: true }, ctx({ git }))
+  assert.equal(noRepo.ok, false)
+})
