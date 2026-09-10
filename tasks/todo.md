@@ -2470,6 +2470,13 @@ booked meeting is a calendar invite, not a person's say-so."
       line (`milestone-cdt-proposal`), live Supabase state (`cm-redesign-live`,
       `cm-second-live-book`), a reachable URL (hosted demo). Each is a candidate eleventh check
       with a named data source — see the Phase 14 review.
+- [x] 14.8a Full `--dry` on the mini with all 107 checks (operations carried over by the
+      janitors in ~8 min): 13s wall; 3 proofs fully true — `cc-direction-layer` 4/4 and
+      `cc-scoreboard-truth` 3/3 are genuinely done; **`forge-triage` 1/1 was a wrong-reason
+      green** (its `[DECISION]` grep matched `roadmap-test.ts`), replaced with a path check for
+      the script it must produce. `calendar_event` reports "no calendar feeds configured" on the
+      mini: `~/.openclaw/workspace/.credentials/calendar.json` exists on neither machine, so the
+      check is honest but undecidable until Pavan places the ICS URLs there (a credential — his).
 - [ ] 14.8 AFTER merge + deploy: watch `~/.openclaw/logs/roadmap-watch.log` on the mini for the
       first triggered tick, read the board back, confirm Jessica's staging work shows as movement
       on bidpro and the four cc- milestones moved to today's date.

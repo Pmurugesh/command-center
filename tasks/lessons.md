@@ -313,3 +313,9 @@ reads), refusing it is not rigour, it is a board that lies by omission. The entr
    change, one announce a morning.
 4. Cost questions get a number, not reassurance: the watcher is a dozen `ls-remote` calls every
    five minutes and zero tokens. Say so.
+- **[2026-09-09]** An agent-applied proof read done by matching a test fixture: `forge-triage`
+  grepped `[DECISION]` under `scripts/` and hit `roadmap-test.ts`. Every proof block written
+  at scale gets the same audit before it ships: **run the check, list every fully-true proof,
+  and read each one's detail** — the file it matched, not just the count. A proof whose literal
+  can occur in tests, docs, or fixtures is not a proof. Name the artifact the milestone must
+  produce (a path) over a phrase it might contain.
