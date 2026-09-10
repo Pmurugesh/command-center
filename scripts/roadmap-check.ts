@@ -414,16 +414,23 @@ async function checkBuild(a: Milestone): Promise<Checked> {
   if (!newest) {
     return { slug: a.slug, error: errors.join('; ') || 'No human commit found in the last 300 commits' }
   }
-  // Landed on the default branch → no ref, whatever %S said. Otherwise the
-  // ref git reached it from is a branch it is genuinely on.
-  const landed = await isAncestor(newestDir, newest.sha, newestDefaultRef)
-  const onBranch = !landed && newest.ref && newest.ref !== 'origin/HEAD' && newest.ref !== newestDefaultRef
+  // Landed on the default branch → no ref, whatever %S said. On an integration
+  // branch (staging) → name THAT, not the feature branch it came in on: "on
+  // origin/staging" tells Pavan it is merged and unreleased, which is the fact
+  // he acts on. Otherwise the ref git reached it from is a branch it is on.
+  let ref: string | undefined
+  for (const candidate of await landedRefs(newestDir)) {
+    if (await isAncestor(newestDir, newest.sha, candidate)) { ref = candidate; break }
+  }
+  const onBranch = ref === undefined
+    ? (newest.ref && newest.ref !== 'origin/HEAD' && newest.ref !== newestDefaultRef ? newest.ref : undefined)
+    : (ref === newestDefaultRef ? undefined : ref)
   return {
     slug: a.slug,
     evidence_age_days: days(newest.at),
     last_evidence_at: newest.at,
     last_evidence_author: newest.author,
-    ...(onBranch ? { last_evidence_ref: newest.ref } : {}),
+    ...(onBranch ? { last_evidence_ref: onBranch } : {}),
   }
 }
 
