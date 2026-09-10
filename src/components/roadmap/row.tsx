@@ -41,7 +41,7 @@ export function RowCard({ row, ranks }: {
 
   return (
     <Card id={row.slug} className={cn('scroll-mt-16', trouble > 0 && 'border-status-danger/30')}>
-      <CardContent className="p-6">
+      <CardContent className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-3">
           <div className="min-w-0 flex-1 basis-80">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">

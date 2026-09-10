@@ -66,7 +66,7 @@ export default async function AgentsPage() {
             key={agent.id}
             className={agent.id === 'main' ? 'border-blue-500/30 bg-blue-500/5' : ''}
           >
-            <CardContent className="p-6 space-y-4">
+            <CardContent className="p-4 space-y-4">
               {/* Header: emoji + name + id, with status & model on the right */}
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">

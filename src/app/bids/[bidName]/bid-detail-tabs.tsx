@@ -48,7 +48,7 @@ export function BidDetailTabs({ files }: { files: BidFile[] }) {
       {/* Active tab content — markdown reads better at constrained width */}
       {activeFile && (
         <div className="rounded-lg border border-border bg-card">
-          <div className="max-w-3xl mx-auto p-6 md:p-8">
+          <div className="p-4 md:p-5">
             <MarkdownRenderer content={activeFile.content} />
           </div>
         </div>

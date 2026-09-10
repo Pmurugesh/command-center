@@ -70,7 +70,7 @@ export default async function GtmPage() {
         docs.map((doc, i) => (
           // scroll-mt keeps the anchored card clear of the sticky-ish top bar
           <Card key={doc.slug} id={doc.slug} className="scroll-mt-16">
-            <CardContent className="p-6">
+            <CardContent className="p-4">
               <details open={i === 0}>
                 <summary className="cursor-pointer select-none text-base font-semibold transition-colors hover:text-blue-400">
                   {doc.title}

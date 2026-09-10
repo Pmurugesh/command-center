@@ -102,11 +102,11 @@ export function LibraryBrowser({ files }: { files: LibraryFile[] }) {
 
       {/* Content area */}
       <Card className="lg:col-span-3">
-        <CardContent className="p-6">
+        <CardContent className="p-4">
           {selectedFile ? (
             <div>
               <h2 className="text-xl font-semibold mb-4">{selectedFile.displayName}</h2>
-              <div className="max-w-3xl">
+              <div>
                 <MarkdownRenderer content={selectedFile.content} />
               </div>
             </div>

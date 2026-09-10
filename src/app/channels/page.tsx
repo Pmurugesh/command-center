@@ -51,7 +51,7 @@ function ChannelCard({ channel }: { channel: Channel }) {
       id={channel.slug}
       className={cn('scroll-mt-16', alerting && 'border-status-warning/30')}
     >
-      <CardContent className="p-6">
+      <CardContent className="p-4">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-base font-semibold">{channel.name}</h3>
           <Badge variant={STATUS_BADGE[channel.status] ?? 'outline'} className="text-[10px]">

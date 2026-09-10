@@ -4,6 +4,11 @@ module.exports = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      // A rung above 2xl (1536px). Without it the layout had nothing to say
+      // between 1536px and a 2560px monitor — see tasks/todo.md Phase 14.
+      screens: {
+        "3xl": "1800px",
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
