@@ -2487,3 +2487,34 @@ booked meeting is a calendar invite, not a person's say-so."
 
 **Not in scope.** Unpushed commits (nothing can see them — push at end of day is a team rule).
 Linear/intent tracking (separate decision). Network-probe checks ("URL reachable") — still refused.
+
+## Phase 14 addendum — BidPro is built by someone else, and the board should say what (2026-09-09)
+
+**Pavan:** "I need to track her progress of what she is working on so I can step in and
+supplement — answering the handoff questions or doing them." And: "just because they are internal
+tools doesn't mean they shouldn't have milestones — implemented and used, these save money,
+increase engagement or boost revenue."
+
+- [x] The BidPro row held only handoffs and decisions (what the suite needs from BidPro). Its body
+      said "read-only — every milestone is a handoff or a decision, never an edit", which conflated
+      *not editing her repo* with *not tracking her work*. Reworded: two lists side by side.
+- [x] Six `kind: build` milestones drafted from Jessica's own `docs/<workstream>-plan.md` files
+      (subagent, every literal verified at origin/staging, main and the DMV branch): form grammar,
+      scan requirement fixes, extraction eval corpus, multitenancy, staging database, docx form
+      fill. Six `[DECISION]` lines carry the questions her trackers leave to the owner — they queue
+      on Today. Rulings already recorded are listed so nothing is re-asked. 65 → 71 milestones,
+      lint `[]`.
+- [x] Found on the way: **proofs read `origin/main` only** (`GIT.open` → `originRef`), while
+      handoff literals read main + staging. BidPro integrates on staging and releases in batches
+      (main 29 commits behind), so a proof would flip weeks after the work. `openForProof` now
+      returns `landedRefs`; present proofs hold at the first ref and say which, `absent` must hold
+      at every ref, `flag_default` reads the first ref that has the file. Test added (120).
+- [ ] After merge: dry run on the mini shows `bidpro-docx-form-fill` 1/1 (finished 09-08, Pavan
+      may type `done:`), `bidpro-scan-requirement-fixes` 0/3 until the DMV branch merges.
+
+**Are there others like BidPro?** No. Of 13 rows, BidPro was the only one with repos and zero build
+milestones. `gtm` and `proc` have no build milestones because their one milestone each is a
+decision by nature. What IS true of every `kind: internal` row (bidpro, command-center, gtm,
+web-presence): the build-next ranking's pull term is CRM demand, which internal tools cannot earn,
+so they rank only through `unlocks` and targets. That is a design choice worth a look, not a bug —
+an internal tool that saves money has no contact at `meeting-booked`.

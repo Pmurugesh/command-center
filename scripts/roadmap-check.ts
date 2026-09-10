@@ -310,8 +310,21 @@ async function pathCount(repo: string, ref: string, paths: string[]): Promise<nu
  * Git, as the proof engine needs it — the real implementation of the seam that
  * makes the nine checks testable. Everything reads `origin` after a fetch.
  */
+/**
+ * Proofs read the landed refs — main first, then `staging` where it exists —
+ * the same refs a handoff literal is searched at. Found 2026-09-09 drafting
+ * BidPro's build milestones: their team integrates on staging and releases to
+ * main in batches (29 commits behind that day), so a proof read at main alone
+ * would flip weeks after the work was done. A branch is still never a landing.
+ */
+async function openForProof(name: string): Promise<{ dir: string; ref: string; refs: string[] } | { error: string }> {
+  const r = await openRepo(name)
+  if ('error' in r) return r
+  return { ...r, refs: await landedRefs(r.dir) }
+}
+
 const GIT: GitOps = {
-  open: openRepo,
+  open: openForProof,
   pathCount,
   grep: grepAtRef,
   show: showAtRef,
@@ -401,16 +414,23 @@ async function checkBuild(a: Milestone): Promise<Checked> {
   if (!newest) {
     return { slug: a.slug, error: errors.join('; ') || 'No human commit found in the last 300 commits' }
   }
-  // Landed on the default branch → no ref, whatever %S said. Otherwise the
-  // ref git reached it from is a branch it is genuinely on.
-  const landed = await isAncestor(newestDir, newest.sha, newestDefaultRef)
-  const onBranch = !landed && newest.ref && newest.ref !== 'origin/HEAD' && newest.ref !== newestDefaultRef
+  // Landed on the default branch → no ref, whatever %S said. On an integration
+  // branch (staging) → name THAT, not the feature branch it came in on: "on
+  // origin/staging" tells Pavan it is merged and unreleased, which is the fact
+  // he acts on. Otherwise the ref git reached it from is a branch it is on.
+  let ref: string | undefined
+  for (const candidate of await landedRefs(newestDir)) {
+    if (await isAncestor(newestDir, newest.sha, candidate)) { ref = candidate; break }
+  }
+  const onBranch = ref === undefined
+    ? (newest.ref && newest.ref !== 'origin/HEAD' && newest.ref !== newestDefaultRef ? newest.ref : undefined)
+    : (ref === newestDefaultRef ? undefined : ref)
   return {
     slug: a.slug,
     evidence_age_days: days(newest.at),
     last_evidence_at: newest.at,
     last_evidence_author: newest.author,
-    ...(onBranch ? { last_evidence_ref: newest.ref } : {}),
+    ...(onBranch ? { last_evidence_ref: onBranch } : {}),
   }
 }
 
