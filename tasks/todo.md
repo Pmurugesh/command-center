@@ -2477,6 +2477,10 @@ booked meeting is a calendar invite, not a person's say-so."
       the script it must produce. `calendar_event` reports "no calendar feeds configured" on the
       mini: `~/.openclaw/workspace/.credentials/calendar.json` exists on neither machine, so the
       check is honest but undecidable until Pavan places the ICS URLs there (a credential — his).
+- [x] 14.8b PR #48 merged 21:01, deployed to the mini 40s later (acb3a27); post-deploy loaded
+      `com.paladin.roadmap-watch`; first tick 04:04Z took the baseline over 7 repos (the five
+      origin-less clones are skipped). The board is still the 08:00 snapshot until the next push
+      to any repo or a Rescore — Pavan asked that Rescore not be clicked for him.
 - [ ] 14.8 AFTER merge + deploy: watch `~/.openclaw/logs/roadmap-watch.log` on the mini for the
       first triggered tick, read the board back, confirm Jessica's staging work shows as movement
       on bidpro and the four cc- milestones moved to today's date.
