@@ -9,7 +9,7 @@ copy, not this one.
 | Job | Interval | What it does |
 |---|---|---|
 | `operations-janitor` | 5 min | Auto-commit `~/repos/operations`, pull --rebase, push. The MacBook half of the two-way git sync (the mini runs its counterpart every 2 min). |
-| `mini-watchdog` | 30 min | Notices when the mini stops answering (dashboard URL down) and raises a macOS notification — the one health check that cannot live on the mini itself. |
+| `mini-watchdog` | 30 min | Notices when the mini stops answering (dashboard URL down) and raises a macOS notification naming which failure it is: off the network (it restarted and is waiting at the FileVault password screen — someone has to go to it; see `scripts/mini/harden-restarts.sh`) or online but unreachable (toggle Tailscale here). The one health check that cannot live on the mini itself. |
 | `weekly-sync` | Mon 9:00 | The derived-truth pass (needs the platform clone, which lives here): regenerates `products/_registry.md` from the platform's module manifests, then runs drift-check (dead citations, orphan agency slugs, stale agent context → dated intel alert, re-announced only on change). Runs `scripts/macbook/weekly-sync.sh` from `~/repos/command-center` main. Replaced the drift-check-only job 2026-08-24. |
 
 ## Install / update
