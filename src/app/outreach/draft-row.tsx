@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Copy, Check, PenLine, CheckCircle2, Loader2, X } from 'lucide-react'
+import { Copy, Check, PenLine, CheckCircle2, Loader2, X, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { OutreachDraft } from '@/lib/followup'
@@ -163,6 +163,21 @@ export function DraftRow({
             <p className="mt-0.5 font-mono text-[11px] text-muted-foreground/50">
               {draft.to}
             </p>
+          )}
+
+          {/* Internal context. The CRM shorthand that used to be pasted into
+              the email body lives here instead — visible to whoever is
+              personalising the draft, never part of what gets sent. */}
+          {draft.notes && !isSent && (
+            <details className="mt-1.5 group/notes">
+              <summary className="inline-flex cursor-pointer list-none select-none items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground/70 transition-colors hover:text-foreground">
+                <Lock className="h-2.5 w-2.5" />
+                Context · not sent
+              </summary>
+              <div className="mt-1 whitespace-pre-wrap rounded border border-dashed border-border bg-muted/30 px-2 py-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                {draft.notes}
+              </div>
+            </details>
           )}
 
           {/* Sent metadata */}

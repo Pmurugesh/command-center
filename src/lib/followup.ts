@@ -42,6 +42,12 @@ export interface FollowupDraft {
   triggerRef?: string       // meeting slug or bid slug that caused this
   agingSince?: string       // YYYY-MM-DD — when the need arose
   updatedAt?: string
+  /** Who is sending. Not always Pavan — pindi-oeis.md is from Saravanan. */
+  sender?: string
+  /** INTERNAL context for the person personalising this draft, and input for a
+   *  drafting agent. Never rendered into the body: this is where CRM shorthand
+   *  such as next_action and blocked_on lives so it cannot leak into prose. */
+  notes?: string
 }
 
 /** Enriched view for the /outreach queue: computed priority + contact info. */
@@ -71,26 +77,6 @@ function daysSince(iso?: string): number | undefined {
   return Math.floor((Date.now() - t) / 86_400_000)
 }
 
-/**
- * Strip log entries that should never leave the company.
- * Repo paths, parenthetical bookkeeping, and internal system names
- * get filtered to a single external-safe sentence or empty string.
- */
-function externalSafe(text: string): string {
-  let t = text.trim()
-    .replace(/\([^)]*\)/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/\s+([,.;:!?])/g, '$1')
-    .replace(/([,;:])\s*([.!?])/g, '$2')
-    .trim()
-
-  const stop = t.search(/\.\s/)
-  if (stop > 40) t = t.slice(0, stop + 1)
-
-  if (/\b(repo|repository|\.md\b|docs\/|src\/|github|commit|branch|Nexus)\b/i.test(t)) return ''
-  return t.trim()
-}
-
 function computePriority(d: FollowupDraft, agingDays?: number): 'high' | 'medium' | 'low' {
   if (d.triggerKind === 'crm-due') return 'high'
   if (agingDays !== undefined && agingDays > 14) return 'high'
@@ -111,59 +97,96 @@ function sortDrafts(a: OutreachDraft, b: OutreachDraft): number {
 // ── build ─────────────────────────────────────────────────────────────────────
 
 /**
- * Compose the scaffold. Each paragraph is omitted rather than guessed when the
- * store has nothing to say — a follow-up with an empty promise in it is worse
- * than a short one.
+ * Compose the scaffold.
+ *
+ * HARD RULE: no CRM field written for an internal reader may appear in the
+ * body.
+ *
+ * The previous template broke that rule twice, unguarded. `nextAction` went out
+ * as "The next step we agreed was: {…}" — where the real values on disk are
+ * things like "Personal follow-up — upsell", "Call — offer free 30-day pilot",
+ * "Warm product path — services client with no product conversation started"
+ * and "Confirm current status — six meetings through Feb 2026, then silence".
+ * `blockedOn` went out as "I know this is waiting on {…}" — and two contacts
+ * carry `blocked_on: product one-pager does not exist`. Both bypassed
+ * externalSafe() entirely, which in any case only screens for repo paths.
+ *
+ * It also opened with "It has been {n} days since we last spoke", which leads
+ * with your own neglect and — being frozen at write time — was wrong within a
+ * week (christine-lci.md still says 187 when the true figure is 196).
+ *
+ * So the internal facts now travel in frontmatter `notes`, where the person
+ * personalising the draft can read them and a drafting agent can use them as
+ * input. What is left in the body is deliberately short: a greeting, one
+ * concrete ask with real dates, a sign-off. A four-line email that cannot
+ * embarrass you beats a seven-line one that can.
  */
-export function buildDraft(contact: CrmContact, log: CrmLogEntry[] = []): FollowupDraft {
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+/**
+ * The next Tue–Fri block that is at least two days out, as prose.
+ * Concrete dates are the single biggest difference between the generated
+ * drafts and the one good hand-written one in the store.
+ */
+export function nextAvailabilityWindow(now = new Date()): string {
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  start.setDate(start.getDate() + 2)
+  // Advance to Tuesday (2). A Tue start keeps Monday free for the week's own mess.
+  while (start.getDay() !== 2) start.setDate(start.getDate() + 1)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 3) // Friday
+
+  const sameMonth = start.getMonth() === end.getMonth()
+  const range = sameMonth
+    ? `${MONTHS[start.getMonth()]} ${start.getDate()}–${end.getDate()}`
+    : `${MONTHS[start.getMonth()]} ${start.getDate()} – ${MONTHS[end.getMonth()]} ${end.getDate()}`
+  return `Tuesday through Friday (${range})`
+}
+
+export function buildDraft(
+  contact: CrmContact, log: CrmLogEntry[] = [], now = new Date(),
+): FollowupDraft {
   const who = firstName(contact.name)
-  const gap = daysSince(contact.lastTouched)
 
   const recent = [...log].sort((a, b) => b.date.localeCompare(a.date))
-
   const lastEmail = recent.find(l => l.via === 'email-in' || l.via === 'email-out')
   const quoted = lastEmail?.text.match(/"([^"]+)"/)?.[1]
+  // Threading on the real prior subject carries the shared context implicitly,
+  // which is why the body no longer has to try to restate it.
   const subject = quoted
     ? (/^re:/i.test(quoted) ? quoted : `Re: ${quoted}`)
     : contact.agencyName
       ? `Following up — Infinite Solutions / ${contact.agencyName}`
       : 'Following up'
 
-  const lines: string[] = [`Hi ${who},`, '']
+  const body = [
+    `Hi ${who},`,
+    '',
+    'Wanted to pick this back up — would a short call make sense?',
+    '',
+    `I have time ${nextAvailabilityWindow(now)} if any of those work, and I am happy to fit around your calendar.`,
+    '',
+    'Best,',
+    'Pavan',
+  ].join('\n')
 
-  if (gap !== undefined && gap > 0) {
-    lines.push(
-      `It has been ${gap} day${gap === 1 ? '' : 's'} since we last spoke — wanted to pick this back up.`,
-      ''
-    )
-  } else {
-    lines.push('Wanted to pick this back up.', '')
-  }
-
+  // Internal-only. Assembled for the human editing the draft, never sent.
   const ADMIN = /^(seeded|imported|created|added|migrated|backfilled)\b/i
   const context = recent.find(l =>
     l.via !== 'email-in' && l.via !== 'email-out' && !ADMIN.test(l.text.trim())
   )
-  if (context?.text.trim()) {
-    const line = externalSafe(context.text)
-    if (line) lines.push(`Where we left off: ${line}`, '')
-  }
+  const notes = [
+    // owner can be several people ('Ganapathy, Rani') and is the ACCOUNT owner,
+    // not the sender — so it is surfaced here for the human rather than being
+    // guessed into the signature.
+    contact.owner ? `CRM owner: ${contact.owner} — confirm who should send` : '',
+    contact.nextAction ? `Next action (internal): ${contact.nextAction}` : '',
+    contact.blockedOn ? `Blocked on (internal): ${contact.blockedOn}` : '',
+    context?.text.trim() ? `Last logged: ${context.text.trim()}` : '',
+    lastEmail ? `Last email: ${lastEmail.date}` : '',
+    'Generic scaffold — personalise before sending.',
+  ].filter(Boolean).join('\n')
 
-  if (contact.nextAction) {
-    lines.push(`The next step we agreed was: ${contact.nextAction}`, '')
-  }
-  if (contact.blockedOn) {
-    lines.push(`I know this is waiting on ${contact.blockedOn} — happy to help move that along.`, '')
-  }
-
-  lines.push(
-    'Would a short call this week or next work? Happy to work around your calendar.',
-    '',
-    'Best,',
-    'Pavan'
-  )
-
-  // Trigger metadata — crm-due if they have a blown next_action_due, manual otherwise.
   const overdue =
     contact.nextActionDue !== undefined &&
     (daysSince(contact.nextActionDue) ?? 0) > 0
@@ -172,12 +195,66 @@ export function buildDraft(contact: CrmContact, log: CrmLogEntry[] = []): Follow
     slug: contact.slug,
     to: contact.email,
     subject,
-    body: lines.join('\n'),
+    body,
     edited: false,
     status: 'draft',
     triggerKind: overdue ? 'crm-due' : 'manual',
     agingSince: contact.nextActionDue ?? contact.lastTouched,
+    sender: 'Pavan',
+    notes,
   }
+}
+
+// ── the invariant ─────────────────────────────────────────────────────────────
+
+/**
+ * Scaffolding that only the old template produced. A human writing an email by
+ * hand does not type these, so matching one means generated text leaked.
+ */
+const TEMPLATE_TELLS: { re: RegExp; why: string }[] = [
+  { re: /It has been \d+ days? since we last spoke/i, why: 'opens with a day count (leads with neglect, and freezes stale)' },
+  { re: /The next step we agreed was:/i,               why: 'asserts an agreement that may not exist, and pastes internal shorthand' },
+  { re: /Where we left off:/i,                         why: 'template label leaking into prose' },
+  { re: /I know this is waiting on /i,                 why: 'pastes the internal blocked_on field' },
+]
+
+/** Repo and system names that must never reach a customer. */
+const SYSTEM_TELL = /\b(repo|repository|docs\/|src\/|github|commit|branch|Nexus)\b|\.md\b/i
+
+/**
+ * Every reason this body must not be sent. Empty array == safe to persist.
+ *
+ * This exists because the invariant "no internal field reaches the body" was
+ * previously only a comment, and the template violated it in two places for
+ * months — one of those emails was actually sent (robert-cdt-mmbi, 2026-09-01).
+ * A rule the code does not enforce is a rule the code does not have.
+ */
+export function findInternalLeaks(
+  body: string, contact?: Pick<CrmContact, 'nextAction' | 'blockedOn'> | null,
+): string[] {
+  const leaks: string[] = []
+
+  for (const { re, why } of TEMPLATE_TELLS) {
+    if (re.test(body)) leaks.push(why)
+  }
+
+  // Verbatim CRM shorthand. Short values are skipped: "Email — demo request"
+  // is common enough phrasing that a human could legitimately write it, while
+  // "Warm product path — services client with no product conversation started"
+  // could only have been pasted.
+  for (const [field, value] of [
+    ['next_action', contact?.nextAction],
+    ['blocked_on', contact?.blockedOn],
+  ] as const) {
+    const v = value?.trim()
+    if (v && v.length >= 12 && body.includes(v)) {
+      leaks.push(`contains the internal ${field} verbatim: "${v}"`)
+    }
+  }
+
+  if (SYSTEM_TELL.test(body)) leaks.push('names a repo, path or internal system')
+
+  return leaks
 }
 
 // ── read / write ──────────────────────────────────────────────────────────────
@@ -200,6 +277,8 @@ export async function readDraft(slug: string): Promise<FollowupDraft | null> {
       triggerRef: typeof data.trigger_ref === 'string' ? data.trigger_ref : undefined,
       agingSince: typeof data.aging_since === 'string' ? data.aging_since : undefined,
       updatedAt: typeof data.updated_at === 'string' ? data.updated_at : undefined,
+      sender: typeof data.sender === 'string' ? data.sender : undefined,
+      notes: typeof data.notes === 'string' ? data.notes : undefined,
     }
   } catch {
     return null
@@ -207,6 +286,18 @@ export async function readDraft(slug: string): Promise<FollowupDraft | null> {
 }
 
 export async function writeDraft(d: FollowupDraft): Promise<FollowupDraft> {
+  // Refuse to persist a body that would embarrass us. Every path that creates a
+  // draft — dashboard, API, or an agent writing through this module — goes
+  // through here, so this is where the invariant is cheapest to hold.
+  const subject = await getContact(d.slug).catch(() => null)
+  const leaks = findInternalLeaks(d.body, subject)
+  if (leaks.length > 0) {
+    throw new Error(
+      `Refusing to write draft "${d.slug}" — it leaks internal content:\n` +
+      leaks.map(l => `  · ${l}`).join('\n'),
+    )
+  }
+
   await fs.mkdir(PATHS.crmDrafts, { recursive: true })
   const next = { ...d, updatedAt: new Date().toISOString() }
 
@@ -223,6 +314,8 @@ export async function writeDraft(d: FollowupDraft): Promise<FollowupDraft> {
   if (next.triggerKind) meta.trigger_kind = next.triggerKind
   if (next.triggerRef) meta.trigger_ref = next.triggerRef
   if (next.agingSince) meta.aging_since = next.agingSince
+  if (next.sender) meta.sender = next.sender
+  if (next.notes) meta.notes = next.notes
 
   const fileContent = matter.stringify(`\n${next.body.trim()}\n`, meta)
   await fs.writeFile(draftPath(next.slug), fileContent, 'utf-8')

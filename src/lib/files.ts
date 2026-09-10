@@ -86,6 +86,12 @@ export async function listBids(): Promise<Bid[]> {
       hasDocuments,
       updatedAt,
       deadlineAt: bidDeadline(status),
+      agency: status?.agency,
+      contractValue: status?.contractValue,
+      stage: status?.stage,
+      reason: status?.reason,
+      decisionsOpen: status?.decisionsOpen,
+      coverage: status?.coverage,
     })
   }
 
@@ -225,6 +231,33 @@ export function currentScanReports(reports: ScanReport[]): ScanReport[] {
 
 // ── Intelligence ──
 
+/**
+ * The alerts/ directory is not homogeneous: alongside the daily scans it holds
+ * weekly rollups, strategic briefings, heartbeat reports and drift reports.
+ * Typing everything by its folder labelled all of them "Daily Scan". The
+ * filename suffix is the honest signal, so it wins over the folder.
+ */
+function classifyAlert(
+  filename: string,
+  folderType: IntelAlert['type'],
+): { type: IntelAlert['type']; label: string } {
+  if (folderType !== 'daily') {
+    const labels: Record<string, string> = {
+      weekly: 'Weekly Briefing',
+      procurement: 'Procurement',
+      competitor: 'Competitor',
+      system: 'System',
+    }
+    return { type: folderType, label: labels[folderType] ?? 'Alert' }
+  }
+  const base = filename.replace(/\.md$/, '')
+  if (/-weekly$/.test(base))       return { type: 'weekly', label: 'Weekly Briefing' }
+  if (/-briefing$/.test(base))     return { type: 'weekly', label: 'Briefing' }
+  if (/-heartbeat$/.test(base))    return { type: 'system', label: 'Heartbeat' }
+  if (/-drift-report$/.test(base)) return { type: 'system', label: 'Drift Report' }
+  return { type: 'daily', label: 'Daily Scan' }
+}
+
 export async function listIntelAlerts(): Promise<IntelAlert[]> {
   const alerts: IntelAlert[] = []
   const baseDir = path.dirname(PATHS.intelligence) // intelligence/ root
@@ -244,11 +277,13 @@ export async function listIntelAlerts(): Promise<IntelAlert[]> {
       if (!filename.endsWith('.md')) continue
       const content = await fs.readFile(path.join(dir, filename), 'utf-8')
       const dateMatch = filename.match(/^(\d{4}-\d{2}-\d{2})/)
+      const { type: resolvedType, label } = classifyAlert(filename, type)
       alerts.push({
         filename,
         date: dateMatch ? dateMatch[1] : '',
         content,
-        type,
+        type: resolvedType,
+        label,
       })
     }
   }

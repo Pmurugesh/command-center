@@ -10,6 +10,15 @@ export interface Bid {
   hasDocuments?: boolean
   updatedAt?: string // ISO; from .status.json updatedAt OR bid dir mtime
   deadlineAt?: string // YYYY-MM-DD; normalized from .status.json (deadline | deadlineProposalDue)
+  // These all existed in .status.json and were read, then thrown away by
+  // listBids — so the pipeline page could not show a deadline, a dollar value,
+  // an agency or a staffing gap. See tasks/todo.md Phase 14.
+  agency?: string
+  contractValue?: number
+  stage?: BidStage
+  reason?: string
+  decisionsOpen?: number
+  coverage?: { rolesTotal: number; rolesStaffed: number; slotsTotal: number; slotsFilled: number }
 }
 
 export interface BidFile {
@@ -94,7 +103,11 @@ export interface IntelAlert {
   filename: string
   date: string
   content: string
-  type: 'daily' | 'weekly' | 'procurement' | 'competitor' | 'other'
+  type: 'daily' | 'weekly' | 'procurement' | 'competitor' | 'system'
+  /** Display name for the alert's kind. Derived from the FILENAME suffix, not
+   *  the folder: everything in alerts/ used to render as "Daily Scan", which
+   *  mislabelled the weekly, briefing, heartbeat and drift-report files. */
+  label: string
 }
 
 export interface CronJob {
