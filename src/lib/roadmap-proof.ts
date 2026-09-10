@@ -244,7 +244,10 @@ export async function evalCheck(c: ProofCheck, ctx: ProofContext): Promise<Proof
       const r = await ctx.git.open(c.repo)
       if ('error' in r) return { check: c.check, ok: false, detail: r.error }
       const n = await ctx.git.pathCount(r.dir, r.ref, [c.path])
-      return { check: c.check, ok: n > 0, detail: `${c.repo} ${c.path}: ${n} file(s) at ${r.ref}` }
+      return {
+        check: c.check, ok: c.absent ? n === 0 : n > 0,
+        detail: `${c.repo} ${c.path}: ${n} file(s) at ${r.ref}${c.absent ? ' (want none)' : ''}`,
+      }
     }
 
     case 'git_grep': {
@@ -252,8 +255,8 @@ export async function evalCheck(c: ProofCheck, ctx: ProofContext): Promise<Proof
       if ('error' in r) return { check: c.check, ok: false, detail: r.error }
       const n = await ctx.git.grep(r.dir, r.ref, c.pattern, c.path)
       return {
-        check: c.check, ok: n > 0,
-        detail: `${c.repo}: "${c.pattern}" in ${n} file(s)${c.path ? ` under ${c.path}` : ''} at ${r.ref}`,
+        check: c.check, ok: c.absent ? n === 0 : n > 0,
+        detail: `${c.repo}: "${c.pattern}" in ${n} file(s)${c.path ? ` under ${c.path}` : ''} at ${r.ref}${c.absent ? ' (want none)' : ''}`,
       }
     }
 
@@ -331,7 +334,8 @@ export async function evalCheck(c: ProofCheck, ctx: ProofContext): Promise<Proof
       try { re = new RegExp(c.title_match, 'i') } catch {
         return { check: c.check, ok: false, detail: `title_match ${JSON.stringify(c.title_match)} is not a regex` }
       }
-      const where = `/${c.title_match}/${c.after ? ` after ${c.after}` : ''}${c.before ? ` before ${c.before}` : ''}`
+      const domain = c.attendee_domain?.trim().toLowerCase()
+      const where = `/${c.title_match}/${domain ? ` with @${domain}` : ''}${c.after ? ` after ${c.after}` : ''}${c.before ? ` before ${c.before}` : ''}`
       // Absence renders unknown, never green — and never a confident red either.
       // A calendar that was not read, or whose feeds all failed, is not "no
       // invite"; it is "could not look", and the detail must say so.
@@ -344,6 +348,7 @@ export async function evalCheck(c: ProofCheck, ctx: ProofContext): Promise<Proof
       const hits = ctx.calendar.filter(ev => {
         const day = ev.startAt.slice(0, 10)
         return re.test(ev.title) && (!c.after || day > c.after) && (!c.before || day < c.before)
+          && (!domain || ev.attendees.some(a => a.toLowerCase().endsWith(`@${domain}`)))
       })
       return {
         check: c.check,

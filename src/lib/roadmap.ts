@@ -105,13 +105,15 @@ export type ProofCheck =
   | { check: 'file_exists'; path: string }
   | { check: 'frontmatter_field'; path: string; field: string; equals: unknown }
   | { check: 'decision_resolved'; path: string; contains: string }
-  | { check: 'git_path_exists'; repo: string; path: string }
-  | { check: 'git_grep'; repo: string; path?: string; pattern: string }
+  /** `absent: true` inverts the question ("the flag is gone", "the stub was
+   *  deleted") — guarded: the repo must open, or the answer is "could not look". */
+  | { check: 'git_path_exists'; repo: string; path: string; absent?: boolean }
+  | { check: 'git_grep'; repo: string; path?: string; pattern: string; absent?: boolean }
   | { check: 'flag_default'; repo: string; path: string; name: string; equals: unknown }
   | { check: 'contact_stage'; contact: string; at_least: string }
   | { check: 'contacts_count'; product: string; stage_at_least: string; count: number }
   | { check: 'meeting_logged'; agency: string; title_match: string; after?: string }
-  | { check: 'calendar_event'; title_match: string; after?: string; before?: string }
+  | { check: 'calendar_event'; title_match: string; after?: string; before?: string; attendee_domain?: string }
 
 export const PROOF_CHECKS = [
   'file_exists', 'frontmatter_field', 'decision_resolved', 'git_path_exists',

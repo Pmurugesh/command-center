@@ -1264,7 +1264,8 @@ test('parseProof: calendar_event is in the vocabulary; an eleventh check is not'
 })
 
 test('calendar_event: not read, unreachable, hit, miss, window — and never a confident red for a feed that failed', async () => {
-  const ev = (title: string, day: string) => ({ uid: title, title, startAt: `${day}T10:00:00-07:00`, allDay: false, calendar: 'Work', isDemo: false })
+  const ev = (title: string, day: string, attendees: string[] = []) =>
+    ({ uid: title, title, startAt: `${day}T10:00:00-07:00`, allDay: false, calendar: 'Work', isDemo: false, attendees })
   const check = { check: 'calendar_event' as const, title_match: 'OEIS.*demo', after: '2026-09-01', before: '2026-10-01' }
 
   const unread = await evalCheck(check, ctx())
@@ -1287,4 +1288,23 @@ test('calendar_event: not read, unreachable, hit, miss, window — and never a c
 
   const bad = await evalCheck({ ...check, title_match: '(?i)demo' }, ctx({ calendar: [] }))
   assert.equal(bad.ok, false); assert.match(bad.detail, /not a regex/)
+
+  // Attendee domain: the invite has to have THEM on it, not just their name in the title.
+  const withDomain = { check: 'calendar_event' as const, title_match: '.', attendee_domain: 'calhr.ca.gov' }
+  const theirs = await evalCheck(withDomain, ctx({ calendar: [ev('Intro call', '2026-09-20', ['Pat.Lee@CalHR.ca.gov'])] }))
+  assert.equal(theirs.ok, true)
+  const ours = await evalCheck(withDomain, ctx({ calendar: [ev('CalHR prep', '2026-09-20', ['pavan@novaera.ai'])] }))
+  assert.equal(ours.ok, false); assert.match(ours.detail, /with @calhr\.ca\.gov/)
+})
+
+test('git checks: absent inverts the answer, and a repo that will not open is never "absent"', async () => {
+  const git = fakeGit({ missing: ['Nowhere'], paths: { Nexus: ['src/a.ts', 'src/b.ts'] }, files: { 'src/a.ts': 'const NEW_FLAG = true' } })
+  const gone = await evalCheck({ check: 'git_path_exists', repo: 'Nexus', path: 'legacy/', absent: true }, ctx({ git }))
+  assert.equal(gone.ok, true); assert.match(gone.detail, /want none/)
+  const still = await evalCheck({ check: 'git_path_exists', repo: 'Nexus', path: 'src/', absent: true }, ctx({ git }))
+  assert.equal(still.ok, false)
+  assert.equal((await evalCheck({ check: 'git_grep', repo: 'Nexus', pattern: 'OLD_FLAG', absent: true }, ctx({ git }))).ok, true)
+  assert.equal((await evalCheck({ check: 'git_grep', repo: 'Nexus', pattern: 'NEW_FLAG', absent: true }, ctx({ git }))).ok, false)
+  const noRepo = await evalCheck({ check: 'git_grep', repo: 'Nowhere', pattern: 'OLD_FLAG', absent: true }, ctx({ git }))
+  assert.equal(noRepo.ok, false)
 })

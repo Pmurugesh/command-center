@@ -39,6 +39,10 @@ export interface Meeting {
   location?: string
   calendar: string // X-WR-CALNAME, or "calendar N" when the feed omits it
   isDemo: boolean
+  /** Lower-cased e-mail addresses from ATTENDEE and ORGANIZER (`mailto:` values).
+   *  The roadmap's `calendar_event` proof matches on the domain: an invite with
+   *  someone @calhr.ca.gov on it is a stronger fact than a title. */
+  attendees: string[]
 }
 
 export interface CalendarResult {
@@ -334,6 +338,9 @@ export function parseIcsFeed(ics: string, feedIndex: number, windowStartMs: numb
 
     const title = icsText(first(ev, 'SUMMARY')?.value ?? '(untitled)')
     const location = first(ev, 'LOCATION') ? icsText(first(ev, 'LOCATION')!.value) : undefined
+    const attendees = [...(ev['ATTENDEE'] ?? []), ...(ev['ORGANIZER'] ?? [])]
+      .map(p => p.value.replace(/^mailto:/i, '').trim().toLowerCase())
+      .filter(v => v.includes('@'))
     const isOverride = Boolean(first(ev, 'RECURRENCE-ID'))
 
     const rruleProp = first(ev, 'RRULE')
@@ -370,6 +377,7 @@ export function parseIcsFeed(ics: string, feedIndex: number, windowStartMs: numb
         location,
         calendar,
         isDemo: DEMO_RE.test(title),
+        attendees,
       })
     }
   }
