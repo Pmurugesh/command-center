@@ -2458,9 +2458,18 @@ booked meeting is a calendar invite, not a person's say-so."
       default ref: landed → no ref; otherwise the branch. After the fix: cc- milestones show
       today's date and no branch; cm- show 20:32 "on origin/claude/vibrant-payne-319061"; bidpro
       investment 171 → 184 (staging now counts).
-- [ ] 14.7 operations: README schema (proof on every kind, `calendar_event`, the watcher), proof
-      blocks for every milestone the vocabulary can express (subagent audit → applied by hand,
-      each literal verified where the repo is local), `proof: manual` only with a stated reason.
+- [x] 14.7 operations: README schema (proof on every kind, `calendar_event` + `attendee_domain`,
+      `absent: true`, the watcher), proof blocks applied from a 65-milestone audit: **9 files /
+      17 checks → 48 files / 107 checks**; 10 `proof: manual` with a stated reason; 7 build
+      milestones left without proof because every candidate literal was a guess (a guessed proof
+      that reads done for the wrong reason is worse than none). Four evidence-path defects fixed
+      on the way (`Contract` lives in `shared.py`; two is-website files were filed under
+      infiniteai-website; stale migration numbers; `supportsSandbox` is documented, not coded).
+      Lint `[]`. The operations janitor (5-min tick) carries the edits to the mini.
+      Still inexpressible: an OR of routes (`reporting-first-next-step`), a human-`via` CRM log
+      line (`milestone-cdt-proposal`), live Supabase state (`cm-redesign-live`,
+      `cm-second-live-book`), a reachable URL (hosted demo). Each is a candidate eleventh check
+      with a named data source — see the Phase 14 review.
 - [ ] 14.8 AFTER merge + deploy: watch `~/.openclaw/logs/roadmap-watch.log` on the mini for the
       first triggered tick, read the board back, confirm Jessica's staging work shows as movement
       on bidpro and the four cc- milestones moved to today's date.
