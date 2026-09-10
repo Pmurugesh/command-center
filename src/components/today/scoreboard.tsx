@@ -89,7 +89,7 @@ export function Scoreboard({ momentum, score }: ScoreboardProps) {
 
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-4">
+      <div className={`grid grid-cols-2 gap-3 md:gap-4 ${targets.bidsSubmitted === null ? 'md:grid-cols-5' : 'md:grid-cols-6'}`}>
         {touchTile}
         <Tile label="Meetings" sub="agency, this campaign">
           <Ratio actual={score.meetingsHeld} target={targets.meetings} closing={closing} />
@@ -100,6 +100,11 @@ export function Scoreboard({ momentum, score }: ScoreboardProps) {
         <Tile label="Pilot LOI" sub="signed">
           <Ratio actual={targets.loiActual} target={targets.loi} closing={closing} />
         </Tile>
+        {targets.bidsSubmitted !== null && (
+          <Tile label="Bids submitted" sub="responses out, this campaign">
+            <Ratio actual={score.bidsSubmitted} target={targets.bidsSubmitted} closing={closing} />
+          </Tile>
+        )}
         <div className="col-span-2 md:col-span-1">
           <Tile
             label="Phase 0"

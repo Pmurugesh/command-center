@@ -1329,3 +1329,15 @@ test('git checks: absent inverts the answer, and a repo that will not open is ne
   const noRepo = await evalCheck({ check: 'git_grep', repo: 'Nowhere', pattern: 'OLD_FLAG', absent: true }, ctx({ git }))
   assert.equal(noRepo.ok, false)
 })
+
+test('bidsSubmittedInWindow: responded stage or status, dated inside the window, lapsed never counts', async () => {
+  const { bidsSubmittedInWindow } = await import('../src/lib/gtm.ts')
+  const bids = [
+    { stage: 'submitted', updatedAt: '2026-09-10T10:00:00Z' },
+    { stage: 'lapsed', updatedAt: '2026-09-10T10:00:00Z' },
+    { status: 'Post-Response', updatedAt: '2026-09-01T10:00:00Z' },
+    { stage: 'awarded', updatedAt: '2026-08-01T10:00:00Z' },
+    { stage: 'submitted' },
+  ]
+  assert.equal(bidsSubmittedInWindow(bids, '2026-08-25', '2026-09-22'), 2)
+})

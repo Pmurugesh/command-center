@@ -21,6 +21,7 @@ import { runCommandArgs } from './shell'
 import { acquireLock, atomicWrite } from './store'
 import { listMeetings } from './meetings'
 import { DEMO_RE } from './calendar'
+import { listBids } from './files'
 
 // ── targets ─────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,10 @@ export interface Targets {
   demos: number
   loi: number
   loiActual: number
+  /** Optional (2026-09-09): responses out the door inside the window. Absent
+   *  in older files → the tile is not shown. Pavan's reframing: "if I can
+   *  respond to more bids I expose myself to more buyers — a GTM investment." */
+  bidsSubmitted: number | null
   phase0: Phase0Item[]
 }
 
@@ -86,6 +91,7 @@ export async function getTargets(): Promise<Targets | null> {
       campaign: typeof data.campaign === 'string' ? data.campaign : 'campaign',
       start, end, meetings, demos, loi,
       loiActual: toCount(a.loi) ?? 0,
+      bidsSubmitted: toCount(t.bids_submitted),
       phase0,
     }
   } catch {
@@ -99,7 +105,29 @@ export interface CampaignScore {
   targets: Targets | null
   meetingsHeld: number // agency meetings archived inside the window
   demosGiven: number   // of those, title matches DEMO_RE
+  /** Bids at a responded stage whose last change fell inside the window. */
+  bidsSubmitted: number
   daysLeft: number | null
+}
+
+/**
+ * "A response went out": the connector's stage for workbench bids, the
+ * hand-set status for markdown bids. `lapsed` shares a rank with `submitted`
+ * in the ladder, so this is a named set, not a rank threshold.
+ */
+const RESPONDED_STAGES = new Set(['submitted', 'awarded'])
+const RESPONDED_STATUSES = new Set(['submitted', 'post-response', 'evaluation', 'awarded', 'won'])
+
+export function bidsSubmittedInWindow(
+  bids: { stage?: string; status?: string; updatedAt?: string }[], start: string, end: string
+): number {
+  return bids.filter(b => {
+    const responded = RESPONDED_STAGES.has(b.stage ?? '') || RESPONDED_STATUSES.has(String(b.status ?? '').toLowerCase())
+    const day = (b.updatedAt ?? '').slice(0, 10)
+    // Dated by the sync's `updatedAt` until BidPro's Phase 0 lands
+    // `status_changed_at` — see gtm/targets.md.
+    return responded && day >= start && day <= end
+  }).length
 }
 
 /**
@@ -110,9 +138,12 @@ export interface CampaignScore {
  */
 export async function getCampaignScore(): Promise<CampaignScore> {
   const targets = await getTargets()
-  if (!targets) return { targets: null, meetingsHeld: 0, demosGiven: 0, daysLeft: null }
+  if (!targets) return { targets: null, meetingsHeld: 0, demosGiven: 0, bidsSubmitted: 0, daysLeft: null }
 
   const meetings = await listMeetings()
+  const bidsSubmitted = targets.bidsSubmitted === null
+    ? 0
+    : bidsSubmittedInWindow(await listBids().catch(() => []), targets.start, targets.end)
   const inWindow = meetings.filter(
     m => m.category === 'agency' && m.date >= targets.start && m.date <= targets.end
   )
@@ -121,7 +152,7 @@ export async function getCampaignScore(): Promise<CampaignScore> {
     0,
     Math.ceil((new Date(`${targets.end}T23:59:59`).getTime() - Date.now()) / 86_400_000)
   )
-  return { targets, meetingsHeld: inWindow.length, demosGiven, daysLeft }
+  return { targets, meetingsHeld: inWindow.length, demosGiven, bidsSubmitted, daysLeft }
 }
 
 // ── strategic decisions ─────────────────────────────────────────────────────

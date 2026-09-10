@@ -2518,3 +2518,28 @@ decision by nature. What IS true of every `kind: internal` row (bidpro, command-
 web-presence): the build-next ranking's pull term is CRM demand, which internal tools cannot earn,
 so they rank only through `unlocks` and targets. That is a design choice worth a look, not a bug —
 an internal tool that saves money has no contact at `meeting-booked`.
+
+## Phase 14 addendum — bids are GTM (2026-09-09, late)
+
+**Pavan:** "If I can respond to more bids I expose myself to more opportunities and prospective
+buyers — this is a GTM investment. And the more signals I get from more places about what people
+are buying, the more insight into which solutions to put time into." The live bid board agreed:
+22 bids, 8 scanned, 8 lapsed, 0 drafting — the funnel dies where BidPro's Phases 1–3 begin.
+
+- [x] Targets, aggressive, owner Pavan (he ports the operations markdown pipeline into BidPro
+      while Jessica keeps extraction quality): Phase 0 award signal **2026-09-12**, Phase 1 plan
+      per requirement **2026-09-19**, Phase 2 solution module **2026-10-03**. Log lines say why.
+- [x] `targets.bids_submitted: 3` in gtm/targets.md for the Phase 1 campaign window (ends 09-22),
+      DERIVED on the scoreboard: a bid at a responded stage/status whose last change fell inside
+      the window. Dated by the sync's `updatedAt` until Phase 0 lands `status_changed_at`; the
+      file says so. Tile appears only when the target is set (older files unchanged). Test added.
+- [ ] NOT done, on purpose: an `unlocks` edge from Phase 2 to the GTM row. The GTM row's one
+      milestone is SLP pricing, which does not depend on bid drafting; a fake edge would corrupt
+      the ranking to flatter a thesis. The scoreboard line is the honest lever. If Pavan wants
+      BidPro to earn demand pull, the right change is a "solicitation demand" pull term — see next.
+- [ ] Candidate, not built: **solicitation demand as a pull signal.** BidPro's scan already
+      extracts requirements per solicitation; Phase 1 tags plan rows by module. A row-level count
+      of "solicitations in the last 90 days whose requirements matched this product" would give
+      product rows a market signal that does not depend on a CRM stage — exactly the "what are
+      people buying" insight Pavan named. Needs Phase 1 first (plan rows) and a product ↔ module
+      mapping. Scope it after Phase 1 lands.
