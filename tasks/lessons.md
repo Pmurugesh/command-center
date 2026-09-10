@@ -288,3 +288,28 @@
   when a measurement contradicts the source, suspect the apparatus before
   rewriting the code. Corollary seen twice since: a measurement taken while a
   route is still compiling reads short — re-measure before believing a regression.
+
+## 2026-09-09 — a doctrine is not a requirement (Phase 14)
+
+**What happened.** Pavan tested the board by shipping: he and two devs pushed 55 commits in a
+day and nothing moved. The audit found three mechanical gaps (daily-only run, one ref per repo,
+proof never evaluated on build/handoff) — and one that was mine: I had defended "nine checks and
+no tenth" and "proof is for demand/decision only" as design purity. His ruling: *"as much as
+possible, nothing should be manual — a booked meeting is a calendar invite, not a person's
+say-so."* He was right. 56 of 65 milestones could only reach `done` by someone typing a date.
+
+**The pattern.** A small vocabulary is a virtue only while it covers the facts the owner needs
+decided. When the owner names a decidable data source (a calendar feed the dashboard already
+reads), refusing it is not rigour, it is a board that lies by omission. The entry requirement is
+"decidable from a file, a git tree, or a feed with no judgement" — not "nine".
+
+**Rules.**
+1. When the founder says a thing should be automatic and names its data source, the question is
+   "is it decidable?", never "is it in the list?". Grow the vocabulary; keep the entry test.
+2. Every kind carries proof when the vocabulary can express its DoD. `proof: manual` is an
+   exception that states its reason, never the default for a kind.
+3. Sync cadence follows what the reader needs, not the job's cost. "Constant monitoring" was the
+   wrong frame — the BOARD should be constant, the MESSAGES should not. Silent recompute on
+   change, one announce a morning.
+4. Cost questions get a number, not reassurance: the watcher is a dozen `ls-remote` calls every
+   five minutes and zero tokens. Say so.

@@ -27,6 +27,7 @@ import path from 'path'
 import matter from 'gray-matter'
 import { CRM_STAGES, NON_HUMAN_VIA, stageAtLeast, wantsProduct, type CrmStage } from './config'
 import type { ProofCheck, ProofResult, HandoffState } from './roadmap'
+import type { Meeting as CalendarEvent } from './calendar'
 
 /** Git, as the proof engine needs it. The script supplies the real one; the
  *  tests supply a fake, which is the point of the seam. */
@@ -61,6 +62,12 @@ export interface Meeting {
 export interface ProofContext {
   contacts: Contact[]
   meetings: Meeting[]
+  /** Calendar events from the ICS feeds, over the window the check fetched.
+   *  Absent (undefined) means the calendar was never read; empty means it was
+   *  read and had nothing — the check distinguishes the two. */
+  calendar?: CalendarEvent[]
+  /** Per-feed fetch failures — a check must say "unreachable", never "not booked". */
+  calendarErrors?: string[]
   /** The operations repo root; every `path:` in a check is relative to it. */
   root: string
   git: GitOps
@@ -317,6 +324,33 @@ export async function evalCheck(c: ProofCheck, ctx: ProofContext): Promise<Proof
         detail: hits.length > 0
           ? `${hits.length} agency meeting(s) for ${c.agency} matching ${where}: ${hits.map(h => h.slug).join(', ')}`
           : `no agency meeting for ${c.agency} matching ${where}`,
+      }
+    }
+    case 'calendar_event': {
+      let re: RegExp
+      try { re = new RegExp(c.title_match, 'i') } catch {
+        return { check: c.check, ok: false, detail: `title_match ${JSON.stringify(c.title_match)} is not a regex` }
+      }
+      const where = `/${c.title_match}/${c.after ? ` after ${c.after}` : ''}${c.before ? ` before ${c.before}` : ''}`
+      // Absence renders unknown, never green — and never a confident red either.
+      // A calendar that was not read, or whose feeds all failed, is not "no
+      // invite"; it is "could not look", and the detail must say so.
+      if (!ctx.calendar) {
+        return { check: c.check, ok: false, detail: `calendar not read this run — cannot decide ${where}` }
+      }
+      if (ctx.calendar.length === 0 && ctx.calendarErrors?.length) {
+        return { check: c.check, ok: false, detail: `calendar unreachable (${ctx.calendarErrors.join('; ')}) — cannot decide ${where}` }
+      }
+      const hits = ctx.calendar.filter(ev => {
+        const day = ev.startAt.slice(0, 10)
+        return re.test(ev.title) && (!c.after || day > c.after) && (!c.before || day < c.before)
+      })
+      return {
+        check: c.check,
+        ok: hits.length > 0,
+        detail: hits.length > 0
+          ? `${hits.length} calendar event(s) matching ${where}: ${hits.slice(0, 3).map(h => `${h.startAt.slice(0, 10)} ${h.title}`).join(' · ')}`
+          : `no calendar event matching ${where}`,
       }
     }
   }

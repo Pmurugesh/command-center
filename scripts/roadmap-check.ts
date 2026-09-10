@@ -47,8 +47,9 @@ import {
   readAuthored, lintRoadmap, deriveState, deriveStage, rankBuildNext, topOpenByRow,
   pullScore, INVESTMENT_WINDOWS,
   type HandoffState, type ProofCheck, type ProofResult, type RoadmapRow,
-  type RoadmapMilestone, type RowPull, type DerivedEntry,
+  type RoadmapMilestone, type RowPull, type DerivedEntry, type RankedMilestone,
 } from '../src/lib/roadmap.ts'
+import { getMeetingsInWindow } from '../src/lib/calendar.ts'
 import { stageAtLeast, wantsProduct } from '../src/lib/config.ts'
 import {
   evalCheck, evalHandoff, readContacts, readMeetings,
@@ -56,6 +57,16 @@ import {
 } from '../src/lib/roadmap-proof.ts'
 
 const DRY = process.argv.includes('--dry')
+/**
+ * `--quiet` is the watcher's mode (Phase 14): recompute the board, write the
+ * file, log the run — and say nothing on stdout, so nothing is announced and
+ * the "last announced top objective" is not advanced. The 08:00 cron and the
+ * Rescore button run without it and speak: one message a morning, plus one
+ * whenever a person asks. Pavan, 2026-09-09: "maybe I don't need constant
+ * monitoring" — right: the BOARD should be constant, the MESSAGES should not.
+ */
+const QUIET = process.argv.includes('--quiet')
+const ANNOUNCED_TOP = path.join(PATHS.roadmapCheckLog, '..', '..', 'state', 'roadmap-announced-top.json')
 
 /**
  * Commits that are not progress. Bots bump dependencies; the janitors commit
@@ -176,16 +187,30 @@ async function openRepo(name: string): Promise<{ dir: string; ref: string } | { 
 /** Field separator for git --format: a byte no commit subject or name contains. */
 const SEP = '\x1f'
 
-interface HumanCommit { at: string; author: string; subject: string; sha: string }
+interface HumanCommit { at: string; author: string; subject: string; sha: string; ref?: string }
 
-function parseCommits(out: string): HumanCommit[] {
+/**
+ * Every branch on origin except the `HEAD` symref (which would name the same
+ * commits twice under a different ref). Phase 14: the evidence scan reads all
+ * of them, so a push to `claude/x` or `staging` is movement the moment it is
+ * pushed. Nothing here decides "landed" — that stays with `landedRefs`.
+ */
+const ALL_ORIGIN = ['--exclude=refs/remotes/origin/HEAD', '--remotes=origin']
+
+function parseCommits(out: string, withRef = false): HumanCommit[] {
   const rows: HumanCommit[] = []
   for (const line of out.split('\n')) {
     if (!line.trim()) continue
-    const [sha, at, author, subject = ''] = line.split(SEP)
+    const parts = line.split(SEP)
+    const [sha, at, author] = parts
+    const ref = withRef ? parts[3] : undefined
+    const subject = (withRef ? parts[4] : parts[3]) ?? ''
     if (!sha || !at || !author) continue
     if (BOT_AUTHORS.has(author) || BOT_SUBJECTS.test(subject)) continue
-    rows.push({ sha, at, author: canonAuthor(author), subject })
+    rows.push({
+      sha, at, author: canonAuthor(author), subject,
+      ...(ref ? { ref: ref.replace(/^refs\/remotes\//, '') } : {}),
+    })
   }
   return rows
 }
@@ -197,19 +222,35 @@ function parseCommits(out: string): HumanCommit[] {
  * AND subject, and `--invert-grep` cannot express both cleanly. 300 is far
  * beyond any real bot run on these paths.
  */
-async function lastHumanCommit(repo: string, ref: string, paths: string[]): Promise<HumanCommit | null> {
+/**
+ * Has `sha` landed on `ref`? `%S` names the ref git happened to reach a commit
+ * from first, so a commit on main that is ALSO on the branch it came from can
+ * be reported as "on claude/x". Proved on the mini 2026-09-09: PR #47's commits
+ * read as on their branch an hour after merging. Reachability is the fact.
+ */
+function isAncestor(repo: string, sha: string, ref: string): Promise<boolean> {
+  return new Promise(resolve => {
+    execFile('git', ['-C', repo, 'merge-base', '--is-ancestor', sha, ref], { timeout: 60_000 }, err => resolve(!err))
+  })
+}
+
+async function lastHumanCommit(repo: string, paths: string[]): Promise<HumanCommit | null> {
+  // `--source` fills %S with the ref each commit was reached from, so the
+  // board can say "on claude/x" — a branch is movement, never a landing.
   const out = await git(repo, [
-    'log', '-n', '300', '--no-merges', `--format=%H${SEP}%aI${SEP}%an${SEP}%s`, ref, '--', ...paths,
+    'log', '-n', '300', '--no-merges', '--source', `--format=%H${SEP}%aI${SEP}%an${SEP}%S${SEP}%s`,
+    ...ALL_ORIGIN, '--', ...paths,
   ])
-  return parseCommits(out)[0] ?? null
+  return parseCommits(out, true)[0] ?? null
 }
 
 /** Human commit SHAs on `ref` in the last `window` days, optionally path-scoped. */
 async function humanCommitShas(
-  repo: string, ref: string, window: number, paths: string[] = []
+  repo: string, window: number, paths: string[] = []
 ): Promise<Set<string>> {
+  // A Set of SHAs: a commit reachable from three branches is one commit.
   const args = [
-    'log', '--no-merges', `--since=${window} days ago`, `--format=%H${SEP}%aI${SEP}%an${SEP}%s`, ref,
+    'log', '--no-merges', `--since=${window} days ago`, `--format=%H${SEP}%aI${SEP}%an${SEP}%s`, ...ALL_ORIGIN,
   ]
   if (paths.length) args.push('--', ...paths)
   const out = await git(repo, args, 180_000)
@@ -311,6 +352,8 @@ interface Checked {
   evidence_age_days?: number | null
   last_evidence_at?: string | null
   last_evidence_author?: string | null
+  /** Only when the newest evidence commit is on a non-default branch. */
+  last_evidence_ref?: string | null
   handoff_state?: HandoffState
   handoff_age_days?: number | null
   handoff_at?: string | null
@@ -335,28 +378,39 @@ async function checkBuild(a: Milestone): Promise<Checked> {
   for (const e of a.evidence) byRepo.set(e.repo, [...(byRepo.get(e.repo) ?? []), e.path])
 
   let newest: HumanCommit | null = null
+  let newestDefaultRef = ''
+  let newestDir = ''
   const errors: string[] = []
   for (const [repoName, paths] of byRepo) {
     const r = await openRepo(repoName)
     if ('error' in r) { errors.push(r.error); continue }
-    // A path that matches nothing at the ref is a stale evidence pointer, which
-    // is a defect in the roadmap file — not a milestone with no activity.
-    if (await pathCount(r.dir, r.ref, paths) === 0) {
-      errors.push(`${repoName}: evidence path matches nothing at ${r.ref}`)
+    const c = await lastHumanCommit(r.dir, paths)
+    if (!c) {
+      // A path that matches nothing at the default ref AND has no commit on any
+      // branch is a stale evidence pointer — a defect in the roadmap file, not
+      // a milestone with no activity. A path that exists only on a branch is
+      // simply new work, and the commit above already found it.
+      errors.push(await pathCount(r.dir, r.ref, paths) === 0
+        ? `${repoName}: evidence path matches nothing at ${r.ref} or any branch`
+        : `${repoName}: no human commit on the evidence path in the last 300`)
       continue
     }
-    const c = await lastHumanCommit(r.dir, r.ref, paths)
-    if (c && (!newest || c.at > newest.at)) newest = c
+    if (!newest || c.at > newest.at) { newest = c; newestDefaultRef = r.ref; newestDir = r.dir }
   }
 
   if (!newest) {
     return { slug: a.slug, error: errors.join('; ') || 'No human commit found in the last 300 commits' }
   }
+  // Landed on the default branch → no ref, whatever %S said. Otherwise the
+  // ref git reached it from is a branch it is genuinely on.
+  const landed = await isAncestor(newestDir, newest.sha, newestDefaultRef)
+  const onBranch = !landed && newest.ref && newest.ref !== 'origin/HEAD' && newest.ref !== newestDefaultRef
   return {
     slug: a.slug,
     evidence_age_days: days(newest.at),
     last_evidence_at: newest.at,
     last_evidence_author: newest.author,
+    ...(onBranch ? { last_evidence_ref: newest.ref } : {}),
   }
 }
 
@@ -424,12 +478,12 @@ async function rowInvestment(
       const r = await openRepo(repoName)
       if ('error' in r) { if (w === INVESTMENT_WINDOWS[0]) errors.push(r.error); continue }
       if (row.kind === 'platform') {
-        const all = await humanCommitShas(r.dir, r.ref, w)
-        const product = await humanCommitShas(r.dir, r.ref, w, productPaths.get(repoName) ?? [])
+        const all = await humanCommitShas(r.dir, w)
+        const product = await humanCommitShas(r.dir, w, productPaths.get(repoName) ?? [])
         for (const sha of product) all.delete(sha)
         total += all.size
       } else {
-        total += (await humanCommitShas(r.dir, r.ref, w, paths)).size
+        total += (await humanCommitShas(r.dir, w, paths)).size
       }
     }
     investment[w] = total
@@ -491,6 +545,26 @@ const STAGE_DOTS = (stage: string) => {
 }
 
 /** One line per run, outside git — the page reads the last `ok` for freshness. */
+/**
+ * The delta is the message. The cron announces stdout to the team's Telegram,
+ * and "the top objective moved" is the one line a person picking up work
+ * needs — the table is for the board. Compared against the last ANNOUNCED top,
+ * not the previous file: the watcher rewrites the file all day in `--quiet`
+ * mode, and the morning message must still say what moved since yesterday.
+ */
+async function announceDelta(top: RankedMilestone | undefined): Promise<void> {
+  if (QUIET || DRY || !top) return
+  let last: { slug?: string; name?: string } = {}
+  try { last = JSON.parse(await fs.readFile(ANNOUNCED_TOP, 'utf-8')) } catch { /* first announce */ }
+  if (last.slug && last.slug !== top.slug) {
+    console.log(`Build next moved: ${last.name ?? last.slug} → ${top.name} (${top.reason})`)
+  } else {
+    console.log(`Build next: ${top.name} (${top.reason})`)
+  }
+  await fs.mkdir(path.dirname(ANNOUNCED_TOP), { recursive: true })
+  await fs.writeFile(ANNOUNCED_TOP, JSON.stringify({ slug: top.slug, name: top.name, at: new Date().toISOString() }), 'utf-8')
+}
+
 async function logRun(line: string): Promise<void> {
   if (DRY) return
   try {
@@ -517,17 +591,43 @@ async function main() {
   const meetings = await readMeetings(PATHS.operationsRoot)
   const ctx: ProofContext = { contacts, meetings, root: PATHS.operationsRoot, git: GIT }
 
+  // The calendar is fetched once, and only when a milestone asks for it — the
+  // check must not grow a network dependency for boards that never use it.
+  // −90/+180 days: a demo booked last quarter or next is inside the window.
+  const declares = (m: Milestone, check: string) =>
+    [...(m.proof ?? []), ...m.proven].some(c => c.check === check)
+  if (milestones.some(m => declares(m, 'calendar_event'))) {
+    const DAY = 86_400_000
+    const cal = await getMeetingsInWindow(now.getTime() - 90 * DAY, now.getTime() + 180 * DAY)
+    ctx.calendar = cal.meetings
+    ctx.calendarErrors = cal.configured ? cal.errors : ['no calendar feeds configured']
+    for (const e of ctx.calendarErrors) warnings.push(`calendar: ${e}`)
+  }
+
   const rowBySlug = new Map(rows.map(r => [r.slug, r]))
 
   const checked: Checked[] = []
   for (const m of milestones) {
+    let c: Checked
     if (m.kind === 'handoff') {
-      checked.push(await checkHandoff(m, rowBySlug.get(m.row)?.repos ?? []))
+      c = await checkHandoff(m, rowBySlug.get(m.row)?.repos ?? [])
     } else if (m.kind === 'demand' || m.kind === 'decision') {
-      checked.push(await checkProof(m, ctx))
+      c = await checkProof(m, ctx)
     } else {
-      checked.push(await checkBuild(m))
+      c = await checkBuild(m)
     }
+    // Phase 14: build and handoff milestones may ALSO declare a proof. Activity
+    // and landing are measured as before; the proof, when fully true, is what
+    // lets `deriveState` say done without a typed date.
+    if ((m.kind === 'build' || m.kind === 'handoff') && ((m.proof?.length ?? 0) > 0 || m.proven.length > 0)) {
+      const p = await checkProof(m, ctx)
+      c = {
+        ...c,
+        proof_true: p.proof_true, proof_total: p.proof_total, proof_results: p.proof_results,
+        ...(p.proven_total != null ? { proven_true: p.proven_true, proven_total: p.proven_total } : {}),
+      }
+    }
+    checked.push(c)
   }
   const bySlug = new Map(checked.map(c => [c.slug, c]))
 
@@ -555,6 +655,7 @@ async function main() {
       slug: m.slug,
       evidenceAgeDays: d.evidence_age_days,
       lastEvidenceAt: d.last_evidence_at,
+      lastEvidenceRef: d.last_evidence_ref ?? undefined,
       handoffState: d.handoff_state,
       handoffRef: d.handoff_ref ?? undefined,
       handoffAgeDays: d.handoff_age_days,
@@ -572,6 +673,7 @@ async function main() {
       daysToTarget,
       evidenceAgeDays: derived.evidenceAgeDays ?? undefined,
       lastEvidenceAt: derived.lastEvidenceAt ?? undefined,
+      lastEvidenceRef: derived.lastEvidenceRef ?? undefined,
       handoffState: derived.handoffState,
       handoffAgeDays: derived.handoffAgeDays ?? undefined,
       proofTrue: derived.proofTrue ?? undefined,
@@ -608,7 +710,7 @@ async function main() {
       const d = bySlug.get(m.slug)!
       return [
         m.slug, m.target ?? null, m.done ?? null, m.state, m.stage,
-        d.last_evidence_at ?? null, d.handoff_state ?? null, d.handoff_at ?? null,
+        d.last_evidence_at ?? null, d.last_evidence_ref ?? null, d.handoff_state ?? null, d.handoff_at ?? null,
         d.handoff_ref ?? null, d.handoff_file ?? null,
         d.proof_true ?? null, d.proof_total ?? null, d.error ?? null,
       ]
@@ -654,6 +756,7 @@ async function main() {
       ...(c.evidence_age_days != null ? [`    evidence_age_days: ${c.evidence_age_days}`] : []),
       ...(c.last_evidence_at ? [`    last_evidence_at: '${c.last_evidence_at}'`] : []),
       ...(c.last_evidence_author ? [`    last_evidence_author: ${yaml(c.last_evidence_author)}`] : []),
+      ...(c.last_evidence_ref ? [`    last_evidence_ref: ${yaml(c.last_evidence_ref)}`] : []),
       ...(c.handoff_state ? [`    handoff_state: ${c.handoff_state}`] : []),
       ...(c.handoff_age_days != null ? [`    handoff_age_days: ${c.handoff_age_days}`] : []),
       ...(c.handoff_at ? [`    handoff_at: '${c.handoff_at}'`] : []),
@@ -711,7 +814,7 @@ async function main() {
     ),
     '',
     `_${rows.length} rows, ${sorted.length} milestones. Evidence age and investment count only`,
-    'human commits on `origin` — bot and janitor commits are excluded, because a path a',
+    'human commits on ANY `origin/*` branch (proof and handoffs read main + staging only) — bot and janitor commits are excluded, because a path a',
     'machine writes to is green forever and tells you nothing. Demand counts only contacts',
     'with a human `via` log line, for the same reason: `crm/` is machine-written._',
     '',
@@ -763,7 +866,8 @@ async function main() {
   // A file without a fingerprint is the pre-fingerprint format: rewrite once.
   const prevFingerprint = /^fingerprint: (\w+)$/m.exec(prev)?.[1]
   if (prevFingerprint === fingerprint) {
-    console.log('roadmap-check: no change')
+    if (!QUIET) console.log('roadmap-check: no change')
+    await announceDelta(ranking[0])
     await logRun('ok unchanged')
     return
   }
@@ -777,8 +881,10 @@ async function main() {
 
   await fs.mkdir(PATHS.roadmap, { recursive: true })
   await fs.writeFile(PATHS.roadmapStatus, next, 'utf-8')
-  await logRun(`ok changed rows=${rows.length} milestones=${sorted.length}`)
-  console.log(`roadmap-check: wrote ${rows.length} rows, ${sorted.length} milestones`)
+  await logRun(`ok changed rows=${rows.length} milestones=${sorted.length}${ranking[0] ? ` top=${ranking[0].slug}` : ''}`)
+  if (!QUIET) console.log(`roadmap-check: wrote ${rows.length} rows, ${sorted.length} milestones`)
+  await announceDelta(ranking[0])
+  if (QUIET) return
   console.log('\nBuild next:')
   ranking.forEach((x, i) => console.log(`  ${i + 1}. ${x.name} — ${x.reason}`))
   for (const w of warnings) console.warn(`  warn: ${w}`)

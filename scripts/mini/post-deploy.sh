@@ -17,6 +17,7 @@ INSTALLERS=(
   scripts/mini/install-nexus-sync.sh      # Nexus clone on origin/main before health scans
   scripts/mini/install-cron-delivery.sh   # no cron may run with delivery "last" and no target
   scripts/mini/install-heartbeat.sh       # nothing else notices when a pipeline stops
+  scripts/mini/install-roadmap-watch.sh   # the board follows the repos, not the clock
 )
 
 # Installers that need the gateway token and skip cleanly without it. Kept apart

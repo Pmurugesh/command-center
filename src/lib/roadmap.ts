@@ -27,6 +27,14 @@
  *
  * Anything those cannot express is `proof: manual` and renders needs-a-person.
  * It never renders done. That is the whole reason the vocabulary is small.
+ *
+ * Phase 14 (2026-09-09): ANY kind may also carry a `proof:` list, and a fully
+ * true proof is `done` whatever the activity says. Pavan's ruling after a day
+ * on which 55 commits moved nothing on the board: "as much as possible, nothing
+ * should be manual — a booked meeting is a calendar invite, not a person's
+ * say-so." Evidence measures movement; proof decides done. The evidence scan
+ * also reads every `origin/*` branch now, so unmerged work is visible as
+ * movement — and only movement. Proof and handoffs still read main + staging.
  */
 import fs from 'fs/promises'
 import path from 'path'
@@ -84,9 +92,14 @@ export interface EvidencePath {
 }
 
 /**
- * The nine checks, and no tenth. Each is decidable from a file or a git tree
- * with no judgement and no model call — that is the entry requirement. A DoD
- * that needs a person is `proof: manual`, which is honest rather than absent.
+ * The ten checks. Each is decidable from a file, a git tree, or a calendar
+ * feed with no judgement and no model call — that is the entry requirement. A
+ * DoD that needs a person is `proof: manual`, which is honest rather than absent.
+ *
+ * `calendar_event` is the tenth (Phase 14): "a demo is booked" is an invite on
+ * the calendar the dashboard already reads, and reading it is no more a
+ * judgement than reading a CRM stage. `meeting_logged` remains the check for
+ * "it happened" — an invite is a plan, a log is a fact.
  */
 export type ProofCheck =
   | { check: 'file_exists'; path: string }
@@ -98,10 +111,12 @@ export type ProofCheck =
   | { check: 'contact_stage'; contact: string; at_least: string }
   | { check: 'contacts_count'; product: string; stage_at_least: string; count: number }
   | { check: 'meeting_logged'; agency: string; title_match: string; after?: string }
+  | { check: 'calendar_event'; title_match: string; after?: string; before?: string }
 
 export const PROOF_CHECKS = [
   'file_exists', 'frontmatter_field', 'decision_resolved', 'git_path_exists',
   'git_grep', 'flag_default', 'contact_stage', 'contacts_count', 'meeting_logged',
+  'calendar_event',
 ] as const
 
 export interface RoadmapMilestone {
@@ -125,9 +140,12 @@ export interface RoadmapMilestone {
 
   // ── derived (joined from _status.md; undefined when it has not run) ──
   daysToTarget?: number
-  /** Days since the last *human* commit touching any evidence path on origin. */
+  /** Days since the last *human* commit touching any evidence path on ANY origin branch. */
   evidenceAgeDays?: number
   lastEvidenceAt?: string
+  /** The branch that commit was reached from — set only when it is NOT the
+   *  default branch, so "on claude/x" is never printed for main. */
+  lastEvidenceRef?: string
   handoffState?: HandoffState
   /** Which ref the handoff literal was found at — `origin/main` or an
    *  integration branch. Shown, so `merged` on staging is never read as main. */
@@ -202,6 +220,8 @@ export interface DerivedEntry {
   slug: string
   evidenceAgeDays?: number | null
   lastEvidenceAt?: string | null
+  /** Present only when the newest evidence commit is on a non-default branch. */
+  lastEvidenceRef?: string | null
   handoffState?: HandoffState
   /** Which ref the literal was found at. Present only when merged/consumed. */
   handoffRef?: string
@@ -308,6 +328,17 @@ export function deriveState(
     return { state: 'unknown', reason: derived.error, daysToTarget }
   }
 
+  // Phase 14: a build or handoff that declares a proof and satisfies all of it
+  // is done, whatever the commit log says. A demo tenant whose URL is in the
+  // website source is finished even if nobody has touched infra/ in a month.
+  const proofTotal = derived?.proofTotal ?? 0
+  const proofTrue = derived?.proofTrue ?? 0
+  if ((item.kind === 'build' || item.kind === 'handoff') && proofTotal > 0 && proofTrue === proofTotal) {
+    return { state: 'done', reason: `Proof satisfied (${proofTrue}/${proofTotal})`, daysToTarget }
+  }
+  // Partial proof is progress worth reading next to the activity.
+  const proofNote = proofTotal > 0 ? `, proof ${proofTrue}/${proofTotal}` : ''
+
   if (item.kind === 'handoff') {
     const hs = derived?.handoffState ?? 'unknown'
     if (hs === 'unknown') return { state: 'unknown', reason: 'Handoff state not resolved', daysToTarget }
@@ -375,30 +406,32 @@ export function deriveState(
   if (age == null) {
     return { state: 'unknown', reason: 'No evidence path resolved', daysToTarget }
   }
+  // Movement on a branch is movement, but it must never read like a landing.
+  const where = derived?.lastEvidenceRef ? ` on ${derived.lastEvidenceRef}` : ''
 
   if (daysToTarget !== undefined && daysToTarget <= TARGET_NEAR_DAYS) {
     return age >= EVIDENCE_WARN_DAYS
       ? {
           state: 'at-risk',
-          reason: `Due in ${daysToTarget}d, no commits on the evidence path in ${age}d`,
+          reason: `Due in ${daysToTarget}d, no commits on the evidence path in ${age}d${proofNote}`,
           daysToTarget,
         }
-      : { state: 'on-track', reason: `Due in ${daysToTarget}d, last commit ${age}d ago`, daysToTarget }
+      : { state: 'on-track', reason: `Due in ${daysToTarget}d, last commit ${age}d ago${where}${proofNote}`, daysToTarget }
   }
 
   if (age >= EVIDENCE_IDLE_DAYS) {
     return {
       state: 'idle',
-      reason: `No commits on the evidence path in ${age}d`,
+      reason: `No commits on the evidence path in ${age}d${proofNote}`,
       daysToTarget,
     }
   }
 
   if (daysToTarget === undefined) {
-    return { state: 'no-target', reason: `Active (last commit ${age}d ago) but no target date set`, daysToTarget }
+    return { state: 'no-target', reason: `Active (last commit ${age}d ago${where}) but no target date set${proofNote}`, daysToTarget }
   }
 
-  return { state: 'active', reason: `Last commit ${age}d ago, ${daysToTarget}d to target`, daysToTarget }
+  return { state: 'active', reason: `Last commit ${age}d ago${where}, ${daysToTarget}d to target${proofNote}`, daysToTarget }
 }
 
 /**
@@ -690,6 +723,7 @@ export async function readStatus(): Promise<RoadmapStatus> {
         slug,
         evidenceAgeDays: num(r.evidence_age_days),
         lastEvidenceAt: str(r.last_evidence_at) ?? null,
+        lastEvidenceRef: str(r.last_evidence_ref) ?? null,
         handoffState: str(r.handoff_state) as HandoffState | undefined,
         handoffRef: str(r.handoff_ref),
         handoffFile: str(r.handoff_file),

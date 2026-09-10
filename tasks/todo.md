@@ -2413,3 +2413,57 @@ Weekdays **07:15 PT**, before the 08:00 sales brief.
 **This is the Phase B acceptance test.** If `AgentWriter`, given Christine's
 brief, produces a reply into the OPR-0650 thread that answers her question with
 dates and does not open by announcing 196 days of silence, the design works.
+
+---
+
+## Phase 14 — the board follows the repos (2026-09-09)
+
+**Why.** Today's test failed on every axis. Pavan and two devs pushed 55 commits across four
+repos; the board showed none of them. Three causes, all mechanical: roadmap-check runs weekdays
+08:00 only; it reads ONE ref per repo (`origin/HEAD`), so staging and every `claude/*` branch are
+invisible; and 56 of 65 milestones can only reach `done` by someone typing a date, because build
+and handoff milestones never had their proof evaluated even when declared. Pavan's ruling: the
+board must be in sync with the repos, and "as much as possible, nothing should be manual — a
+booked meeting is a calendar invite, not a person's say-so."
+
+**Design.** No webhooks: the mini is tailnet-only and GitHub cannot reach it. Same pattern as
+`commandcenter-deploy` — a launchd tick that asks origin whether anything moved.
+
+- [x] 14.1 `scripts/mini/install-roadmap-watch.sh` — `com.paladin.roadmap-watch`, every 5 min:
+      `git ls-remote --heads --tags origin` per clone (no fetch), hash the head list, compare to
+      `~/.openclaw/state/roadmap-watch.heads`; on change POST
+      `localhost:3000/api/system/cron/roadmap-check/run` (same path as the Rescore button, so the
+      Telegram announce and the check log both happen); fall back to running the script directly if
+      the dashboard is down; keep the old state on failure so the next tick retries. Registered in
+      `post-deploy.sh` and in `heartbeat.ts` (declared gap 1h).
+- [x] 14.2 Branch-aware evidence in `roadmap-check.ts`: `lastHumanCommit` and `humanCommitShas`
+      scan `--remotes=origin` (dedup by SHA). The ref the newest commit was reached from is
+      recorded as `last_evidence_ref` and rendered ("on claude/mailbox-ingestion") when it is not
+      the default ref. Proof and handoff stay on main + staging: unmerged work is movement, never
+      landing.
+- [x] 14.3 Proof on every kind: `checkProof` runs for any milestone with a proof list, not only
+      demand/decision. `deriveState` for build/handoff: proof fully true → `done` ("Proof satisfied
+      n/n"); partial proof is shown in the reason. `deriveStage` unchanged. Lint allows proof on all
+      kinds. `ProofList` renders for build/handoff when a proof exists.
+- [x] 14.4 Tenth check, `calendar_event` — `{ title_match, after?, before? }` against the ICS
+      feeds the dashboard already reads (`calendar.ts`), fetched once per run over a −90/+180 day
+      window. A feed that will not fetch renders the check false with "calendar unreachable" in the
+      detail — never a silent false. `meeting_logged` stays the check for "it happened".
+- [x] 14.5 The Telegram announce carries the delta: when the #1 build-next changes, stdout leads
+      with "Build next moved: A → B" so the team sees the new objective, not a table.
+- [x] 14.6 Tests for each new branch (111 → 118); tsc, lint, build clean; `--dry` proved against
+      the mini's clones over ssh from a scratch copy of this branch (read-only). Found on the way:
+      `%S` names the ref git reached a commit from FIRST, so PR #47's commits read "on
+      claude/design-…" an hour after merging. Fixed with `merge-base --is-ancestor` against the
+      default ref: landed → no ref; otherwise the branch. After the fix: cc- milestones show
+      today's date and no branch; cm- show 20:32 "on origin/claude/vibrant-payne-319061"; bidpro
+      investment 171 → 184 (staging now counts).
+- [ ] 14.7 operations: README schema (proof on every kind, `calendar_event`, the watcher), proof
+      blocks for every milestone the vocabulary can express (subagent audit → applied by hand,
+      each literal verified where the repo is local), `proof: manual` only with a stated reason.
+- [ ] 14.8 AFTER merge + deploy: watch `~/.openclaw/logs/roadmap-watch.log` on the mini for the
+      first triggered tick, read the board back, confirm Jessica's staging work shows as movement
+      on bidpro and the four cc- milestones moved to today's date.
+
+**Not in scope.** Unpushed commits (nothing can see them — push at end of day is a team rule).
+Linear/intent tracking (separate decision). Network-probe checks ("URL reachable") — still refused.
