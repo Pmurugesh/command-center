@@ -63,7 +63,7 @@ export default async function TodayPage() {
          channels, opportunities, freshness, buckets, insights, calendar, leads, contacts,
          roadmapRows] = await Promise.all([
     listBids(),
-    getCampaignScore().catch(() => ({ targets: null, meetingsHeld: 0, demosGiven: 0, daysLeft: null })),
+    getCampaignScore().catch(() => ({ targets: null, meetingsHeld: 0, demosGiven: 0, bidsSubmitted: 0, daysLeft: null })),
     getNormalizedCronJobs().catch(() => ({ reachable: false, jobs: [] })),
     getDecisionQueue().catch(() => []),
     getAgent24hSummary().catch(() => []),
