@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
+import { Reader } from '@/components/layout/reader'
 import { FileTree } from '@/components/shared/file-tree'
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { Search, X } from 'lucide-react'
@@ -61,60 +62,88 @@ export function LibraryBrowser({ files }: { files: LibraryFile[] }) {
   const treeItems = useMemo(() => toTreeItems(files), [files])
   const filteredTree = useMemo(() => filterTree(treeItems, query.trim()), [treeItems, query])
 
+  // These files carry 14–27 headings each, which is exactly the case an outline
+  // serves — and the freed left gutter is where it goes.
+  const outline = useMemo(() => {
+    if (!selectedFile) return [] as { level: number; text: string; id: string }[]
+    return selectedFile.content.split('\n')
+      .map(l => l.match(/^(#{2,3})\s+(.+)$/))
+      .filter((m): m is RegExpMatchArray => m !== null)
+      .map(m => ({
+        level: m[1].length,
+        text: m[2].replace(/[*`]/g, '').trim(),
+        id: m[2].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+      }))
+  }, [selectedFile])
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-      {/* File tree sidebar */}
-      <Card className="lg:col-span-1 self-start">
-        <CardContent className="p-3 space-y-3">
+    // Reader, not a 1+3 grid. The tree held 6 files and was `self-start`, so it
+    // collapsed to ~250px beside a 4,200px reader — the largest dead region in
+    // the app. A full-height index has no gutter to leave empty.
+    <Reader
+      indexWidth="lg:w-[20rem] 3xl:w-[22rem]"
+      index={
+        <div className="space-y-2">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search files..."
-              className="w-full rounded-md border border-border bg-background pl-8 pr-7 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+              className="w-full rounded-md border border-border bg-background py-1.5 pl-8 pr-7 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
             {query && (
-              <button
-                type="button"
-                onClick={() => setQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label="Clear search"
-              >
+              <button type="button" onClick={() => setQuery('')} aria-label="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
-          {filteredTree.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-2 px-1">No files match &ldquo;{query}&rdquo;</p>
-          ) : (
-            <FileTree
-              items={filteredTree}
-              selectedPath={selectedPath}
-              onSelect={(item) => {
-                if (item.path) setSelectedPath(item.path)
-              }}
-            />
+          <Card>
+            <CardContent className="p-2">
+              {filteredTree.length === 0 ? (
+                <p className="px-1 py-2 text-xs text-muted-foreground">No files match &ldquo;{query}&rdquo;</p>
+              ) : (
+                <FileTree items={filteredTree} selectedPath={selectedPath}
+                  onSelect={(item) => { if (item.path) setSelectedPath(item.path) }} />
+              )}
+            </CardContent>
+          </Card>
+          {outline.length > 0 && (
+            <Card>
+              <CardContent className="p-2">
+                <p className="px-1 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">In this file</p>
+                <ul className="space-y-0.5">
+                  {outline.map((h, i) => (
+                    <li key={i}>
+                      <a href={`#${h.id}`} title={h.text}
+                        className={`block truncate rounded px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground ${h.level === 3 ? 'pl-4' : ''}`}>
+                        {h.text}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Content area */}
-      <Card className="lg:col-span-3">
-        <CardContent className="p-4">
+        </div>
+      }
+    >
+      <Card>
+        <CardContent className="p-4 md:p-5">
           {selectedFile ? (
-            <div>
-              <h2 className="text-xl font-semibold mb-4">{selectedFile.displayName}</h2>
-              <div>
-                <MarkdownRenderer content={selectedFile.content} />
-              </div>
-            </div>
+            <>
+              <h2 className="mb-3 border-b border-border pb-2 text-base font-semibold">{selectedFile.displayName}</h2>
+              {/* No max-w here: the measure policy caps prose and lets these
+                  files' 42-row tables use the full pane. */}
+              <MarkdownRenderer content={selectedFile.content} />
+            </>
           ) : (
-            <p className="text-muted-foreground text-sm">Select a file from the tree to view its contents</p>
+            <p className="text-sm text-muted-foreground">Select a file from the tree to view its contents</p>
           )}
         </CardContent>
       </Card>
-    </div>
+    </Reader>
   )
 }

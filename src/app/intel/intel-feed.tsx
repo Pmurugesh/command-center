@@ -1,109 +1,130 @@
 "use client"
 
-import { useState } from 'react'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { EmptyState } from '@/components/shared/empty-state'
-import { ChevronDown, ChevronRight, Radio } from 'lucide-react'
+import { Reader } from '@/components/layout/reader'
+import { Radio, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { hasCriticalContent } from '@/lib/markdown'
 import type { IntelAlert } from '@/types'
 
-type TabType = 'daily' | 'weekly' | 'procurement'
+type TabType = 'daily' | 'weekly' | 'procurement' | 'competitor' | 'system'
 
-interface IntelFeedProps {
-  dailyAlerts: IntelAlert[]
-  weeklyBriefings: IntelAlert[]
-  procurements: IntelAlert[]
+/** Per-alert signal computed once on the server, so the index can say something. */
+export interface AlertSignal {
+  filename: string
+  critical: boolean
+  deltas: { new: number; resolved: number; unchanged: number }
+  summary: string
 }
 
-export function IntelFeed({ dailyAlerts, weeklyBriefings, procurements }: IntelFeedProps) {
-  const [activeTab, setActiveTab] = useState<TabType>('daily')
-  const [expanded, setExpanded] = useState<string | null>(null)
+const TABS: { key: TabType; label: string }[] = [
+  { key: 'daily', label: 'Daily' },
+  { key: 'weekly', label: 'Weekly' },
+  { key: 'procurement', label: 'Procurements' },
+  { key: 'competitor', label: 'Competitors' },
+  { key: 'system', label: 'System' },
+]
 
-  const tabs: { key: TabType; label: string; count: number }[] = [
-    { key: 'daily', label: 'Daily Alerts', count: dailyAlerts.length },
-    { key: 'weekly', label: 'Weekly Briefings', count: weeklyBriefings.length },
-    { key: 'procurement', label: 'Procurements', count: procurements.length },
-  ]
+/**
+ * Intelligence, as a Reader.
+ *
+ * This page used to stack 58 collapsed cards: 6,949px tall with ZERO expanded
+ * content on load — 6.7 screens of scrolling to reach 3,237 characters. The
+ * open alert was then trapped in a max-h-[600px] nested scroller, and only one
+ * could be open at a time.
+ *
+ * Now: an index carrying a per-row signal (critical / new / resolved) so it is
+ * scannable without opening anything, and a pane that owns the full height.
+ */
+export function IntelFeed({ alerts, signals }: { alerts: IntelAlert[]; signals: Record<string, AlertSignal> }) {
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {}
+    for (const a of alerts) c[a.type] = (c[a.type] ?? 0) + 1
+    return c
+  }, [alerts])
 
-  const currentAlerts = activeTab === 'daily' ? dailyAlerts :
-    activeTab === 'weekly' ? weeklyBriefings : procurements
+  const firstTab = TABS.find(t => (counts[t.key] ?? 0) > 0)?.key ?? 'daily'
+  const [activeTab, setActiveTab] = useState<TabType>(firstTab)
+  const [selected, setSelected] = useState<string | null>(null)
 
-  // Auto-expand first alert when switching tabs
-  const handleTabChange = (tab: TabType) => {
-    setActiveTab(tab)
-    const alerts = tab === 'daily' ? dailyAlerts :
-      tab === 'weekly' ? weeklyBriefings : procurements
-    setExpanded(alerts[0]?.filename || null)
-  }
+  const current = useMemo(() => alerts.filter(a => a.type === activeTab), [alerts, activeTab])
+  const active = current.find(a => a.filename === selected) ?? current[0] ?? null
 
   return (
-    <div className="space-y-4">
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-border">
-        {tabs.map(tab => (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1 border-b border-border">
+        {TABS.filter(t => (counts[t.key] ?? 0) > 0).map(tab => (
           <button
             key={tab.key}
-            onClick={() => handleTabChange(tab.key)}
+            onClick={() => { setActiveTab(tab.key); setSelected(null) }}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 text-sm transition-colors border-b-2",
+              'flex items-center gap-2 border-b-2 px-3 py-1.5 text-sm transition-colors',
               activeTab === tab.key
-                ? "text-foreground border-blue-400"
-                : "text-muted-foreground border-transparent hover:text-foreground"
+                ? 'border-blue-400 text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
             )}
           >
             {tab.label}
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{tab.count}</Badge>
+            <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">{counts[tab.key] ?? 0}</Badge>
           </button>
         ))}
       </div>
 
-      {/* Alert list */}
-      {currentAlerts.length === 0 ? (
+      {current.length === 0 ? (
         <EmptyState icon={Radio} title={`No ${activeTab} alerts`} />
       ) : (
-        <div className="space-y-4">
-          {currentAlerts.map((alert) => {
-            const hasCritical = hasCriticalContent(alert.content)
-            return (
-              <Card key={alert.filename}>
-                <CardHeader
-                  className="cursor-pointer"
-                  onClick={() => setExpanded(expanded === alert.filename ? null : alert.filename)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      {expanded === alert.filename ? (
-                        <ChevronDown className="h-4 w-4" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4" />
-                      )}
-                      <div>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <Radio className="h-4 w-4" />
-                          {alert.date || 'Undated'} — {alert.type === 'daily' ? 'Daily Scan' : alert.type === 'weekly' ? 'Weekly Briefing' : 'Procurement'}
-                        </CardTitle>
-                        <CardDescription>{alert.filename}</CardDescription>
+        <Reader
+          index={
+            <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+              {current.map(alert => {
+                const sig = signals[alert.filename]
+                const isActive = active?.filename === alert.filename
+                return (
+                  <li key={alert.filename}>
+                    <button
+                      onClick={() => setSelected(alert.filename)}
+                      className={cn('w-full px-3 py-2 text-left transition-colors',
+                        isActive ? 'bg-accent' : 'hover:bg-accent/40')}
+                    >
+                      <div className="flex items-baseline gap-2">
+                        <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+                          {alert.date || '—'}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{alert.label}</span>
+                        {sig?.critical && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-danger" />}
                       </div>
-                    </div>
-                    <div className="flex gap-2">
-                      {hasCritical && <Badge variant="destructive">Critical</Badge>}
-                    </div>
-                  </div>
-                </CardHeader>
-                {expanded === alert.filename && (
-                  <CardContent>
-                    <div className="rounded-lg border border-border p-4 bg-background max-h-[600px] overflow-y-auto">
-                      <MarkdownRenderer content={alert.content} />
-                    </div>
-                  </CardContent>
+                      {/* The signal that makes the index worth scanning —
+                          extractDeltaIndicators already existed and was only
+                          used by /health. */}
+                      <div className="mt-0.5 flex items-center gap-2 font-mono text-[10px] tabular-nums text-muted-foreground">
+                        {sig && sig.deltas.new > 0 && <span className="text-status-warning">{sig.deltas.new} new</span>}
+                        {sig && sig.deltas.resolved > 0 && <span className="text-status-success">{sig.deltas.resolved} resolved</span>}
+                        {sig && sig.deltas.new === 0 && sig.deltas.resolved === 0 && !sig.critical && (
+                          <span className="opacity-60">no change</span>
+                        )}
+                      </div>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          }
+        >
+          {active && (
+            <div className="rounded-lg border border-border bg-card p-4 md:p-5">
+              <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border pb-2">
+                <h2 className="text-base font-semibold">{active.date || 'Undated'} — {active.label}</h2>
+                <span className="font-mono text-xs text-muted-foreground">{active.filename}</span>
+                {signals[active.filename]?.critical && (
+                  <Badge variant="destructive" className="text-[10px]">Critical</Badge>
                 )}
-              </Card>
-            )
-          })}
-        </div>
+              </div>
+              <MarkdownRenderer content={active.content} />
+            </div>
+          )}
+        </Reader>
       )}
     </div>
   )
