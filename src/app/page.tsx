@@ -138,7 +138,7 @@ export default async function TodayPage() {
   const now = new Date()
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title={`${greeting(now)}, Pavan`}
         description={todayLabel(now)}
@@ -151,40 +151,50 @@ export default async function TodayPage() {
       />
 
       {/* Scoreboard — progress against the declared campaign. "Am I actually
-          selling, and am I on pace?" outranks every other number on the page. */}
+          selling, and am I on pace?" outranks every other number on the page,
+          so it keeps the full width as a tile strip. */}
       <Scoreboard momentum={insights?.momentum ?? null} score={score} />
 
-      {/* Today's moves — the single ranked queue. Strategic decisions,
-          artifact blockers, bid flags, due touches, closing deadlines: merged
-          and leverage-ranked so the top row is the day's highest-value action. */}
-      <MovesCard moves={moves} />
+      {/* Two-column working area. Reading order is preserved: the ranked queue
+          stays top-left, where the eye lands. The rail carries the dated and
+          the delegated — context you check against the queue, not instead of
+          it. Stacking these cost ~2,400px of scroll for rows whose content
+          never exceeded ~520px. See tasks/todo.md Phase 14. */}
+      <div className="grid gap-4 xl:grid-cols-3">
+        <div className="space-y-4 xl:col-span-2">
+          {/* The single ranked queue: strategic decisions, artifact blockers,
+              bid flags, due touches, closing deadlines — leverage-ranked. */}
+          <MovesCard moves={moves} />
 
-      {/* The clock — meetings, bid deadlines, and scored solicitations for
-          the next two weeks, one agenda */}
-      <ClockCard items={clock} calendarConfigured={calendar.configured} calendarErrors={calendar.errors} />
+          {/* Who needs you, ranked. A blocked or overdue contact outranks
+              any report. */}
+          <PipelineBuckets buckets={buckets} />
 
-      {/* Pipeline — who needs you, ranked. A blocked or overdue contact
-          outranks any report. */}
-      <PipelineBuckets buckets={buckets} />
+          {/* Active bids — compact; the full table lives on /bids */}
+          <ActiveBidsList bids={activeBids} />
+        </div>
 
-      {/* Active bids — compact; the kanban lives on /bids */}
-      <ActiveBidsList bids={activeBids} />
+        <div className="space-y-4">
+          {/* The clock — meetings, bid deadlines and scored solicitations for
+              the next two weeks, one agenda */}
+          <ClockCard items={clock} calendarConfigured={calendar.configured} calendarErrors={calendar.errors} />
 
-      {/* Waiting on — what's delegated, to whom, and what's stuck */}
-      <WaitingOnCard groups={waiting} />
+          {/* Waiting on — what's delegated, to whom, and what's stuck */}
+          <WaitingOnCard groups={waiting} />
 
-      {/* Channels going dark — renders only when a vehicle/partner is blocked
-          or cold (the SLP failure class) */}
-      <ChannelsHealthCard alerts={channelAlerts(channels)} />
+          {/* Channels going dark — renders only when a vehicle/partner is
+              blocked or cold (the SLP failure class) */}
+          <ChannelsHealthCard alerts={channelAlerts(channels)} />
 
-      {/* Pipeline shape — stage funnel, owner load, product concentration */}
-      {insights && <ShapeCompact shape={insights.shape} />}
+          {/* Pipeline shape — stage funnel, owner load, product concentration */}
+          {insights && <ShapeCompact shape={insights.shape} />}
+        </div>
+      </div>
 
-      {/* What changed since this browser last looked — one line, expandable */}
+      {/* Below the queue: what changed, and is the machine healthy. Both are
+          full-width strips that stay collapsed unless something is red. */}
       <ChangesFeed />
 
-      {/* Machine room — agents, feeds, health. Collapsed unless something is
-          red; the header dot carries the green-state signal. */}
       <MachineRoom
         summaries={agentSummaries}
         freshness={freshness}
