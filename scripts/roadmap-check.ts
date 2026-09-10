@@ -310,8 +310,21 @@ async function pathCount(repo: string, ref: string, paths: string[]): Promise<nu
  * Git, as the proof engine needs it — the real implementation of the seam that
  * makes the nine checks testable. Everything reads `origin` after a fetch.
  */
+/**
+ * Proofs read the landed refs — main first, then `staging` where it exists —
+ * the same refs a handoff literal is searched at. Found 2026-09-09 drafting
+ * BidPro's build milestones: their team integrates on staging and releases to
+ * main in batches (29 commits behind that day), so a proof read at main alone
+ * would flip weeks after the work was done. A branch is still never a landing.
+ */
+async function openForProof(name: string): Promise<{ dir: string; ref: string; refs: string[] } | { error: string }> {
+  const r = await openRepo(name)
+  if ('error' in r) return r
+  return { ...r, refs: await landedRefs(r.dir) }
+}
+
 const GIT: GitOps = {
-  open: openRepo,
+  open: openForProof,
   pathCount,
   grep: grepAtRef,
   show: showAtRef,

@@ -33,7 +33,12 @@ import type { Meeting as CalendarEvent } from './calendar'
  *  tests supply a fake, which is the point of the seam. */
 export interface GitOps {
   /** Resolve + fetch. `{ error }` when the repo is unusable on this machine. */
-  open(repo: string): Promise<{ dir: string; ref: string } | { error: string }>
+  /** `refs`, when present, are the landed refs in precedence order (default
+   *  branch first, then integration branches such as `staging`). A proof is
+   *  true at the first ref where it holds and says which; an `absent` proof
+   *  must hold at every ref, because "gone from staging, still on main" is
+   *  not gone. Absent `refs` → `[ref]` (the fakes, and older callers). */
+  open(repo: string): Promise<{ dir: string; ref: string; refs?: string[] } | { error: string }>
   pathCount(dir: string, ref: string, paths: string[]): Promise<number>
   grep(dir: string, ref: string, needle: string, sub?: string): Promise<number>
   show(dir: string, ref: string, file: string): Promise<string | null>
@@ -188,7 +193,27 @@ export async function readMeetings(root: string): Promise<Meeting[]> {
   return out
 }
 
-// ── the nine checks ─────────────────────────────────────────────────────────
+/**
+ * Evaluate a count-shaped git question at the landed refs. Present: true at
+ * the first ref with a hit, reported. Absent: must be zero at EVERY ref, and
+ * the first ref that still has it is the one reported.
+ */
+async function atLandedRefs(
+  r: { ref: string; refs?: string[] },
+  absent: boolean | undefined,
+  count: (ref: string) => Promise<number>,
+): Promise<{ ok: boolean; ref: string; value: number }> {
+  const refs = r.refs?.length ? r.refs : [r.ref]
+  let last = { ok: false, ref: refs[0], value: 0 }
+  for (const ref of refs) {
+    const n = await count(ref)
+    if (absent ? n > 0 : n > 0) return { ok: !absent, ref, value: n }
+    last = { ok: Boolean(absent), ref, value: n }
+  }
+  return last
+}
+
+// ── the ten checks ──────────────────────────────────────────────────────────
 
 /**
  * One check → one verdict, with a sentence saying why.
@@ -243,28 +268,36 @@ export async function evalCheck(c: ProofCheck, ctx: ProofContext): Promise<Proof
     case 'git_path_exists': {
       const r = await ctx.git.open(c.repo)
       if ('error' in r) return { check: c.check, ok: false, detail: r.error }
-      const n = await ctx.git.pathCount(r.dir, r.ref, [c.path])
+      const { ok, ref, value: n } = await atLandedRefs(r, c.absent, ref => ctx.git.pathCount(r.dir, ref, [c.path]))
       return {
-        check: c.check, ok: c.absent ? n === 0 : n > 0,
-        detail: `${c.repo} ${c.path}: ${n} file(s) at ${r.ref}${c.absent ? ' (want none)' : ''}`,
+        check: c.check, ok,
+        detail: `${c.repo} ${c.path}: ${n} file(s) at ${ref}${c.absent ? ' (want none)' : ''}`,
       }
     }
 
     case 'git_grep': {
       const r = await ctx.git.open(c.repo)
       if ('error' in r) return { check: c.check, ok: false, detail: r.error }
-      const n = await ctx.git.grep(r.dir, r.ref, c.pattern, c.path)
+      const { ok, ref, value: n } = await atLandedRefs(r, c.absent, ref => ctx.git.grep(r.dir, ref, c.pattern, c.path))
       return {
-        check: c.check, ok: c.absent ? n === 0 : n > 0,
-        detail: `${c.repo}: "${c.pattern}" in ${n} file(s)${c.path ? ` under ${c.path}` : ''} at ${r.ref}${c.absent ? ' (want none)' : ''}`,
+        check: c.check, ok,
+        detail: `${c.repo}: "${c.pattern}" in ${n} file(s)${c.path ? ` under ${c.path}` : ''} at ${ref}${c.absent ? ' (want none)' : ''}`,
       }
     }
 
     case 'flag_default': {
       const r = await ctx.git.open(c.repo)
       if ('error' in r) return { check: c.check, ok: false, detail: r.error }
-      const src = await ctx.git.show(r.dir, r.ref, c.path)
-      if (!src) return { check: c.check, ok: false, detail: `${c.repo} ${c.path} not readable at ${r.ref}` }
+      // The flag is read at the first landed ref that has the file; a default
+      // flipped on staging but not yet released reads as flipped, at staging.
+      let src: string | null = null
+      let ref = r.ref
+      for (const candidate of r.refs ?? [r.ref]) {
+        src = await ctx.git.show(r.dir, candidate, c.path)
+        ref = candidate
+        if (src) break
+      }
+      if (!src) return { check: c.check, ok: false, detail: `${c.repo} ${c.path} not readable at ${(r.refs ?? [r.ref]).join(' or ')}` }
       // `name: bool = True` (Python settings), `export const name = true` (TS).
       // The default is the first token after the `=` on the declaration line;
       // an optional declaration keyword may precede the name, or the four repos
@@ -278,7 +311,7 @@ export async function evalCheck(c: ProofCheck, ctx: ProofContext): Promise<Proof
       return {
         check: c.check,
         ok: literalMatches(m[1], c.equals),
-        detail: `${c.repo} ${c.path}: ${c.name} = ${m[1]} (want ${c.equals})`,
+        detail: `${c.repo} ${c.path}: ${c.name} = ${m[1]} (want ${c.equals}) at ${ref}`,
       }
     }
 

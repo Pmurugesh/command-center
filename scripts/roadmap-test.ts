@@ -1297,6 +1297,27 @@ test('calendar_event: not read, unreachable, hit, miss, window — and never a c
   assert.equal(ours.ok, false); assert.match(ours.detail, /with @calhr\.ca\.gov/)
 })
 
+test('git checks: a proof holds at the first landed ref and says which; absent needs every ref', async () => {
+  // main lacks the literal, staging has it — the BidPro shape.
+  const git: GitOps = {
+    async open() { return { dir: '/fake/q', ref: 'origin/main', refs: ['origin/main', 'origin/staging'] } },
+    async pathCount(_d, ref, paths) { return ref === 'origin/staging' && paths[0] === 'docs/key.md' ? 1 : 0 },
+    async grep(_d, ref, needle) { return ref === 'origin/staging' && needle === 'stated_in' ? 2 : 0 },
+    async show(_d, ref, file) { return file === 'svc.py' ? (ref === 'origin/staging' ? 'PROMPT_VERSION = "p1.6"' : 'PROMPT_VERSION = "p1.3"') : null },
+  }
+  const p = await evalCheck({ check: 'git_path_exists', repo: 'q', path: 'docs/key.md' }, ctx({ git }))
+  assert.equal(p.ok, true); assert.match(p.detail, /at origin\/staging/)
+  const g = await evalCheck({ check: 'git_grep', repo: 'q', pattern: 'stated_in' }, ctx({ git }))
+  assert.equal(g.ok, true); assert.match(g.detail, /2 file\(s\).*at origin\/staging/)
+  const f = await evalCheck({ check: 'flag_default', repo: 'q', path: 'svc.py', name: 'PROMPT_VERSION', equals: 'p1.6' }, ctx({ git }))
+  assert.equal(f.ok, false); assert.match(f.detail, /p1.3.*at origin\/main/) // main has the file, so main is read
+  // Absent: gone from main but still on staging is NOT gone.
+  const a = await evalCheck({ check: 'git_grep', repo: 'q', pattern: 'stated_in', absent: true }, ctx({ git }))
+  assert.equal(a.ok, false); assert.match(a.detail, /at origin\/staging \(want none\)/)
+  const gone = await evalCheck({ check: 'git_grep', repo: 'q', pattern: 'nowhere', absent: true }, ctx({ git }))
+  assert.equal(gone.ok, true)
+})
+
 test('git checks: absent inverts the answer, and a repo that will not open is never "absent"', async () => {
   const git = fakeGit({ missing: ['Nowhere'], paths: { Nexus: ['src/a.ts', 'src/b.ts'] }, files: { 'src/a.ts': 'const NEW_FLAG = true' } })
   const gone = await evalCheck({ check: 'git_path_exists', repo: 'Nexus', path: 'legacy/', absent: true }, ctx({ git }))
