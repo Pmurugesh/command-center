@@ -2136,3 +2136,280 @@ And `consumed` was decided from our repo alone, before theirs was read — a pla
 - [ ] AFTER merge + deploy: operations — `spec:` on p1–p3, p0 `consumed_by → src/lib/bid-sync.ts`,
       README schema, Log lines. `bidpro-won-signal` stays as is (`awarded_at` is in no spec yet).
 - [ ] Trigger roadmap-check on the mini and read the board back.
+
+---
+
+# Phase 14 — The layout pass (2026-09-09) — DONE
+
+## How this was measured
+
+Dev server at 1728x1080 and 2560x1440, `getBoundingClientRect` over every
+route, plus a Range-based measurement of *painted* text extent per list row (so
+`truncate`d text is not counted as if it filled its box). Four parallel page
+audits read every page component and the data on disk.
+
+## Diagnosis — "whitespace" was four separate defects
+
+### 1. The outer gutter — a hard 1280px cap
+
+`layout.tsx` wrapped every page in `max-w-7xl mx-auto`:
+
+| Window | Content | Wasted | Window used |
+|---|---|---|---|
+| 1440px | 1201px | 15px | 83% |
+| 1728px | 1280px | 224px | 74% |
+| 2560px | 1280px | **1056px** | **50%** |
+
+The app was designed at ~1440px, where it is fine. Every pixel past that was
+thrown away. Grid breakpoints across `src/`: `md:` x13, `lg:` x5, `xl:` x1,
+`2xl:` x0 — from 768px to 2560px the layout never changed, it only stretched.
+
+### 2. The inner dead gap — stretched rows (fixing #1 alone makes this WORSE)
+
+Every list is `flex items-center justify-between` with `min-w-0 flex-1` left and
+a `shrink-0` chip cluster right. Across Today's 30 rows at 1182px:
+**median dead gap 873px — 74% of the row.** Widening the container widens the
+hole. Rows want ~520px, which is what columns give them.
+
+### 3. Vertical bloat — marketing defaults + collapse-by-default
+
+`card.tsx` was stock shadcn: `p-6`, `text-2xl`. **15 of 27 `CardHeader`s
+overrode to `pb-3`, and every single `CardTitle` overrode down.** The default
+was wrong and was being patched one call site at a time.
+
+/intel was the extreme: **6,949px to read 3,237 characters** — 61 cards, zero
+expanded on load, so the entire height was chrome.
+
+### 4. Accidental measure — markdown width was unowned
+
+Three call sites, three measures, none deliberate: 768px in /library and
+/bids/[id] (squeezing 42-row tables), ~160ch in /gtm, ~180ch in
+/meetings/[slug]. This is why "fill the page" cannot be applied uniformly —
+prose wants ~78ch, tables want everything.
+
+## The fix — three layout modes, not one column
+
+- **Board** — data. Full width; children flow into responsive ~520px columns.
+- **Reader** — documents. Index rail + pane; prose capped, tables break out.
+- **Focus** — forms and stubs. Centred and narrow; the only correct cap.
+
+## Results, measured at 1728x1080
+
+| Page | Height | Screens | chars/px |
+|---|---|---|---|
+| /intel | 6,949 → **1,073** (−85%) | 6.7 → 1.0 | 0.47 → **4.96** |
+| /library | 4,121 → **1,040** (−75%) | 4.0 → 1.0 | 1.61 → **6.77** |
+| /gtm | 2,804 → **1,040** (−63%) | 2.7 → 1.0 | 1.82 → **10.13** |
+| /health | 3,136 → **1,040** (−67%) | 3.1 → 1.0 | 4.63 → **11.41** |
+| /meetings | 2,738 → **1,040** (−62%) | 2.6 → 1.0 | 1.44 → **5.11** |
+| /bids | 2,840 → **1,362** (−52%) | 2.7 → 1.3 | 0.91 → **3.85** |
+| / (Today) | 5,706 → **3,757** (−34%) | 5.5 → 3.6 | 1.22 → 1.86 |
+| /roadmap | 5,874 → **4,488** (−24%) | 5.6 → 4.3 | 1.37 → 1.84 |
+| /channels | 2,948 → **1,650** (−44%) | 2.8 → 1.6 | 0.91 → 1.68 |
+| /content | 3,204 → **2,056** (−36%) | 3.1 → 2.0 | 1.40 → 2.18 |
+| /agencies | 2,300 → **1,858** (−19%) | 2.2 → 1.8 | 0.91 → 1.12 |
+| /intake | 1,908 → **1,486** (−22%) | 1.9 → 1.4 | — → 2.28 |
+
+Window used: **74% → 86% at 1728px; 50% → 91% at 2560px.**
+Median row dead gap on Today: **873px → 454px.**
+
+### What actually moved the needle
+
+The container cap was the loudest defect but the smallest win — removing it
+alone bought ~5% vertical on Today. **Columns and density did the rest.** The
+pages that improved most are the ones whose layout MODE changed, not the ones
+that merely got wider. Worth remembering the next time "it feels empty" gets
+diagnosed as "the container is too narrow".
+
+## Verified
+- [x] `pnpm build` exit 0; `tsc --noEmit` clean; `next lint` clean.
+- [x] 2560px: 91% of window used, Today 2.7 screens.
+- [x] 1440px and 375px: zero horizontal overflow; sidebar still hidden on
+      mobile; the bids table scrolls itself rather than the page.
+- [x] Prose measure ~78ch; tables break out (verified /gtm 1,184 → 787px prose,
+      /library table 768 → 1,041px).
+- [x] /gtm#lead-rules opens the right doc instead of a collapsed card.
+
+## Not done — still open in 14.2
+The /system trio merge into one Machine page, /bids/[bidName] file+fact rails,
+the /intel procurements table, the /outreach coverage strip, /agencies
+master-detail, /content status kanban, and the /roadmap row-summary strip and
+milestone matrix (rows went two-up instead). Each is written up above with its
+measured cause.
+
+---
+
+# Phase 15 — Outreach drafts: stop internal shorthand reaching customers (2026-09-09) — DONE
+
+`buildDraft()` interpolated two CRM fields straight into the email body:
+
+```
+The next step we agreed was: {contact.nextAction}
+I know this is waiting on {contact.blockedOn} — happy to help move that along.
+```
+
+Those are shorthand written for Pavan. Real values on disk: `Personal follow-up
+— upsell`, `Call — offer free 30-day pilot`, `Warm product path — services
+client with no product conversation started`, `Confirm current status — six
+meetings through Feb 2026, then silence`, and `blocked_on: product one-pager
+does not exist`. Both bypassed `externalSafe()`, which only screened for repo
+paths. The body also opened with `It has been {n} days since we last spoke` —
+leading with our own neglect, frozen at write time, wrong within a week.
+
+**One was sent.** `robert-cdt-mmbi`, `sent_at: 2026-09-01`, to a state CIO's
+office.
+
+## Who was responsible: not an agent
+
+`writeDraft()` emits the commit trailer `via: dashboard`, and both bad drafts
+carry it — so they came from the Draft button, not from any agent or cron.
+Confirmed on the mini: no agent instruction mentioned `crm/drafts`, and nothing
+in `scripts/` writes there. `pindi-oeis.md` — the one good draft — arrived as a
+janitor `auto:` sweep, i.e. written directly, bypassing the template.
+
+## Fixed
+- `buildDraft` interpolates no internal field at all. Internal context moved to
+  frontmatter `notes`, shown behind a "Context · not sent" disclosure.
+- `findInternalLeaks()` enforced in `writeDraft()` — the invariant was
+  previously a comment above the function that violated it.
+- `scripts/verify-drafts.ts` sweeps every draft on disk, including
+  agent-written ones that bypass `writeDraft`. Gates unsent leaks; records
+  already-sent ones without failing, since a permanently-red check is ignored.
+- operations (pushed): `workflows/follow-up-email.md`, the AGENTS.md content
+  rule, both poisoned drafts regenerated, `pindi-oeis.md` → `edited: true`.
+
+## Verified
+- [x] All 108 contacts swept through `buildDraft`: **0 bodies leak an internal field**.
+- [x] `verify-drafts.ts`: 0 unsent leaks, 1 already-sent recorded.
+
+## Still open
+- `robert-cdt-mmbi` is sent and cannot be unsent.
+- Phase B unbuilt: 9 contacts need a draft and have none — see Phase 16.
+
+---
+
+# Phase 16 — Outreach Phase B: the auto-trigger scan (spec, 2026-09-09)
+
+Phase A (queue, copy, edit, mark-sent) shipped. Phase B fills the queue. Today
+the only thing that creates a draft is clicking **Draft** on Today's Moves.
+
+## Design: code detects, agent writes, human sends
+
+| Layer | Owner | Why |
+|---|---|---|
+| Detection — who needs a follow-up, and why | **code** | must be reviewable and identical every run |
+| The brief — facts, thread, recipient, history | **code** | the agent must not go looking for its own facts |
+| The prose | **agent** | the thing a template provably cannot do |
+| The safety gate | **code** | applied to agent output too |
+| Send | **human** | unchanged |
+
+The deterministic template produced three emails that all leaked and one that
+was sent; the only good draft in the store was agent-written. Turning `Warm
+product path — services client with no product conversation started` into a
+sentence a client should read is a language task.
+
+**Precedent: Scribe** — already an agent-writes-artifacts cron (07:30/16:00,
+staged mail → proposals, `.judgment-ledger` mtime as heartbeat, see
+`src/lib/insights.ts:300`). Phase B is the same shape.
+
+## B.1 Detection — `scripts/scan-outreach.ts`
+
+| Trigger | Source | Rule |
+|---|---|---|
+| `crm-due` | `bucketize()` → overdue, dueToday | `nextActionDue` ≤ today on a worked contact |
+| `cold-contact` | `bucketize()` → goingCold | `daysSinceTouch ≥ CRM_COLD_DAYS` (21) |
+| `post-meeting` | `listMeetings()` + contact log | meeting whose contacts have no log entry and no draft after `meeting.date` |
+| `bid-submitted` | `listBids()` | ships LAST, behind a flag — see below |
+
+**`bid-submitted` ships last.** The only bid→contact join is the `agency`
+string, many-to-many and unvalidated; CDT has several contacts, and emailing all
+of them because one bid was submitted is worse than not emailing.
+`discoveryEvent.businessUnit` is a tighter key and should be evaluated first.
+
+### Suppression — matters more than detection
+Never generate when: an unsent draft exists; a draft was sent within 14 days;
+the contact is **blocked** (their blocker is our problem, not theirs); the
+contact is **not-started** (`bucketize` separates these from `goingCold`
+deliberately — "picking this back up" is a lie to a stranger); or the contact is
+terminal.
+
+Net target: overdue(1) + dueToday(1) + goingCold(8) = 10, minus drafted = **~9**.
+
+### Volume cap
+**5 new drafts per run** in steady state, oldest-aging first. A cap turns a bad
+rule into a small mess rather than an outbox-shaped one.
+
+## B.2 The brief — `buildBrief(contact, log, meetings, bids)`
+A typed object, never prose. `intent` carries `nextAction`/`blockedOn`
+explicitly so the writer knows *why* without mistaking them for sendable copy.
+**Must also carry the last inbound message and whether it went unanswered** —
+see the archive findings below.
+
+## B.3 The writer
+```ts
+interface DraftWriter { write(brief: Brief): Promise<{subject, body, sender} | null> }
+```
+- **`AgentWriter`** — `openclaw agent --agent main`, prompted with the brief plus
+  `operations/workflows/follow-up-email.md` as the rubric. **Primary.**
+- **`TemplateWriter`** — today's `buildDraft`. Fallback on any failure.
+
+### Two traps this codebase already documents
+1. **`openclaw agent` exits 0 on a dead model call** (`insights.ts:305`). Exit
+   status is not success — validate that output exists and is non-trivial.
+2. **`triggerAgent()` (`intake.ts:77`) is fire-and-forget with `--deliver
+   --channel telegram`** — it returns nothing. Confirm `openclaw agent` can
+   return stdout synchronously before building on it; if not, the agent writes
+   the draft file itself and the scan reads it back (the `pindi-oeis` route, now
+   documented in the workflow doc).
+
+## B.4 The gate — agent output is not trusted
+Every draft passes `findInternalLeaks()` before persisting. The brief hands the
+writer `nextAction` and `blockedOn`, so **the agent is the most likely future
+source of exactly the leak Phase 15 fixed.** On failure: discard, fall back to
+template, record.
+
+## B.5 Schedule and install
+Weekdays **07:15 PT**, before the 08:00 sales brief.
+`scripts/mini/install-outreach-scan.sh`, idempotent, following
+`install-bid-sync.sh`, added to `post-deploy.sh` **`GATED_INSTALLERS`**
+(`--if-possible`, needs the gateway token). Deploys by merge. Register in
+`scripts/heartbeat.ts` so a stopped scan is noticed — nothing currently consumes
+`lib/heartbeat.ts`, and this is a reason to.
+
+## B.6 Verify — not done until this passes
+- [ ] `--dry` prints what it would create and why, writing nothing.
+- [ ] Re-running immediately creates **zero** additional drafts.
+- [ ] Blocked and not-started contacts are never drafted.
+- [ ] `verify-drafts.ts` green after a real run.
+- [ ] Force an agent failure → template fallback, scan still exits 0.
+- [ ] Feed the agent a contact whose `next_action` is `Personal follow-up —
+      upsell` and confirm the gate catches it if the agent echoes it.
+
+## Decisions taken (2026-09-09)
+1. **The agent path is live.** `AgentWriter` is primary; `TemplateWriter` is the
+   safety net, not the plan.
+2. **First run approved by hand, once.** `--dry` prints all ~9, reviewed in one
+   pass, then a single `--apply`. The 5/run cap governs steady state only.
+3. **Sender is per-thread, not per-contact** — settled by evidence, below.
+4. **Contacts with no email** — 5 of 6 backfilled; skip the last with a
+   data-gap flag rather than drafting to nobody.
+
+## What the mail archive proved (2026-09-09)
+
+- **`Christine.Asiata@lci.ca.gov`** — 34 messages, recovered from
+  `crm/intake/email/`. Backfilled with `amarjot-ctc`, `mark-liu`,
+  `robert-crowell`, `zachary-waller`, each verified by matching the address
+  domain to the contact's agency. `john-wood` deliberately left empty: the
+  archive's "John" hits were `jjohnston@comerit.com` and
+  `peterjohn@4infinitesolutions.com`, substring matches against a DDS contact.
+- **The premise of her follow-up was wrong.** Her last message is 2026-02-26 —
+  one day *after* the recorded `last_touched`, and **inbound**. She shared the
+  CEQA folder and asked us to *"provide some dates and times"*. Nobody replied,
+  for 196 days. That inbound was missing from the CRM log entirely.
+- **Sender cannot be a contact-level field.** She addressed Gana and Saravanan
+  and only CC'd Pavan. `sender` must derive from the thread being answered,
+  defaulting to Pavan only for genuinely new outreach.
+
+**This is the Phase B acceptance test.** If `AgentWriter`, given Christine's
+brief, produces a reply into the OPR-0650 thread that answers her question with
+dates and does not open by announcing 196 days of silence, the design works.
