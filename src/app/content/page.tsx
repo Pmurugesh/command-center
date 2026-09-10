@@ -31,7 +31,7 @@ export default async function ContentPage() {
   const published = all.filter(s => s.status === 'published').length
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
         title="Content"
         description={
@@ -50,16 +50,17 @@ export default async function ContentPage() {
           description="Voice generates content ideas every Monday at 08:00 PT and writes them to operations/content/suggestions/. Nothing has been written there yet — the next run will populate this page, or add one yourself with New post."
         />
       ) : (
-        <div className="space-y-8">
+        // Weeks are identical-shape blocks stacked vertically — three of them
+        // was ~3,200px for cards whose content never exceeded ~520px wide.
+        // Side by side, the batch reads as a batch. See todo.md Phase 14.
+        <div className="grid gap-4 xl:grid-cols-2 3xl:grid-cols-3">
           {weeks.map(({ week, items }) => (
-            <section key={week} className="space-y-4">
-              <div className="flex items-baseline gap-3">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <section key={week}>
+              <div className="mb-2 flex items-baseline gap-2 border-b border-border pb-1">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {weekLabel(week)}
                 </h2>
-                <span className="text-xs text-muted-foreground/70">
-                  {items.length} post{items.length === 1 ? '' : 's'}
-                </span>
+                <span className="font-mono text-[10px] tabular-nums text-muted-foreground/70">{items.length}</span>
               </div>
               <SuggestionList initial={items} />
             </section>

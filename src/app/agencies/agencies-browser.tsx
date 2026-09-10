@@ -121,9 +121,12 @@ export function AgenciesBrowser({ agencies }: { agencies: Agency[] }) {
   const staleCount = useMemo(() => filtered.filter(a => isStale(a.lastModified)).length, [filtered])
 
   return (
-    <div className="space-y-4">
-      {/* Priority filter chips */}
-      <div className="flex items-center gap-1 border-b border-border overflow-x-auto pb-px">
+    <div className="space-y-3">
+      {/* One toolbar. The chips, the search box and the view toggle were three
+          stacked full-width bands carrying ~600px of controls between them —
+          ~110px of page height before the first row of data. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border pb-2">
+      <div className="flex items-center gap-1 overflow-x-auto">
         {(['all', 'high', 'medium', 'low'] as PriorityFilter[]).map(p => {
           const active = priorityFilter === p
           const label = p === 'all' ? 'All' : PRIORITY_BADGE[p].label
@@ -134,10 +137,10 @@ export function AgenciesBrowser({ agencies }: { agencies: Agency[] }) {
               type="button"
               onClick={() => setPriorityFilter(p)}
               className={cn(
-                'flex items-center gap-1.5 px-3 py-2 text-sm transition-colors border-b-2 -mb-px whitespace-nowrap',
+                'flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs transition-colors',
                 active
-                  ? 'text-foreground border-status-accent'
-                  : 'text-muted-foreground border-transparent hover:text-foreground'
+                  ? 'bg-accent text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
               )}
             >
               {label}
@@ -147,9 +150,7 @@ export function AgenciesBrowser({ agencies }: { agencies: Agency[] }) {
         })}
       </div>
 
-      {/* Search + view toggle */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
+        <div className="relative min-w-[200px] max-w-xs flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <input
             type="text"
@@ -273,14 +274,14 @@ function AgenciesTable({
         <table className="w-full text-sm">
           <thead className="bg-muted/40">
             <tr>
-              <th className="text-left px-4 py-2.5"><HeaderButton k="name" label="Agency" /></th>
-              <th className="text-left px-3 py-2.5"><HeaderButton k="priority" label="Priority" /></th>
-              <th className="text-right px-3 py-2.5"><HeaderButton k="contacts" label="Contacts" align="right" /></th>
-              <th className="text-left px-3 py-2.5 hidden lg:table-cell">
+              <th className="text-left px-3 py-1.5"><HeaderButton k="name" label="Agency" /></th>
+              <th className="text-left px-3 py-1.5"><HeaderButton k="priority" label="Priority" /></th>
+              <th className="text-right px-3 py-1.5"><HeaderButton k="contacts" label="Contacts" align="right" /></th>
+              <th className="text-left px-3 py-1.5 hidden md:table-cell">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Top contact</span>
               </th>
-              <th className="text-left px-3 py-2.5"><HeaderButton k="updated" label="Updated" /></th>
-              <th className="w-8 px-3 py-2.5"></th>
+              <th className="text-left px-3 py-1.5"><HeaderButton k="updated" label="Updated" /></th>
+              <th className="w-8 px-3 py-1.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -295,7 +296,7 @@ function AgenciesTable({
                     i % 2 === 1 && 'bg-muted/10'
                   )}
                 >
-                  <td className="px-4 py-2.5">
+                  <td className="px-3 py-1.5">
                     <Link href={`/agencies/${encodeURIComponent(a.slug)}`} className="flex items-center gap-2 group/link">
                       <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                       <span className="font-medium group-hover/link:text-status-accent transition-colors">
@@ -303,13 +304,13 @@ function AgenciesTable({
                       </span>
                     </Link>
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-1.5">
                     <Badge variant={badge.variant} className="text-[10px] uppercase tracking-wide">
                       {badge.label}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2.5 text-right font-mono tabular-nums">{a.contactCount}</td>
-                  <td className="px-3 py-2.5 hidden lg:table-cell text-muted-foreground">
+                  <td className="px-3 py-1.5 text-right font-mono tabular-nums">{a.contactCount}</td>
+                  <td className="px-3 py-1.5 hidden md:table-cell text-muted-foreground">
                     {top ? (
                       <a
                         href={`mailto:${top.email}`}
@@ -322,13 +323,13 @@ function AgenciesTable({
                       <span className="text-muted-foreground/50 text-xs">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                  <td className="px-3 py-1.5 text-xs text-muted-foreground">
                     <div className="flex items-center gap-2">
                       <TimeAgo date={a.lastModified} />
                       <StaleBadge iso={a.lastModified} />
                     </div>
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-1.5">
                     <Link href={`/agencies/${encodeURIComponent(a.slug)}`} aria-label={`Open ${a.displayName}`}>
                       <ArrowRight className="h-4 w-4 text-muted-foreground/60 group-hover:text-status-accent transition-colors" />
                     </Link>
@@ -382,7 +383,7 @@ function AgenciesCompactList({ agencies }: { agencies: Agency[] }) {
 
 function AgenciesGrid({ agencies }: { agencies: Agency[] }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 gap-4">
       {agencies.map((agency) => {
         const badge = PRIORITY_BADGE[agency.priority]
         const top = agency.contacts[0]
