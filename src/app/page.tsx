@@ -71,7 +71,7 @@ export default async function TodayPage() {
     listChannels().catch(() => []),
     getOpenOpportunities().catch(() => []),
     getPipelineFreshness().catch(() => []),
-    getBuckets().catch(() => ({ overdue: [], blocked: [], dueToday: [], goingCold: [], notStarted: [], sourcedCount: 0, total: 0 })),
+    getBuckets().catch(() => ({ overdue: [], blocked: [], dueToday: [], goingCold: [], notStarted: [], byAgency: [], sourcedCount: 0, total: 0 })),
     getInsights().catch(() => null),
     getUpcomingMeetings().catch(() => ({ configured: true, meetings: [], errors: ['calendar lookup failed'] })),
     listLeads().catch(() => []),

@@ -26,7 +26,7 @@ import {
   normalizeCrmStage, normalizeCrmStatus,
 } from './config'
 import type {
-  CrmContact, CrmContactUpdate, CrmContactView, CrmBuckets, CrmLogEntry,
+  CrmAgencyGroup, CrmBucketKey, CrmContact, CrmContactUpdate, CrmContactView, CrmBuckets, CrmLogEntry,
 } from '@/types'
 
 const LOG_HEADING = '## Log'
@@ -348,11 +348,21 @@ export function bucketize(contacts: CrmContact[]): CrmBuckets {
 
   const overdue = worked.filter(c => c.daysOverdue !== undefined)
   const dueToday = worked.filter(c => c.nextActionDue === t)
+  // Cold is judged per agency: someone quiet at an agency we spoke to last week
+  // is not a relationship going cold. Only COLD softens this way. A dated promise
+  // stays overdue however warm the agency is — otherwise Robert Payne's CDT
+  // proposal, 43 days late, would vanish because CDT itself reads warm.
+  const touches = freshestTouchByAgency(contacts)
+  const agencyWarm = (c: CrmContactView) => {
+    const days = daysSince(c.agency ? touches.get(c.agency)?.date : undefined)
+    return days !== undefined && days < CRM_COLD_DAYS
+  }
   const goingCold = worked.filter(c =>
     c.daysOverdue === undefined &&
     c.nextActionDue !== t &&
     c.daysSinceTouch !== undefined &&
-    c.daysSinceTouch >= CRM_COLD_DAYS)
+    c.daysSinceTouch >= CRM_COLD_DAYS &&
+    !agencyWarm(c))
 
   const byOverdue = (a: CrmContactView, b: CrmContactView) => (b.daysOverdue ?? 0) - (a.daysOverdue ?? 0)
   const byStale = (a: CrmContactView, b: CrmContactView) => (b.daysSinceTouch ?? 0) - (a.daysSinceTouch ?? 0)
@@ -363,15 +373,72 @@ export function bucketize(contacts: CrmContact[]): CrmBuckets {
     Number(b.tier === 'T1') - Number(a.tier === 'T1') ||
     a.name.localeCompare(b.name)
 
-  return {
-    overdue: overdue.sort(byOverdue),
+  const sorted = {
     blocked: blocked.sort(byStale),
+    overdue: overdue.sort(byOverdue),
     dueToday,
     goingCold: goingCold.sort(byStale),
     notStarted: notStarted.sort(byPriority),
+  }
+  return {
+    ...sorted,
+    byAgency: groupByAgency(sorted, touches),
     sourcedCount,
     total: contacts.length,
   }
+}
+
+/**
+ * The freshest human touch with anyone at each agency.
+ *
+ * The agency is the client and the people are touchpoints, so "is this
+ * relationship cooling" is a question about the agency. Asked per person, it put
+ * Shafi's 2025 OEIS demo on the board as its own alarm while the same work moved
+ * forward through Pindy (2026-09-10). Only worked contacts count: a record an
+ * import created can carry a last_touched nobody earned.
+ */
+function freshestTouchByAgency(contacts: CrmContact[]): Map<string, { date: string; name: string }> {
+  const out = new Map<string, { date: string; name: string }>()
+  for (const c of contacts) {
+    if (!c.agency || !c.lastTouched || !hasBeenWorked(c)) continue
+    const seen = out.get(c.agency)
+    if (!seen || c.lastTouched > seen.date) out.set(c.agency, { date: c.lastTouched, name: c.name })
+  }
+  return out
+}
+
+/** Blocked cannot proceed, overdue is late, today is on time, cold is drifting. */
+const BUCKET_ORDER: readonly CrmBucketKey[] = ['blocked', 'overdue', 'dueToday', 'goingCold', 'notStarted']
+
+/**
+ * The same rows, grouped by agency. Walking the buckets in urgency order means
+ * each agency is first seen at its most urgent row, and a Map keeps insertion
+ * order — so the groups come out ranked with no second sort to drift from the first.
+ */
+function groupByAgency(
+  buckets: Record<CrmBucketKey, CrmContactView[]>,
+  touches: Map<string, { date: string; name: string }>,
+): CrmAgencyGroup[] {
+  const groups = new Map<string, CrmAgencyGroup>()
+  for (const bucket of BUCKET_ORDER) {
+    for (const contact of buckets[bucket]) {
+      const key = contact.agency ?? `contact:${contact.slug}`
+      let group = groups.get(key)
+      if (!group) {
+        const touch = contact.agency ? touches.get(contact.agency) : undefined
+        const days = daysSince(touch?.date)
+        group = {
+          agency: contact.agency,
+          agencyName: contact.agencyName ?? contact.agency ?? contact.name,
+          items: [],
+          lastTouch: touch && days !== undefined ? { ...touch, days } : undefined,
+        }
+        groups.set(key, group)
+      }
+      group.items.push({ bucket, contact })
+    }
+  }
+  return Array.from(groups.values())
 }
 
 export async function getBuckets(): Promise<CrmBuckets> {

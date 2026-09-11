@@ -2543,3 +2543,26 @@ are buying, the more insight into which solutions to put time into." The live bi
       product rows a market signal that does not depend on a CRM stage — exactly the "what are
       people buying" insight Pavan named. Needs Phase 1 first (plan rows) and a product ↔ module
       mapping. Scope it after Phase 1 lands.
+
+## Today's pipeline grouped by agency (2026-09-10)
+
+**Pavan:** "maybe it would be helpful to group the alerts by agency or something since in my case
+that is the client." It came out of Shafi (OEIS, demo 2025-09-16) sitting on the overdue list while
+the same WMP thread moved forward through Pindy. Shafi himself was a data fix, done first:
+`status: dormant` with a log line pointing at `pindi-oeis` (operations `e6197a1`).
+
+This is the lighter option, chosen over moving the CRM's unit of record to the agency: the store
+stays one file per person, and the board groups by agency.
+
+- [ ] `bucketize` computes the freshest human touch per agency and returns `byAgency`: agencies
+      ranked by their most urgent row, rows in bucket order. The flat buckets stay as they are for
+      Moves, Waiting On and `generate-outreach`.
+- [ ] Going cold is judged per agency: a quiet person at an agency touched in the last 21 days is
+      not an alert. Overdue is NOT softened — a warm agency must never hide a dated promise
+      (Robert Payne's CDT proposal, 43d overdue, while CDT reads warm). Today this removes one row:
+      Scott at CDT.
+- [ ] Pipeline section renders one card per agency: name → `/agencies/<slug>`, last touch with
+      anyone there, and each row keeps its chip and its in-place actions.
+- [ ] `scripts/crm-test.ts`: the Shafi case, the Robert case, imports don't warm an agency, and
+      ranking + every row landing in exactly one agency.
+- [ ] Verify: tsc, tests, live Today page against the real CRM.
