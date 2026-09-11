@@ -1,12 +1,15 @@
 import { BarChart3 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { CRM_STAGES } from '@/lib/config'
 import type { Insights, ShapeBucket } from '@/lib/insights'
+
+const STAGE_ORDER: readonly string[] = CRM_STAGES
 
 function Bar({ buckets, tone }: { buckets: ShapeBucket[]; tone: string }) {
   const max = Math.max(1, ...buckets.map(b => b.count))
   return (
     <div className="space-y-1.5">
-      {buckets.slice(0, 6).map(b => (
+      {buckets.map(b => (
         <div key={b.key} className="flex items-center gap-2">
           <span className="w-28 shrink-0 truncate text-xs text-muted-foreground">{b.key}</span>
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-border">
@@ -28,6 +31,10 @@ function Bar({ buckets, tone }: { buckets: ShapeBucket[]; tone: string }) {
  */
 export function ShapeCompact({ shape }: { shape: Insights['shape'] }) {
   const allIdentified = shape.stages.length === 1 && shape.stages[0].key === 'identified'
+  // Pipeline order, not count order: ranked by size the funnel read identified,
+  // pilot-discussion, demo-given, contacted. Uncapped, so `won` can't fall off
+  // the end the day a seventh stage has contacts.
+  const stages = [...shape.stages].sort((a, b) => STAGE_ORDER.indexOf(a.key) - STAGE_ORDER.indexOf(b.key))
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -41,7 +48,7 @@ export function ShapeCompact({ shape }: { shape: Insights['shape'] }) {
         <div className="grid gap-4 lg:grid-cols-3 xl:grid-cols-1">
           <div>
             <p className="mb-1.5 text-xs font-medium text-muted-foreground">Stage</p>
-            <Bar buckets={shape.stages} tone="bg-blue-500" />
+            <Bar buckets={stages} tone="bg-blue-500" />
             {allIdentified && (
               // A single flat bar is not a rendering failure — it is the finding.
               <p className="mt-2 text-xs text-amber-400">
@@ -51,11 +58,11 @@ export function ShapeCompact({ shape }: { shape: Insights['shape'] }) {
           </div>
           <div>
             <p className="mb-1.5 text-xs font-medium text-muted-foreground">Owner load</p>
-            <Bar buckets={shape.owners} tone="bg-purple-500" />
+            <Bar buckets={shape.owners.slice(0, 6)} tone="bg-purple-500" />
           </div>
           <div>
             <p className="mb-1.5 text-xs font-medium text-muted-foreground">Product</p>
-            <Bar buckets={shape.products} tone="bg-emerald-500" />
+            <Bar buckets={shape.products.slice(0, 6)} tone="bg-emerald-500" />
           </div>
         </div>
       </CardContent>
