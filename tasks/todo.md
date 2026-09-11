@@ -2554,15 +2554,33 @@ the same WMP thread moved forward through Pindy. Shafi himself was a data fix, d
 This is the lighter option, chosen over moving the CRM's unit of record to the agency: the store
 stays one file per person, and the board groups by agency.
 
-- [ ] `bucketize` computes the freshest human touch per agency and returns `byAgency`: agencies
+- [x] `bucketize` computes the freshest human touch per agency and returns `byAgency`: agencies
       ranked by their most urgent row, rows in bucket order. The flat buckets stay as they are for
       Moves, Waiting On and `generate-outreach`.
-- [ ] Going cold is judged per agency: a quiet person at an agency touched in the last 21 days is
+- [x] Going cold is judged per agency: a quiet person at an agency touched in the last 21 days is
       not an alert. Overdue is NOT softened — a warm agency must never hide a dated promise
       (Robert Payne's CDT proposal, 43d overdue, while CDT reads warm). Today this removes one row:
       Scott at CDT.
-- [ ] Pipeline section renders one card per agency: name → `/agencies/<slug>`, last touch with
+- [x] Pipeline section renders one card per agency: name → `/agencies/<slug>`, last touch with
       anyone there, and each row keeps its chip and its in-place actions.
-- [ ] `scripts/crm-test.ts`: the Shafi case, the Robert case, imports don't warm an agency, and
+- [x] `scripts/crm-test.ts`: the Shafi case, the Robert case, imports don't warm an agency, and
       ranking + every row landing in exactly one agency.
-- [ ] Verify: tsc, tests, live Today page against the real CRM.
+- [x] Found while verifying, fixed: on a 375px phone the whole Today column was 1,435px wide and
+      every row's action buttons sat off-screen. Neither grid column had `min-w-0`, so one
+      `truncate` line sized the track to its text. Pre-existing — Today's moves was equally wide.
+
+### Verified
+- `tsc --noEmit` exit 0; `scripts/crm-test.ts` 4/4; `scripts/roadmap-test.ts` 121/121.
+- Live Today page on the real CRM: 14 agencies · 2 blocked · 1 overdue · 7 going cold (was 8 —
+  Scott at CDT, as predicted) · 6 not started. CDT reads "last touch 11d ago · Robert Payne" with
+  Robert still 44d overdue. Show-more expands to all 14; every agency link returns 200.
+- 375px: Pipeline and Moves both 343px, nothing scrolls sideways, 20/20 row buttons on screen.
+  1440px: columns 773 / 379.
+- Not mine, not fixed: at 1440px `main` still scrolls 15px sideways, from the count column in
+  `shape-compact.tsx`. Identical with and without the `min-w-0` change (toggled live).
+
+### Review
+Grouping needed one rule to mean anything — cold is judged per agency — and one guard to stay
+honest — overdue never is. "A warm agency silences its people" would have hidden the most overdue
+commitment on the board. The flat buckets are untouched, so Moves, Waiting On and the outreach view
+keep their shape; only going-cold's membership moved.
