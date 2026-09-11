@@ -21,8 +21,10 @@ function Bar({ buckets, tone }: { buckets: ShapeBucket[]; tone: string }) {
 
 /**
  * Pipeline shape, one compact card: stage funnel, owner load, product
- * concentration side by side on wide screens. Extracted from the old daily
- * brief — the shape is context, not action, so it lives below the queues.
+ * concentration. Extracted from the old daily brief — the shape is context,
+ * not action, so it lives in the rail beside the queues. Side by side only at
+ * lg, where the card is still full width; from xl it sits in the ~380px rail,
+ * where three columns give each Bar row ~104px of the 160px it needs.
  */
 export function ShapeCompact({ shape }: { shape: Insights['shape'] }) {
   const allIdentified = shape.stages.length === 1 && shape.stages[0].key === 'identified'
@@ -36,7 +38,7 @@ export function ShapeCompact({ shape }: { shape: Insights['shape'] }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-3 xl:grid-cols-1">
           <div>
             <p className="mb-1.5 text-xs font-medium text-muted-foreground">Stage</p>
             <Bar buckets={shape.stages} tone="bg-blue-500" />
