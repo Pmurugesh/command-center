@@ -119,7 +119,13 @@ export default async function RoadmapPage() {
           {/* Build next and Decisions are both narrow one-line lists. Stacked,
               each took a full-width band and pushed the rows further down; side
               by side they cost one band between them. See todo.md Phase 14. */}
-          <div className="grid gap-x-8 gap-y-4 2xl:grid-cols-2">
+          {/* grid-cols-1, not an implicit column: below 2xl a grid with no
+              template gets one `auto` track, which grows to its items'
+              min-content, so one `truncate` decision line (nowrap) sized the
+              band to its full text — 3,203px, scrolling the page sideways at
+              every width under 1536px. grid-cols-1 is minmax(0,1fr), the track
+              2xl already uses. */}
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 2xl:grid-cols-2">
           {/* ── Build next ────────────────────────────────────────────── */}
           {/* A section, not a card. Three nested box layers (page → section →
               tile) was most of what made this page feel heavy. */}

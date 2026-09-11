@@ -319,3 +319,17 @@ reads), refusing it is not rigour, it is a board that lies by omission. The entr
   and read each one's detail** — the file it matched, not just the count. A proof whose literal
   can occur in tests, docs, or fixtures is not a proof. Name the artifact the milestone must
   produce (a path) over a phrase it might contain.
+- **[2026-09-11]** A session was started to fix a Today sideways scroll that `0f2c76b` had
+  already fixed. The brief's 954px came from `:3000`, another worktree's `next dev` running code
+  from before that commit; its numbers (954, 1313) reproduced on the real tree only after deleting
+  `min-w-0` in the live DOM. **Before measuring on a dev server, prove it serves your tree**:
+  `lsof -nP -iTCP:3000 -sTCP:LISTEN`, then `lsof -p <pid> | grep cwd`; if it isn't yours, run
+  your own on another port. And **reproduce the reported number on your own tree before
+  changing code** — a number you can't reproduce is a question about the environment.
+- **[2026-09-11]** A breakpoint-only grid (`grid gap-x-8 2xl:grid-cols-2`) has no template
+  below its breakpoint, so it gets one `auto` track, and a `truncate` (nowrap) line inside grows
+  that track to its full text. /roadmap was 3,203px wide under 1536px — worse than the Today bug
+  that was reported, on a page nobody had asked about. Grep can't tell harmless from broken:
+  seven grids matched the pattern and one had the bug. **Sweep with a measurement, not a
+  pattern**: for every `display:grid` element, compare `gridTemplateColumns` + gaps with its
+  content box. That also catches a blow-out an `overflow-hidden` card hides from `main`.

@@ -2584,3 +2584,34 @@ Grouping needed one rule to mean anything — cold is judged per agency — and 
 honest — overdue never is. "A warm agency silences its people" would have hidden the most overdue
 commitment on the board. The flat buckets are untouched, so Moves, Waiting On and the outreach view
 keep their shape; only going-cold's membership moved.
+
+## Sideways scroll re-check: Today and every other page (2026-09-11)
+
+Started as "Today scrolls sideways below xl; give the working-area grid `grid-cols-1`". The brief's
+954px was measured on `:3000`, which was serving another worktree at `4e448ad`, before `0f2c76b`
+put `min-w-0` on both Today columns. On origin/main (`b041a60`) Today was already fixed, so
+`grid-cols-1` was not stacked on top of it (tasks/lessons.md, 2026-09-11).
+
+- [x] Today on origin/main, `main` overflow: 375 → 0, 1024 → 0, 1100 → 0, 1920 → 0. 1440 → 15, from
+      the shape card's count column; stacking that card's grid in the live DOM → 0. That fix is on
+      `claude/reverent-proskuriakova-87ee6e` (`92d2228`), not this branch.
+- [x] Deleting `min-w-0` in the live DOM reproduces the brief exactly (954px, 1,313px columns): the
+      number was real, just stale.
+- [x] Swept all 22 routes (19 static, one instance of each dynamic route) at 375 with a grid check —
+      tracks + gaps vs content box — not a grep. Seven grids matched the `grid … <bp>:grid-cols-N`
+      pattern; one still had the bug.
+- [x] /roadmap: the Build next / Decisions band (`grid gap-x-8 gap-y-4 2xl:grid-cols-2`) got one
+      implicit `auto` track of 3,203px under 1536px, sized by `truncate` Decisions lines (letting those
+      12 lines wrap → 343px; the 3 other nowrap elements → no change). `main` overflow 2,844 at 375,
+      2,427 at 1024, 2,011 at 1440. Fixed with `grid-cols-1`.
+- [ ] Not this bug, not fixed (task chip raised): /bids 147px (header "New bid from RFP docs" button
+      and table), /channels 25px (nowrap staleness-strip label and table), /content with New post open
+      129px (the form sits in PageHeader's `flex shrink-0` actions slot; a shrinkable slot → 0, a
+      one-track form grid → no change).
+
+### Verified
+- /roadmap after the fix: 375 → 0 (343px), 1024 → 0 (752px), 1440 → 0 (1168px), no grid wider than
+  its box. At 2xl and above nothing moved: 1600 `648px 648px`, 1920 `808px 808px`, both columns'
+  boxes and the inner row grids identical to the pre-fix measurements.
+- All numbers from this worktree's own dev server on :3001. Server log: only `openclaw: command not
+  found`.
