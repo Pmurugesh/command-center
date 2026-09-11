@@ -355,6 +355,22 @@ export interface CrmContactView extends CrmContact {
   daysBlocked?: number
 }
 
+export type CrmBucketKey = 'blocked' | 'overdue' | 'dueToday' | 'goingCold' | 'notStarted'
+
+/**
+ * One client and everything the board says about them. The agency is who Pavan
+ * sells to; the people inside it are touchpoints (2026-09-10).
+ */
+export interface CrmAgencyGroup {
+  /** Agency slug, for /agencies/<slug>. Absent only for a contact filed without one. */
+  agency?: string
+  agencyName: string
+  /** Urgency order: blocked, overdue, due today, going cold, not started. */
+  items: { bucket: CrmBucketKey; contact: CrmContactView }[]
+  /** Freshest human touch with ANYONE at the agency, including people with nothing due. */
+  lastTouch?: { date: string; days: number; name: string }
+}
+
 export interface CrmBuckets {
   overdue: CrmContactView[]
   blocked: CrmContactView[]
@@ -362,6 +378,8 @@ export interface CrmBuckets {
   goingCold: CrmContactView[]
   /** In the pipeline (someone set an action) but not yet worked. */
   notStarted: CrmContactView[]
+  /** The same rows grouped by agency, most urgent agency first. */
+  byAgency: CrmAgencyGroup[]
   /** Sourced contacts nobody has decided to pursue — inventory, not work. */
   sourcedCount: number
   total: number

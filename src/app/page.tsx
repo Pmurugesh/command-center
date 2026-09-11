@@ -71,7 +71,7 @@ export default async function TodayPage() {
     listChannels().catch(() => []),
     getOpenOpportunities().catch(() => []),
     getPipelineFreshness().catch(() => []),
-    getBuckets().catch(() => ({ overdue: [], blocked: [], dueToday: [], goingCold: [], notStarted: [], sourcedCount: 0, total: 0 })),
+    getBuckets().catch(() => ({ overdue: [], blocked: [], dueToday: [], goingCold: [], notStarted: [], byAgency: [], sourcedCount: 0, total: 0 })),
     getInsights().catch(() => null),
     getUpcomingMeetings().catch(() => ({ configured: true, meetings: [], errors: ['calendar lookup failed'] })),
     listLeads().catch(() => []),
@@ -160,8 +160,11 @@ export default async function TodayPage() {
           the delegated — context you check against the queue, not instead of
           it. Stacking these cost ~2,400px of scroll for rows whose content
           never exceeded ~520px. See tasks/todo.md Phase 14. */}
+      {/* min-w-0 on both columns: a grid item defaults to min-width:auto, so one
+          `truncate` line (nowrap) sized the whole column to its text — 1,435px on
+          a 375px phone, clipping every row's action buttons off-screen. */}
       <div className="grid gap-4 xl:grid-cols-3">
-        <div className="space-y-4 xl:col-span-2">
+        <div className="min-w-0 space-y-4 xl:col-span-2">
           {/* The single ranked queue: strategic decisions, artifact blockers,
               bid flags, due touches, closing deadlines — leverage-ranked. */}
           <MovesCard moves={moves} />
@@ -174,7 +177,7 @@ export default async function TodayPage() {
           <ActiveBidsList bids={activeBids} />
         </div>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           {/* The clock — meetings, bid deadlines and scored solicitations for
               the next two weeks, one agenda */}
           <ClockCard items={clock} calendarConfigured={calendar.configured} calendarErrors={calendar.errors} />

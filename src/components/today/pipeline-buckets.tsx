@@ -1,12 +1,18 @@
 'use client'
 
 /**
- * The morning view: contacts ranked by what needs Pavan first.
+ * The morning view: everything that needs attention, grouped by agency.
  *
- * Buckets are mutually exclusive and ordered by urgency (blocked outranks
- * overdue, because a blocked item cannot be worked at all). Day counters are
- * the point — "89d" is a fact nobody argues with, where "pending" is a status
- * that survived three months unnoticed.
+ * The agency is the client; the people inside it are touchpoints. A flat list of
+ * people put Shafi's year-old OEIS demo on the board as its own alarm while the
+ * same work moved forward through Pindy (2026-09-10). Grouped, one agency reads
+ * as one situation: what is wrong there, and when we last spoke to anyone.
+ *
+ * Agencies arrive ranked by their most urgent row (crm.ts), and rows keep the
+ * order that has always been the argument: blocked (cannot proceed), overdue
+ * (late), due today, going cold (drifting), not started. Day counters are the
+ * point — "89d" is a fact nobody argues with, where "pending" is a status that
+ * survived three months unnoticed.
  *
  * Every row acts in place. Navigating to a detail page to change a status is
  * how a CRM becomes something you stop updating.
@@ -19,74 +25,73 @@ import {
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import type { CrmBuckets, CrmContactView } from '@/types'
+import type { CrmAgencyGroup, CrmBucketKey, CrmBuckets, CrmContactView } from '@/types'
 
-type BucketKey = 'overdue' | 'blocked' | 'dueToday' | 'goingCold' | 'notStarted'
-
-const BUCKET_META: Record<BucketKey, {
+const BUCKET_META: Record<CrmBucketKey, {
   label: string
   icon: typeof AlertTriangle
   tone: string
   chip: string
-  empty: string
 }> = {
   blocked: {
-    label: 'Blocked',
+    label: 'blocked',
     icon: Ban,
     tone: 'border-red-500/30 bg-red-500/5',
     chip: 'bg-red-500/10 text-red-400 border-red-500/30',
-    empty: 'Nothing blocked. Every action can proceed.',
   },
   overdue: {
-    label: 'Overdue',
+    label: 'overdue',
     icon: AlertTriangle,
     tone: 'border-amber-500/30 bg-amber-500/5',
     chip: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-    empty: 'Nothing overdue. You are current.',
   },
   dueToday: {
-    label: 'Due today',
+    label: 'due today',
     icon: CalendarClock,
     tone: 'border-blue-500/30 bg-blue-500/5',
     chip: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
-    empty: 'Nothing due today.',
-  },
-  notStarted: {
-    label: 'Not started',
-    icon: UserPlus,
-    tone: '',
-    chip: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
-    empty: 'Everything in the pipeline has been worked.',
   },
   goingCold: {
-    label: 'Going cold',
+    label: 'going cold',
     icon: Snowflake,
     tone: 'border-slate-500/30 bg-slate-500/5',
     chip: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
-    empty: 'No contacts going cold.',
+  },
+  notStarted: {
+    label: 'not started',
+    icon: UserPlus,
+    tone: '',
+    chip: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
   },
 }
 
-function dayLabel(c: CrmContactView, key: BucketKey): string | null {
-  if (key === 'blocked') return c.daysBlocked ? `${c.daysBlocked}d blocked` : null
-  if (key === 'overdue') return c.daysOverdue ? `${c.daysOverdue}d overdue` : null
-  if (key === 'goingCold') return c.daysSinceTouch ? `${c.daysSinceTouch}d cold` : null
-  // Deliberately NO day counter: a lead nobody ever called is not "88 days late",
-  // it is simply unworked, and an age badge on it manufactures guilt for a
-  // commitment that never existed.
-  if (key === 'notStarted') return c.tier === 'T1' ? 'T1' : null
-  return null
+// Order of the summary chips only. The rows arrive already ranked from crm.ts.
+const SUMMARY_ORDER: CrmBucketKey[] = ['blocked', 'overdue', 'dueToday', 'goingCold', 'notStarted']
+const AGENCIES_SHOWN = 8
+
+/** Rows no longer sit under a bucket heading, so every row names its bucket. */
+function chipLabel(c: CrmContactView, bucket: CrmBucketKey): string {
+  if (bucket === 'blocked' && c.daysBlocked) return `${c.daysBlocked}d blocked`
+  if (bucket === 'overdue' && c.daysOverdue) return `${c.daysOverdue}d overdue`
+  if (bucket === 'goingCold' && c.daysSinceTouch) return `${c.daysSinceTouch}d cold`
+  // Deliberately NO day counter on not-started: a lead nobody ever called is not
+  // "88 days late", it is simply unworked, and an age badge on it manufactures
+  // guilt for a commitment that never existed.
+  if (bucket === 'notStarted' && c.tier === 'T1') return 'not started · T1'
+  return BUCKET_META[bucket].label
+}
+
+function touchLabel(t: NonNullable<CrmAgencyGroup['lastTouch']>): string {
+  return `last touch ${t.days <= 0 ? 'today' : `${t.days}d ago`} · ${t.name}`
 }
 
 function ContactRow({ contact, bucket, onDone }: {
   contact: CrmContactView
-  bucket: BucketKey
+  bucket: CrmBucketKey
   onDone: () => void
 }) {
   const [pending, start] = useTransition()
   const [busy, setBusy] = useState<string | null>(null)
-  const meta = BUCKET_META[bucket]
-  const days = dayLabel(contact, bucket)
 
   async function act(kind: 'log' | 'snooze' | 'unblock') {
     setBusy(kind)
@@ -125,18 +130,17 @@ function ContactRow({ contact, bucket, onDone }: {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-medium truncate">{contact.name}</p>
-          {days && (
-            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-xs ${meta.chip}`}>
-              {days}
-            </span>
-          )}
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-xs ${BUCKET_META[bucket].chip}`}>
+            {chipLabel(contact, bucket)}
+          </span>
           {contact.owner && (
             <span className="text-xs text-muted-foreground">{contact.owner}</span>
           )}
         </div>
-        <p className="text-xs text-muted-foreground truncate">
-          {contact.title ? `${contact.title} — ` : ''}{contact.agencyName ?? contact.agency ?? ''}
-        </p>
+        {/* The agency is the card header, so the row carries only the title. */}
+        {contact.title && (
+          <p className="text-xs text-muted-foreground truncate">{contact.title}</p>
+        )}
         {contact.status === 'blocked' && contact.blockedOn && (
           <p className="mt-1 text-xs text-red-400">Blocked on: {contact.blockedOn}</p>
         )}
@@ -164,43 +168,30 @@ function ContactRow({ contact, bucket, onDone }: {
   )
 }
 
-function Bucket({ bucket, items, onDone }: {
-  bucket: BucketKey
-  items: CrmContactView[]
-  onDone: () => void
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const meta = BUCKET_META[bucket]
-  const Icon = meta.icon
-  const shown = expanded ? items : items.slice(0, 5)
+function AgencyCard({ group, onDone }: { group: CrmAgencyGroup; onDone: () => void }) {
+  // Items are in urgency order, so the first one is the agency's worst.
+  const worst = BUCKET_META[group.items[0].bucket]
+  const Icon = worst.icon
 
   return (
-    <Card className={items.length > 0 ? meta.tone : ''}>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Icon className="h-5 w-5" />
-          {meta.label}
-          <span className="font-mono text-sm text-muted-foreground">{items.length}</span>
+    <Card className={worst.tone}>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-base">
+          <Icon className="h-4 w-4 self-center" />
+          {group.agency ? (
+            <Link href={`/agencies/${encodeURIComponent(group.agency)}`} className="hover:underline">
+              {group.agencyName}
+            </Link>
+          ) : group.agencyName}
+          {group.lastTouch && (
+            <span className="text-xs font-normal text-muted-foreground">{touchLabel(group.lastTouch)}</span>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 pt-0">
-        {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{meta.empty}</p>
-        ) : (
-          <>
-            {shown.map(c => (
-              <ContactRow key={c.slug} contact={c} bucket={bucket} onDone={onDone} />
-            ))}
-            {items.length > 5 && (
-              <button
-                onClick={() => setExpanded(v => !v)}
-                className="text-xs text-blue-400 hover:underline"
-              >
-                {expanded ? 'Show less' : `Show ${items.length - 5} more`}
-              </button>
-            )}
-          </>
-        )}
+        {group.items.map(({ bucket, contact }) => (
+          <ContactRow key={contact.slug} contact={contact} bucket={bucket} onDone={onDone} />
+        ))}
       </CardContent>
     </Card>
   )
@@ -209,10 +200,13 @@ function Bucket({ bucket, items, onDone }: {
 export function PipelineBuckets({ buckets }: { buckets: CrmBuckets }) {
   const router = useRouter()
   const refresh = () => router.refresh()
+  const [expanded, setExpanded] = useState(false)
 
-  // Order is the argument: blocked first (cannot proceed), then overdue (late),
-  // then today (on time), then cold (drifting).
-  const order: BucketKey[] = ['blocked', 'overdue', 'dueToday', 'goingCold', 'notStarted']
+  const groups = buckets.byAgency
+  const shown = expanded ? groups : groups.slice(0, AGENCIES_SHOWN)
+  const counts = SUMMARY_ORDER
+    .map(key => ({ key, n: buckets[key].length }))
+    .filter(({ n }) => n > 0)
 
   return (
     // scroll-mt clears the top bar when a Move deep-links here via /#pipeline
@@ -223,6 +217,18 @@ export function PipelineBuckets({ buckets }: { buckets: CrmBuckets }) {
           {buckets.total} contacts
         </span>
       </div>
+      {counts.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-muted-foreground">
+            {groups.length} {groups.length === 1 ? 'agency' : 'agencies'}
+          </span>
+          {counts.map(({ key, n }) => (
+            <span key={key} className={`inline-flex items-center rounded-full border px-2 py-0.5 font-mono ${BUCKET_META[key].chip}`}>
+              {n} {BUCKET_META[key].label}
+            </span>
+          ))}
+        </div>
+      )}
       {/* Sourced contacts are counted, not listed. They are business cards from a
           conference, not work anyone committed to — browsable, not a to-do. */}
       {buckets.sourcedCount > 0 && (
@@ -231,9 +237,23 @@ export function PipelineBuckets({ buckets }: { buckets: CrmBuckets }) {
           <Link href="/agencies" className="text-blue-400 hover:underline">browse by agency →</Link>
         </p>
       )}
-      {order.map(key => (
-        <Bucket key={key} bucket={key} items={buckets[key]} onDone={refresh} />
-      ))}
+      {groups.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nothing needs attention. Every agency is current.</p>
+      ) : (
+        <>
+          {shown.map(g => (
+            <AgencyCard key={g.agency ?? g.items[0].contact.slug} group={g} onDone={refresh} />
+          ))}
+          {groups.length > AGENCIES_SHOWN && (
+            <button
+              onClick={() => setExpanded(v => !v)}
+              className="text-xs text-blue-400 hover:underline"
+            >
+              {expanded ? 'Show fewer agencies' : `Show ${groups.length - AGENCIES_SHOWN} more agencies`}
+            </button>
+          )}
+        </>
+      )}
     </div>
   )
 }
