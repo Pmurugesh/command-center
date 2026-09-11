@@ -2615,3 +2615,20 @@ put `min-w-0` on both Today columns. On origin/main (`b041a60`) Today was alread
   boxes and the inner row grids identical to the pre-fix measurements.
 - All numbers from this worktree's own dev server on :3001. Server log: only `openclaw: command not
   found`.
+
+### Landed together (2026-09-11)
+Two sessions worked this surface at once: this /roadmap fix (`0d2b839`) and the Today shape-card fix
+(`92d2228`, `4df5aa8`, already open as PR #55). Each committed on its own branch without merging.
+`claude/running-sessions-overwrite-9b5dc3` took both unchanged (fast-forward, then `--no-ff`), so one
+merge makes one deploy to the mini, and #55 closes as merged once its head is reachable from main
+(tasks/lessons.md, 2026-09-11).
+
+- [x] Combined tree `703be21`, served by its own dev server on :3002 (cwd confirmed with `lsof`): tsc
+      and lint clean.
+- [x] Today, `main` overflow 0 at 375 / 1024 / 1280 / 1440 / 1920, 0 of 16 bar rows spilling. Shape
+      grid `309px` / three `229px` / `291px` / `345px` / `505px`: the card still sits in the xl rail, so
+      the stacked charts hold. Stage chart in pipeline order.
+- [x] /roadmap, `main` overflow 0 at 375 / 1024 / 1280 / 1440 / 1600 / 1920. Band `343` / `752` /
+      `1008` / `1168`px, then `648 648` and `808 808` from 2xl. 0 of 19 grids wider than their box.
+- [x] No console errors on either page. Server log: only `openclaw: command not found` (not
+      installed on this machine).

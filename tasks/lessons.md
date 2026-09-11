@@ -333,3 +333,13 @@ reads), refusing it is not rigour, it is a board that lies by omission. The entr
   seven grids matched the pattern and one had the bug. **Sweep with a measurement, not a
   pattern**: for every `display:grid` element, compare `gridTemplateColumns` + gaps with its
   content box. That also catches a blow-out an `overflow-hidden` card hides from `main`.
+- **[2026-09-11]** Two sessions were fixing Today's sideways scroll at once, in separate
+  worktrees, and one had already opened PR #55 before anyone coordinated them. No file
+  collided, but each was headed for its own merge. `deploy-on-merge.sh` rebuilds the mini every
+  time main moves, so that is two deploys, each verified against a main without the other's
+  change. **When parallel sessions touch the same surface: split file ownership up front, have
+  each commit on its own branch with no PR and no merge, and land everything through one
+  integration branch.** Worktrees share refs, so the handoff is a SHA, not a push. Bring the
+  commits in unchanged (fast-forward or `--no-ff`, never rebase or squash) and land the PR with a
+  merge commit: an open PR whose head becomes reachable from main closes as merged by itself; a
+  rewritten SHA leaves it open beside a duplicate of its own fix.
