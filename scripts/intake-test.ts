@@ -17,6 +17,7 @@ import {
   normalizeSubject, outboundSubjectOf, replyNextAction, resetDueAfterSend, senderFirstName,
 } from '../src/lib/scribe-rules.ts'
 import { parseDraftPatch } from '../src/lib/followup.ts'
+import { isoToLocalDate } from '../src/lib/dates.ts'
 
 test('subject normalisation strips stacked reply prefixes, case and whitespace', () => {
   const want = 'prep agenda for july 22 cdt demo - round 2'
@@ -55,8 +56,12 @@ test('an inbound matching a sent draft within 45 days is a reply to that send', 
   })
   assert.ok(m)
   // The Jul 20 send is outside the window; of the two in-window sends the most recent wins.
-  assert.equal(m.sentDate, '2026-08-31')
-  assert.equal(m.days, 14)
+  // The draft's sent_at is an instant (01:49Z); the CRM works in local dates, so the
+  // expected day is whatever isoToLocalDate says on this machine (Aug 31 in Pacific,
+  // Sep 1 on a UTC runner), and the log line's own date must not out-rank it.
+  const sentLocal = isoToLocalDate('2026-09-01T01:49:42.804Z')
+  assert.equal(m.sentDate, sentLocal >= '2026-08-31' ? sentLocal : '2026-08-31')
+  assert.equal(m.days, daysBetween(m.sentDate, '2026-09-14'))
 })
 
 test('a reply is not a reply when nothing was sent on that thread recently', () => {
