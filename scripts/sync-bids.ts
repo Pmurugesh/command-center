@@ -20,6 +20,15 @@ import type { RemoteBid } from '../src/lib/bid-sync.ts'
 import { getQualTableConfig, signIn, fetchJson, QUAL_TABLE_CONFIG_HELP } from '../src/lib/qual-table.ts'
 
 const DRY = process.argv.includes('--dry')
+// --on-change: the cron's announce mode delivers whatever this prints, every
+// run. 38 of last week's 39 bid-sync messages said "unchanged 16" (audit
+// 2026-09-14). OpenClaw skips the announce when stdout is empty, so with this
+// flag the progress lines are held back and printed only if a bid actually
+// changed. The log file still records every run; failures still print.
+const ON_CHANGE = process.argv.includes('--on-change')
+const held: string[] = []
+const say = (line: string) => { if (ON_CHANGE) held.push(line); else console.log(line) }
+const flush = () => { for (const l of held) console.log(l); held.length = 0 }
 
 interface Summary {
   open_bids?: number
@@ -37,9 +46,9 @@ async function main() {
 
   let summary: Summary
   try {
-    console.log('signing in…')
+    say('signing in…')
     const token = await signIn(config)
-    console.log('fetching (read-only) /api/v1/bids/summary…')
+    say('fetching (read-only) /api/v1/bids/summary…')
     summary = await fetchJson<Summary>(config, token, '/api/v1/bids/summary')
   } catch (e) {
     const msg = String(e).replace(/\s+/g, ' ').slice(0, 200)
@@ -49,7 +58,7 @@ async function main() {
   }
 
   const rows = summary.bids ?? []
-  console.log(`fetched ${rows.length} bids (workbench counts ${summary.open_bids ?? '?'} open, ${summary.due_within_7_days ?? '?'} due within 7 days)`)
+  say(`fetched ${rows.length} bids (workbench counts ${summary.open_bids ?? '?'} open, ${summary.due_within_7_days ?? '?'} due within 7 days)`)
 
   if (DRY) {
     console.log('\n[dry run] mapping only, nothing written:\n')
@@ -63,11 +72,14 @@ async function main() {
   try {
     const outcome = await syncBids(rows, 'bid-sync')
     await appendBidSyncLog(`ok fetched=${rows.length} created=${outcome.created} updated=${outcome.updated} unchanged=${outcome.unchanged}`)
+    if (ON_CHANGE && outcome.created === 0 && outcome.updated === 0) return   // nothing to announce
+    flush()
     console.log(`\ncreated ${outcome.created}, updated ${outcome.updated}, unchanged ${outcome.unchanged}`)
     for (const c of outcome.changes.slice(0, 30)) console.log(`  ${c.folder} (#${c.bidId}): ${c.why}`)
   } catch (e) {
     const msg = String(e).replace(/\s+/g, ' ').slice(0, 200)
     await appendBidSyncLog(`error write ${msg}`)
+    flush()
     console.error(msg)
     process.exit(1)
   }

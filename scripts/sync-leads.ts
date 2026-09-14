@@ -31,6 +31,12 @@ import { getQualTableConfig, signIn, fetchJson, QUAL_TABLE_CONFIG_HELP } from '.
 import type { QualTableConfig } from '../src/lib/qual-table.ts'
 
 const DRY = process.argv.includes('--dry')
+// --on-change: hold the progress lines and print nothing when no lead was
+// created or updated, so the cron's announce is skipped (see sync-bids.ts).
+const ON_CHANGE = process.argv.includes('--on-change')
+const held: string[] = []
+const say = (line: string) => { if (ON_CHANGE) held.push(line); else console.log(line) }
+const flush = () => { for (const l of held) console.log(l); held.length = 0 }
 
 interface RemoteEvent {
   business_unit: string
@@ -68,11 +74,11 @@ async function main() {
     process.exit(2)
   }
 
-  console.log('signing in…')
+  say('signing in…')
   const token = await signIn(config)
-  console.log('fetching (read-only, scope=all)…')
+  say('fetching (read-only, scope=all)…')
   const remote = await fetchEvents(config, token)
-  console.log(`fetched ${remote.length} events`)
+  say(`fetched ${remote.length} events`)
 
   const events = remote.map(e => ({
     businessUnit: e.business_unit,
@@ -88,7 +94,7 @@ async function main() {
   }))
 
   const enriched = events.filter(e => e.description || e.unspscCodes?.length).length
-  console.log(`${enriched}/${events.length} carry description or commodity codes (the rest score provisionally)`)
+  say(`${enriched}/${events.length} carry description or commodity codes (the rest score provisionally)`)
 
   if (DRY) {
     const scored = await scoreEvents(events)
@@ -105,6 +111,8 @@ async function main() {
   }
 
   const outcome = await syncLeads(events, 'lead-sync')
+  if (ON_CHANGE && outcome.created === 0 && outcome.updated === 0) return   // nothing to announce
+  flush()
   console.log(`\ncreated ${outcome.created}, updated ${outcome.updated}, unchanged ${outcome.unchanged}`)
   for (const r of outcome.reasons.slice(0, 20)) console.log(`  ${r.slug}: ${r.why}`)
 }

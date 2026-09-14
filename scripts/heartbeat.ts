@@ -21,7 +21,7 @@ import path from 'path'
 import crypto from 'crypto'
 import matter from 'gray-matter'
 import { PATHS } from '../src/lib/paths.ts'
-import { runCommandArgs, getNormalizedCronJobs } from '../src/lib/shell.ts'
+import { runCommandArgs, getNormalizedCronJobs, getCronJobs } from '../src/lib/shell.ts'
 import { localToday } from '../src/lib/dates.ts'
 import { maxGapHours } from '../src/lib/cron-schedule.ts'
 import { evaluateBeat, findings, type Pipeline, type Probe, type Beat, type Evidence } from '../src/lib/heartbeat.ts'
@@ -186,10 +186,57 @@ async function probeAll(p: Pipeline): Promise<Evidence> {
   return { at, kind, sourceSeen }
 }
 
+// ── cron store export ───────────────────────────────────────────────────────
+//
+// The live cron store is a sqlite file on the mini that nothing backs up, and
+// only 4 of its 13 jobs have installers; the other 9 exist only there (audit
+// 2026-09-14). This writes the DEFINITIONS (never the run state) to
+// operations/agents/main/cron-jobs.json whenever they change, so the janitor
+// commits them and a rebuilt mini can recreate every job. Env values whose key
+// looks like a secret are redacted; payloads only ever carried paths so far.
+
+const SECRET_KEY = /token|secret|password|passwd|api[_-]?key|private/i
+
+async function exportCronStore(raw: unknown[]): Promise<string | null> {
+  const defs = (raw as Record<string, unknown>[]).map(j => {
+    const payload = j.payload as Record<string, unknown> | undefined
+    const env = payload?.env as Record<string, string> | undefined
+    return {
+      id: j.id, name: j.name, description: j.description, enabled: j.enabled, agentId: j.agentId,
+      schedule: j.schedule, sessionTarget: j.sessionTarget, wakeMode: j.wakeMode,
+      payload: payload && {
+        ...payload,
+        env: env && Object.fromEntries(Object.entries(env).map(([k, v]) => [k, SECRET_KEY.test(k) ? '<redacted>' : v])),
+      },
+      delivery: j.delivery, failureAlert: j.failureAlert,
+    }
+  }).sort((a, b) => String(a.name).localeCompare(String(b.name)))
+  const out = `${JSON.stringify(defs, null, 2)}\n`
+  const target = path.join(PATHS.operationsRoot, 'agents/main/cron-jobs.json')
+  let prev = ''
+  try { prev = await fs.readFile(target, 'utf8') } catch { /* first export */ }
+  if (prev === out) return null
+  await fs.writeFile(target, out)
+  const rel = path.relative(PATHS.operationsRoot, target)
+  try {
+    await runCommandArgs('git', ['-C', PATHS.operationsRoot, 'add', '--', rel], 15_000)
+    await runCommandArgs('git', ['-C', PATHS.operationsRoot, 'commit', '-q',
+      '-m', `ops: cron store export (${defs.length} jobs)`, '-m', 'via: heartbeat', '--', rel], 15_000)
+  } catch { /* the janitor sweeps */ }
+  return rel
+}
+
 // ── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
   const { reachable, jobs } = await getNormalizedCronJobs()
+  if (!DRY && reachable) {
+    const { raw } = await getCronJobs()
+    if (raw.length) {
+      const exported = await exportCronStore(raw)
+      if (exported) console.log(`heartbeat: cron store changed → ${exported}`)
+    }
+  }
   const matchJob = (needle?: string) =>
     needle ? jobs.find(j => j.name.toLowerCase().includes(needle.toLowerCase())) : undefined
 

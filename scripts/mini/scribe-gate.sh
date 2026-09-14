@@ -67,7 +67,10 @@ fi
 
 if [ "$unfiled" -eq 0 ]; then
   staged_n=$(ls "$MAILDIR"/*.json 2>/dev/null | wc -l | tr -d ' ')
-  echo "✒️ Nothing to file — all ${staged_n} staged messages are already in the judgment ledger.${stale_note}"
+  # Silent on purpose: an empty stdout makes OpenClaw skip the announce, and
+  # "nothing to file" twice a day was noise (audit 2026-09-14). A stale-mail
+  # warning is still worth a message.
+  [ -n "$stale_note" ] && echo "✒️ Nothing to file.${stale_note}"
   exit 0
 fi
 
