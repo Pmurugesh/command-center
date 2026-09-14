@@ -113,6 +113,6 @@ echo "==> Registering cron"
 # always missed that morning's rescore and waited for the next one: ~40 hours
 # from a Tuesday meeting to the ranking moving, ~64 over a weekend. 08:00 puts
 # it after granola-sync and beside sales-daily-bid-review, and costs a day less.
-register roadmap-check "0 8 * * 1-5" roadmap-check.ts "Derive operations/roadmap/_status.md from human commits on origin, CRM pull, and the build-next ranking — runs after granola-sync so the day's meetings are in it"
+register roadmap-check "0 8 * * 1-5" "roadmap-check.ts --on-change" "Derive operations/roadmap/_status.md from human commits on origin, CRM pull, and the build-next ranking — runs after granola-sync so the day's meetings are in it"
 
 echo "==> Done. Verify with: openclaw cron run $(job_id roadmap-check)  (then tail ~/.openclaw/logs/roadmap-check.log)"

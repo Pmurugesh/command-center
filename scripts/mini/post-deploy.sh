@@ -26,6 +26,7 @@ INSTALLERS=(
 # openclaw cron changes work from here under launchd.
 GATED_INSTALLERS=(
   "scripts/mini/install-roadmap-check.sh --if-possible"  # the board goes stale unless this job runs
+  "scripts/mini/install-cron-alerts.sh"                  # failures reach Telegram; "unchanged" runs do not
 )
 
 for inst in "${INSTALLERS[@]}" "${GATED_INSTALLERS[@]}"; do

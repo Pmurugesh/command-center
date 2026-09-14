@@ -82,7 +82,7 @@ register() {
 }
 
 echo "==> Registering crons"
-register bid-sync  "0 7-18 * * 1-5" sync-bids.ts  "Mirror qual-table bids into operations/bids/*/.status.json (read-only, one GET per run) — Phase 11 connector, 2026-09-08"
-register lead-sync "30 7 * * 1-5"   sync-leads.ts "Score qual-table discovery events through the product lens into crm/leads (read-only) — M3, scheduled 2026-09-08"
+register bid-sync  "0 7-18 * * 1-5" "sync-bids.ts --on-change"  "Mirror qual-table bids into operations/bids/*/.status.json (read-only, one GET per run) — Phase 11 connector, 2026-09-08"
+register lead-sync "30 7 * * 1-5"   "sync-leads.ts --on-change" "Score qual-table discovery events through the product lens into crm/leads (read-only) — M3, scheduled 2026-09-08"
 
 echo "==> Done. Verify with: openclaw cron run $(job_id bid-sync)  (then tail ~/.openclaw/logs/bid-sync.log)"

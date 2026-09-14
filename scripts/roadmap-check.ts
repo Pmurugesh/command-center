@@ -66,6 +66,10 @@ const DRY = process.argv.includes('--dry')
  * monitoring" — right: the BOARD should be constant, the MESSAGES should not.
  */
 const QUIET = process.argv.includes('--quiet')
+// --on-change is the 08:00 cron's mode (2026-09-14): say nothing when the
+// board did not change and the top objective did not move, so OpenClaw skips
+// the Telegram announce. A moved top, or a rewritten board, still prints.
+const ON_CHANGE = process.argv.includes('--on-change')
 const ANNOUNCED_TOP = path.join(PATHS.roadmapCheckLog, '..', '..', 'state', 'roadmap-announced-top.json')
 
 /**
@@ -578,7 +582,7 @@ async function announceDelta(top: RankedMilestone | undefined): Promise<void> {
   try { last = JSON.parse(await fs.readFile(ANNOUNCED_TOP, 'utf-8')) } catch { /* first announce */ }
   if (last.slug && last.slug !== top.slug) {
     console.log(`Build next moved: ${last.name ?? last.slug} → ${top.name} (${top.reason})`)
-  } else {
+  } else if (!ON_CHANGE) {
     console.log(`Build next: ${top.name} (${top.reason})`)
   }
   await fs.mkdir(path.dirname(ANNOUNCED_TOP), { recursive: true })
@@ -886,7 +890,7 @@ async function main() {
   // A file without a fingerprint is the pre-fingerprint format: rewrite once.
   const prevFingerprint = /^fingerprint: (\w+)$/m.exec(prev)?.[1]
   if (prevFingerprint === fingerprint) {
-    if (!QUIET) console.log('roadmap-check: no change')
+    if (!QUIET && !ON_CHANGE) console.log('roadmap-check: no change')
     await announceDelta(ranking[0])
     await logRun('ok unchanged')
     return
