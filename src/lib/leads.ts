@@ -10,11 +10,12 @@
  * caches enrichment forever. What it cannot know is whether OUR verdict changed.
  * That is here.
  *
- * A lead is rewritten only when one of four things is true:
+ * A lead is rewritten only when one of five things is true:
  *   1. it is new
  *   2. `event_version` moved — an addendum, which genuinely deserves re-reading
  *   3. our score or bucket changed
  *   4. LEAD_RULES_VERSION moved — the rules were retuned
+ *   5. its deadline moved, or passed — see EXPIRY below
  *
  * Everything else is a no-op: no write, no commit, no re-surfacing. That matters
  * because the janitor commits every changed file, so writing 300 unchanged leads
@@ -23,6 +24,13 @@
  * TRIAGE IS STICKY. Once a human says bid / skip / watch, a refresh never resets
  * it. Only a version bump reopens a skipped lead, because an addendum can change
  * what the solicitation actually asks for.
+ *
+ * EXPIRY. A solicitation that has closed is not a lead. An event whose end_date
+ * is already past is never ingested, and a stored lead whose end_date passes is
+ * marked `triage: expired` on the next sync — once, so a --on-change run
+ * announces the flip and is quiet afterwards. Nothing is deleted: the file is
+ * the record that we saw it. Until 2026-09-14, 0531-0000039878 (closed
+ * 2026-08-29) sat in the queue as `new` for sixteen days.
  */
 import fs from 'fs/promises'
 import path from 'path'
@@ -34,7 +42,7 @@ import { today } from './crm'
 import { scoreEvent, getAgencyAffinity, loadRules } from './lead-scoring'
 import type { LeadVerdict, ProductSlug, ScorableEvent } from './lead-scoring'
 
-export type LeadTriage = 'new' | 'bid' | 'skip' | 'watch'
+export type LeadTriage = 'new' | 'bid' | 'skip' | 'watch' | 'expired'
 
 export interface Lead {
   slug: string
@@ -63,6 +71,8 @@ export interface SyncOutcome {
   created: number
   updated: number
   unchanged: number
+  /** Incoming events skipped because their end_date had already passed. */
+  expired: number
   reasons: { slug: string; why: string }[]
 }
 
@@ -154,10 +164,18 @@ export async function listLeads(): Promise<Lead[]> {
  * Decide whether an incoming event is materially different from what we hold.
  * Returns null when nothing changed — the caller then writes nothing at all.
  */
-function changeReason(prev: Lead | null, incomingVersion: number | undefined, verdict: LeadVerdict): string | null {
+function changeReason(
+  prev: Lead | null, incoming: { eventVersion?: number; endDate?: string }, verdict: LeadVerdict,
+): string | null {
   if (!prev) return 'new'
-  if (incomingVersion !== undefined && prev.eventVersion !== undefined && incomingVersion !== prev.eventVersion) {
-    return `addendum: version ${prev.eventVersion} → ${incomingVersion}`
+  if (incoming.eventVersion !== undefined && prev.eventVersion !== undefined && incoming.eventVersion !== prev.eventVersion) {
+    return `addendum: version ${prev.eventVersion} → ${incoming.eventVersion}`
+  }
+  // A moved deadline is the one field change worth a rewrite on its own: it is
+  // what decides whether the lead is still live, and an extension reopens one
+  // that expired.
+  if (incoming.endDate && incoming.endDate !== prev.endDate) {
+    return `deadline: ${prev.endDate ?? 'none'} → ${incoming.endDate}`
   }
   if (prev.rulesVersion !== verdict.rulesVersion) {
     return `rescored: rules v${prev.rulesVersion} → v${verdict.rulesVersion}`
@@ -179,11 +197,14 @@ export async function syncLeads(
 ): Promise<SyncOutcome> {
   // Rules and affinity are read ONCE for the whole batch, not per event.
   const [affinity, rules] = await Promise.all([getAgencyAffinity(), loadRules(true)])
-  const outcome: SyncOutcome = { created: 0, updated: 0, unchanged: 0, reasons: [] }
+  const outcome: SyncOutcome = { created: 0, updated: 0, unchanged: 0, expired: 0, reasons: [] }
   const release = await acquireLock(PATHS.crm, PATHS.crmLeads)
+  const now = today()
 
   try {
     for (const ev of events) {
+      // Closed is closed. The stored copy, if any, is handled by the sweep below.
+      if (ev.endDate && ev.endDate < now) { outcome.expired++; continue }
       const slug = leadSlug(ev.businessUnit, ev.eventId)
       const verdict = await scoreEvent(ev, affinity, rules)
 
@@ -195,10 +216,9 @@ export async function syncLeads(
       const prev = prevRaw ? hydrate(slug, prevRaw) : null
       if (!prev && verdict.bucket === 'unlikely') { outcome.unchanged++; continue }
 
-      const why = changeReason(prev, ev.eventVersion, verdict)
+      const why = changeReason(prev, ev, verdict)
       if (!why) { outcome.unchanged++; continue }
 
-      const now = today()
       const lead: Lead = {
         slug,
         source: ev.source ?? 'caleprocure',
@@ -216,9 +236,10 @@ export async function syncLeads(
         rulesVersion: verdict.rulesVersion,
         provisional: verdict.provisional,
         // STICKY: a refresh never resets a human decision. An addendum reopens a
-        // skipped lead, because it can change what the solicitation asks for.
+        // skipped lead, because it can change what the solicitation asks for;
+        // a deadline that moved forward reopens an expired one.
         triage: prev
-          ? (why.startsWith('addendum') && prev.triage === 'skip' ? 'new' : prev.triage)
+          ? (why.startsWith('addendum') && prev.triage === 'skip') || prev.triage === 'expired' ? 'new' : prev.triage
           : 'new',
         firstSeen: prev?.firstSeen ?? now,
         lastSeen: now,
@@ -229,6 +250,17 @@ export async function syncLeads(
       await atomicWrite(leadPath(slug), serialize(lead))
       if (prev) outcome.updated++; else outcome.created++
       outcome.reasons.push({ slug, why })
+    }
+
+    // The expiry sweep: every stored lead past its deadline flips to `expired`
+    // exactly once. Leads written above all carry a future deadline (or none),
+    // so nothing is touched twice in one run.
+    for (const lead of await listLeads()) {
+      if (!lead.endDate || lead.endDate >= now || lead.triage === 'expired') continue
+      lead.triage = 'expired'
+      await atomicWrite(leadPath(lead.slug), serialize(lead))
+      outcome.updated++
+      outcome.reasons.push({ slug: lead.slug, why: `expired: closed ${lead.endDate}` })
     }
 
     // ONE commit for the batch, not one per lead. A daily sync that produced

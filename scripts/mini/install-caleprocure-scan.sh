@@ -14,7 +14,8 @@
 #   3. removes any job named caleprocure-scan with an agentTurn payload (the
 #      legacy browser approach, whether disabled or not)
 #   4. registers the command-payload cron: weekdays 07:00 PT, same slot the
-#      legacy job had
+#      legacy job had, with --on-change so a day with no new event id sends
+#      nothing (the dated file is still written every run)
 #
 # Idempotent: safe to re-run for every deploy.
 #
@@ -86,7 +87,7 @@ else
   openclaw cron add "$JOB_NAME" \
     --cron "0 7 * * 1-5" --tz "America/Los_Angeles" \
     --agent intel \
-    --command "python3 $RUNNER" \
+    --command "python3 $RUNNER --on-change" \
     --command-env "EPROCURE_ENABLED=true" \
     --command-env "QUAL_TABLE_BACKEND=$BACKEND" \
     --announce --channel telegram --to "telegram:8097059385" \

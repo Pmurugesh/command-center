@@ -69,12 +69,21 @@ const PIPELINES: Pipeline[] = [
     probes: [{ kind: 'dated-file', dir: ops('intelligence/procurements'), match: 'caleprocure' }],
   },
   {
-    key: 'intel-scan', name: 'Intel scan', cron: 'daily-intel-scan',
-    // Named "daily", fires Wednesdays. Declared at 168h to match reality; if the
-    // schedule is readable it wins anyway, and a mismatch gets reported.
-    produces: 'intelligence/alerts/ — the daily alert feed on /intel',
-    declaredHours: 168, runsOn: 'mini', quietRunsAreNormal: true,
-    probes: [{ kind: 'dated-file', dir: ops('intelligence/alerts'), match: 'daily' }],
+    key: 'intel-watch-sources', name: 'Source watch', cron: 'intel-watch-sources',
+    produces: 'intelligence/watch/ — what changed on the CDT, Governor, DGS SLP and AB 412 pages',
+    declaredHours: 24, runsOn: 'mini', quietRunsAreNormal: true,
+    // One file per watched page (slugs from scripts/watch-sources.ts), each
+    // stamped only when its page changed; the newest stamp wins. A run that
+    // finds nothing writes nothing, so the cron's run record is the real answer.
+    probes: ['cdt-news', 'gov-newsroom', 'dgs-slp', 'ab-412'].map(slug =>
+      ({ kind: 'frontmatter', path: ops(`intelligence/watch/${slug}.md`), field: 'checked_at' }) as Probe),
+  },
+  {
+    key: 'sunday-brief', name: 'Sunday brief', cron: 'weekly-strategic-briefing',
+    produces: 'intelligence/weekly/<date>-brief.md — the Sunday-night owed / closing / broken digest',
+    // Sundays 20:00, so the honest gap is a week.
+    declaredHours: 168, runsOn: 'mini',
+    probes: [{ kind: 'dated-file', dir: ops('intelligence/weekly'), match: '-brief.md' }],
   },
   {
     key: 'email-sync', name: 'Email sync', cron: 'email-sync',
