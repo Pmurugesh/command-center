@@ -71,7 +71,7 @@ export function IntakeForm() {
             placeholder="Note for the agent (optional — what is this, what should happen)"
             className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           />
-          <AgentSelect />
+          <AgentSelect defaultAgent="scribe" />
           <div className="flex items-center gap-3">
             <button
               type="submit"

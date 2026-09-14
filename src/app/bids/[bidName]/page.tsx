@@ -1,4 +1,7 @@
+import path from 'path'
 import { getBidDetail } from '@/lib/files'
+import { latestIntakeReceipt } from '@/lib/intake'
+import { PATHS } from '@/lib/paths'
 import { notFound } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/page-header'
@@ -13,6 +16,8 @@ export const dynamic = 'force-dynamic'
 export default async function BidDetailPage({ params }: { params: { bidName: string } }) {
   const detail = await getBidDetail(params.bidName)
   if (!detail) notFound()
+  // Newest dashboard-upload receipt: did the agent hand-off actually happen?
+  const receipt = await latestIntakeReceipt(path.join(PATHS.bids, detail.name, 'documents'))
 
   // Collect all [HUMAN DECISION NEEDED] flags with file locations
   const flagLocations: { file: string; count: number }[] = detail.files
@@ -62,7 +67,7 @@ export default async function BidDetailPage({ params }: { params: { bidName: str
       <BidDetailTabs files={detail.files} />
 
       {/* Source documents */}
-      <BidDocuments documents={detail.documents ?? []} bidName={detail.name} />
+      <BidDocuments documents={detail.documents ?? []} bidName={detail.name} receipt={receipt} />
     </div>
   )
 }

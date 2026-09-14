@@ -15,7 +15,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { PATHS } from './paths'
-import { localToday } from './dates'
+import { localDaysAgo, localToday } from './dates'
 import { runCommandArgs } from './shell'
 import { acquireLock, atomicWrite, fileExists } from './store'
 import type { IntakeReviewItem, IntakeReviewStatus } from '@/types'
@@ -71,6 +71,10 @@ export async function upsertPending(items: IntakeReviewItem[], via: string): Pro
       if (!existing) {
         byId.set(item.id, item)
         added++
+      } else if (existing.status === 'stale') {
+        // The old question expired; a new message is a new question.
+        byId.set(item.id, { ...item, count: existing.count + item.count })
+        added++
       } else if (existing.status === 'pending') {
         existing.count += item.count
         if (item.date >= existing.date) {
@@ -90,6 +94,34 @@ export async function upsertPending(items: IntakeReviewItem[], via: string): Pro
       via,
     )
     return added
+  } finally {
+    await release()
+  }
+}
+
+/**
+ * A pending row nobody has resolved in `days` is not a decision waiting to be
+ * made, it is a question that expired: the 8am brief was counting a 12-message
+ * vendor thread from July as "awaiting a human". Marked `stale` — never
+ * deleted, so the queue still shows what came in — and a fresh message from
+ * the same address re-opens it as a new pending row (see upsertPending).
+ * Returns how many rows changed.
+ */
+export async function expireStale(days: number, via: string): Promise<number> {
+  const release = await acquireLock(PATHS.crmIntakeReview)
+  try {
+    const current = await readAll()
+    const cutoff = localDaysAgo(days)
+    const today = localToday()
+    let changed = 0
+    for (const item of current) {
+      if (item.status !== 'pending' || item.date >= cutoff) continue
+      item.status = 'stale'
+      item.resolvedAt = today
+      changed++
+    }
+    if (changed) await writeAll(current, `${changed} row(s) stale after ${days} days`, via)
+    return changed
   } finally {
     await release()
   }

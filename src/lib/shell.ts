@@ -37,17 +37,23 @@ export async function runCommand(command: string, timeoutMs = 10000): Promise<st
 }
 
 // No shell involved: args reach the binary verbatim, so user-provided text can't inject.
-export async function runCommandArgs(file: string, args: string[], timeoutMs = 10000): Promise<string> {
+export async function runCommandArgsResult(
+  file: string, args: string[], timeoutMs = 10000,
+): Promise<CommandResult> {
   try {
     const { stdout } = await execFileAsync(file, args, {
       timeout: timeoutMs,
       env: { ...process.env, PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin` },
     })
-    return stdout.trim()
+    return { ok: true, stdout: stdout.trim() }
   } catch (error) {
     console.error(`Command failed: ${file} ${args.join(' ')}`, error)
-    return ''
+    return { ok: false, stdout: '' }
   }
+}
+
+export async function runCommandArgs(file: string, args: string[], timeoutMs = 10000): Promise<string> {
+  return (await runCommandArgsResult(file, args, timeoutMs)).stdout
 }
 
 export async function getOpenClawStatus(): Promise<string> {

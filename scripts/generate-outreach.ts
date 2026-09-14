@@ -10,6 +10,10 @@
  * commits ONLY when content actually changed (the generated_at line is
  * excluded from the comparison), so a quiet day adds zero commits.
  *
+ * The "Pending action items from email" section is gone (2026-09-14): it was a
+ * one-shot extraction from the Aug 24/26 sweep with no resolution path, and six
+ * of its items had already been answered. The brief now reads the store only.
+ *
  * Run:  node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/generate-outreach.ts
  */
 import fs from 'fs/promises'
@@ -32,18 +36,9 @@ function line(c: CrmContactView, counter?: string | undefined): string {
   return `- ${bits.join(' · ')}`
 }
 
-async function pendingActionItems(): Promise<string[]> {
-  try {
-    const raw = await fs.readFile(
-      path.join(PATHS.crmIntakeReview, 'action-items.md'), 'utf8')
-    return raw.split('\n').filter(l => l.trimStart().startsWith('- [ ]'))
-  } catch { return [] }
-}
-
 async function main() {
   const b = await getBuckets()
   const review = await listPending()
-  const actions = await pendingActionItems()
 
   const s: string[] = [
     '# Priority outreach — GENERATED VIEW, DO NOT HAND-EDIT',
@@ -66,14 +61,13 @@ async function main() {
   section(`Due today (${b.dueToday.length})`, b.dueToday.map(c => line(c)))
   section(`Going cold (${b.goingCold.length})`,
     b.goingCold.map(c => line(c, `${c.daysSinceTouch}d since touch`)))
-  section(`Pending action items from email (${actions.length})`, actions)
 
   if (review.length) {
     s.push(`## Review queue`, '',
       `- ${review.length} correspondent(s) await a human decision on the dashboard /intake page`, '')
   }
   if (!b.overdue.length && !b.blocked.length && !b.dueToday.length
-      && !b.goingCold.length && !actions.length && !review.length) {
+      && !b.goingCold.length && !review.length) {
     s.push('_Nothing needs attention — the store is clear today._', '')
   }
   s.push(`_${b.total} contacts tracked · ${b.sourcedCount} sourced-not-pursued · as of ${today()}_`, '')
@@ -93,11 +87,11 @@ async function main() {
     await runCommandArgs('git', ['-C', PATHS.operationsRoot, 'add', '--', rel], 15_000)
     await runCommandArgs('git', [
       '-C', PATHS.operationsRoot, 'commit', '-q',
-      '-m', `outreach: regenerate view (${b.overdue.length} overdue, ${b.blocked.length} blocked, ${actions.length} action items)`,
+      '-m', `outreach: regenerate view (${b.overdue.length} overdue, ${b.blocked.length} blocked)`,
       '-m', 'via: generate-outreach', '--', rel,
     ], 15_000)
   } catch { /* janitor sweeps */ }
-  console.log(`outreach view: regenerated (${b.overdue.length} overdue, ${b.blocked.length} blocked, ${b.dueToday.length} due, ${b.goingCold.length} cold, ${actions.length} email actions)`)
+  console.log(`outreach view: regenerated (${b.overdue.length} overdue, ${b.blocked.length} blocked, ${b.dueToday.length} due, ${b.goingCold.length} cold)`)
 }
 
 main().catch(err => { console.error('generate-outreach failed:', err); process.exit(1) })

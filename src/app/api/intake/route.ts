@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import path from 'path'
 import { PATHS } from '@/lib/paths'
-import { buildAgentMessage, filesFromForm, saveFiles, triggerAgent } from '@/lib/intake'
+import {
+  INTAKE_AGENT, buildAgentMessage, filesFromForm, resolveAgent, saveFiles, triggerAgent,
+  writeIntakeReceipt,
+} from '@/lib/intake'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,15 +31,15 @@ export async function POST(request: Request) {
     const saved = await saveFiles(dest.dir, files)
 
     const note = form.get('note')
-    const agent = form.get('agent')
-    triggerAgent(
-      buildAgentMessage(
-        `General documents dropped into the ${dest.label} folder — file and process them appropriately.`,
-        saved,
-        typeof note === 'string' ? note : undefined
-      ),
-      typeof agent === 'string' ? agent : undefined
+    const rawAgent = form.get('agent')
+    const agent = resolveAgent(typeof rawAgent === 'string' ? rawAgent : undefined, INTAKE_AGENT.documents)
+    const message = buildAgentMessage(
+      `General documents dropped into the ${dest.label} folder — file and process them appropriately.`,
+      saved,
+      typeof note === 'string' ? note : undefined
     )
+    const receipt = await writeIntakeReceipt(dest.dir, { agent, message, startedAt: new Date().toISOString() })
+    triggerAgent(message, agent, INTAKE_AGENT.documents, receipt)
 
     return NextResponse.json({ saved: saved.map(p => path.basename(p)), dest: dest.dir })
   } catch (error) {
