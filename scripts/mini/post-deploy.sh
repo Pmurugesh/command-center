@@ -20,6 +20,7 @@ INSTALLERS=(
   scripts/mini/install-heartbeat.sh       # nothing else notices when a pipeline stops
   scripts/mini/install-roadmap-watch.sh   # the board follows the repos, not the clock
   scripts/mini/install-dashboard-bind.sh   # port 3000 is loopback-only; Serve is the only way in
+  scripts/mini/install-agent-config.sh     # 4-7 cache retention, main tool deny, memory-core off
 )
 
 # Installers that need the gateway token and skip cleanly without it. Kept apart
