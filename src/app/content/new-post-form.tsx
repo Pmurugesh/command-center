@@ -5,17 +5,32 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Loader2, X } from 'lucide-react'
+import { useDisclosure } from '@/components/shared/disclosure'
 
 const ENTITIES = ['Pavan Personal', 'Infinite Solutions', 'InfiniteAI', 'NovaEra']
+
+/** Opens NewPostForm. Goes in PageHeader's actions, inside the same <Disclosure>. */
+export function NewPostButton() {
+  const [open, setOpen] = useDisclosure()
+  if (open) return null
+  return (
+    <Button size="touch" onClick={() => setOpen(true)}>
+      <Plus className="h-3.5 w-3.5" />
+      <span className="ml-1.5">New post</span>
+    </Button>
+  )
+}
 
 /**
  * Add a post outside the Monday run. The timeliest content — an event you just
  * left, a thought with a short shelf life — is exactly what a weekly batch
  * can't produce, so waiting until Monday would lose it.
+ *
+ * Renders below the page header, never in its actions slot (see Disclosure).
  */
 export function NewPostForm() {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useDisclosure()
   const [entity, setEntity] = useState(ENTITIES[0])
   const [topic, setTopic] = useState('')
   const [hook, setHook] = useState('')
@@ -42,17 +57,10 @@ export function NewPostForm() {
     }
   }
 
-  if (!open) {
-    return (
-      <Button size="touch" onClick={() => setOpen(true)}>
-        <Plus className="h-3.5 w-3.5" />
-        <span className="ml-1.5">New post</span>
-      </Button>
-    )
-  }
+  if (!open) return null
 
   return (
-    <Card className="border-status-accent/30">
+    <Card className="max-w-xl border-status-accent/30">
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">New post</h3>

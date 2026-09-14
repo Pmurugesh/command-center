@@ -2604,10 +2604,10 @@ put `min-w-0` on both Today columns. On origin/main (`b041a60`) Today was alread
       implicit `auto` track of 3,203px under 1536px, sized by `truncate` Decisions lines (letting those
       12 lines wrap → 343px; the 3 other nowrap elements → no change). `main` overflow 2,844 at 375,
       2,427 at 1024, 2,011 at 1440. Fixed with `grid-cols-1`.
-- [ ] Not this bug, not fixed (task chip raised): /bids 147px (header "New bid from RFP docs" button
-      and table), /channels 25px (nowrap staleness-strip label and table), /content with New post open
-      129px (the form sits in PageHeader's `flex shrink-0` actions slot; a shrinkable slot → 0, a
-      one-track form grid → no change).
+- [x] Not this bug, fixed in "Sideways scroll: /bids, /channels, /content" below: /bids 147px (header
+      "New bid from RFP docs" button and table), /channels 25px (nowrap staleness-strip label and
+      table), /content with New post open 129px (the form sits in PageHeader's `flex shrink-0` actions
+      slot; a shrinkable slot → 0, a one-track form grid → no change). Neither table was an offender.
 
 ### Verified
 - /roadmap after the fix: 375 → 0 (343px), 1024 → 0 (752px), 1440 → 0 (1168px), no grid wider than
@@ -2632,3 +2632,42 @@ merge makes one deploy to the mini, and #55 closes as merged once its head is re
       `1008` / `1168`px, then `648 648` and `808 808` from 2xl. 0 of 19 grids wider than their box.
 - [x] No console errors on either page. Server log: only `openclaw: command not found` (not
       installed on this machine).
+
+## Sideways scroll: /bids, /channels, /content (2026-09-11)
+
+The chip from the re-check above. Reproduced on this worktree's own dev server (:3021, cwd confirmed
+with `lsof`; every file involved is unchanged since `b041a60`): /bids 147, /channels 25, /content with
+New post open 129.
+
+- [x] /bids 147 → 0. The header's actions row alone: PageHeader's slot was `shrink-0` and the tabs +
+      button row did not wrap (right edge 522). The table was never an offender: it already scrolls in
+      its own `overflow-x-auto` box (341px wide, 820px of content), so its Deadline/Coverage headers at
+      422/518 were clipped. Shrinkable slot alone → 24; plus a wrapping row → 0.
+- [x] /bids with New bid open: 349 → 0. Unreported, same bug as /content: that form's Card also
+      rendered inside the actions slot.
+- [x] /content with New post open: 129 → 0. Both forms now render below the header. `Disclosure`
+      (src/components/shared/disclosure.tsx) shares open state between the button in the slot and the
+      form under the header; the forms cap at `max-w-xl`. On desktop the header no longer grows as tall
+      as the form with the title floating halfway down it.
+- [x] /channels 25 → 0 at 375, and 17 → 0 at 1440 (desktop was never 0). The quietest channel's label
+      was centred on a dot at 100% of the axis, so half of it hung off the track, and every label sat
+      7px right of its dot. Now it starts at the dot and shifts back by `translateX(-pct%)`:
+      left-aligned at 0, right-aligned at the far end. The "Value" column (442) was clipped by
+      `.markdown-content table`'s own scroller.
+- [x] /channels with every Details open: 4 → 0 at 375, from an unbroken skilljar URL in a channel's
+      markdown. `.markdown-content { overflow-wrap: break-word }`.
+- [ ] Not this, not fixed (task chip raised): /intake 860 at 375 once its email review queue loads.
+      `grid gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]` gets one implicit `auto` track (1,219px) below xl,
+      the /roadmap bug again. ReviewQueue fetches after mount, so a sweep that measures before the rows
+      arrive reads 0; this session's after-sweep did, and it is a likely reason the re-check missed it.
+
+### Verified
+- All 22 routes, `main` overflow before → after, default state. 375: /bids 147 → 0, /channels and
+  /partnerships 25 → 0, the rest 0 → 0 (/intake aside, above). 1440: /channels and /partnerships
+  17 → 0, the rest 0 → 0.
+- Both forms at 375 and 1440: 0 open and closed; the card starts 12px under the header, outside it;
+  the button hides while open and comes back on close/Cancel. At 1440 the /bids header keeps title,
+  tabs and button on one line, and /content's header is the same height open and closed.
+- tsc and lint clean; SSR 200 on all three pages. `useDisclosure must be used inside <Disclosure>` in
+  the log comes only from the seconds between the two edits (its stack has NewPostForm still inside
+  PageHeader); the console count did not move across fresh loads and open/close afterwards.

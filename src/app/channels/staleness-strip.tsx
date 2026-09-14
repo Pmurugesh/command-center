@@ -61,8 +61,14 @@ export function StalenessStrip({ channels }: { channels: Channel[] }) {
                 <a href={`#${c.slug}`} title={`${c.name} — ${d}d`} className="block -translate-x-1/2">
                   <span className={cn('block h-3.5 w-3.5 rounded-full ring-2 ring-card transition-transform hover:scale-125', tone)} />
                 </a>
+                {/* Shifted back by its dot's share of the axis: left-aligned at 0,
+                    right-aligned at the far end, so it stays on the track. Centred,
+                    the far-end label hung off it and scrolled the page sideways. */}
                 {labelled.has(c.slug) && (
-                  <span className="absolute left-1/2 top-5 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] tabular-nums text-muted-foreground">
+                  <span
+                    className="absolute left-0 top-5 whitespace-nowrap font-mono text-[9px] tabular-nums text-muted-foreground"
+                    style={{ transform: `translateX(-${pct(d)}%)` }}
+                  >
                     {c.name.length > 14 ? `${c.name.slice(0, 13)}…` : c.name} {d}d
                   </span>
                 )}

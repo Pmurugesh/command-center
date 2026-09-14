@@ -12,7 +12,8 @@ interface PageHeaderProps {
   breadcrumbs?: Breadcrumb[]
   /** Right-aligned status, filters or primary actions. Prefer putting a page's
    *  filter/search strip here rather than in a separate full-width band below —
-   *  those bands cost ~110px of vertical space and carry <900px of content. */
+   *  those bands cost ~110px of vertical space and carry <900px of content.
+   *  A form that a button here opens renders below the header: see Disclosure. */
   actions?: React.ReactNode
 }
 
@@ -44,7 +45,10 @@ export function PageHeader({ title, description, breadcrumbs, actions }: PageHea
           {description && <p className="text-sm text-muted-foreground">{description}</p>}
         </div>
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {/* Shrinks and wraps, not shrink-0. Beside the title the slot already fits,
+          so this only acts when it has a line to itself narrower than its
+          content — a filter strip on a phone, which shrink-0 pushed sideways. */}
+      {actions && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
     </div>
   )
 }
