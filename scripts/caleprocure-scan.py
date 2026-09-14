@@ -10,8 +10,14 @@ after six weeks of daily 600s timeouts; last real output 2026-07-14).
 
 Output: intelligence/procurements/YYYY-MM-DD-caleprocure.md in the operations
 repo, in the exact shape command-center's lib/procurements.ts parses (## 🔴/🟡
-sections, "### <id> — <title>" blocks, bold field bullets). The mini's
-operations janitor commits it; the dashboard reads it on next load.
+sections, "### <id> — <title>" blocks, bold field bullets, "**Score:** n/10").
+The mini's operations janitor commits it; the dashboard reads it on next load.
+
+Flags:
+  --on-change    the cron announces whatever this prints, every run. With this
+                 flag the dated file is still written, but stdout carries the
+                 shortlist only when an event id is new since the previous
+                 dated file, so a day with nothing new sends nothing.
 
 Environment:
   EPROCURE_ENABLED=true      required — set by the cron definition, never here
@@ -28,6 +34,7 @@ Exit codes: 0 ok · 1 transport/parse failure · 2 gate off · 3 the site asked
 us to stop (should_block) — do NOT re-enable without a human look.
 """
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -55,6 +62,10 @@ FAR_FUTURE = datetime(9999, 1, 1, tzinfo=timezone.utc)
 ENTITY = {"consulting": "Infinite Solutions", "product": "InfiniteAI"}
 LENSES = (eprocure_relevance.CONSULTING, eprocure_relevance.PRODUCT)
 URGENT_DAYS = 7
+ON_CHANGE = "--on-change" in sys.argv[1:]
+# The "### <token> — <title>" heading every block starts with; ids are read
+# back from the previous file with this, never from a side store.
+HEADING_RE = re.compile(r"^### (\S+) — ", re.M)
 
 
 def fetch_export() -> bytes:
@@ -91,6 +102,17 @@ def event_token(row) -> str:
     return f"{row.department_code}-{row.event_id}".replace(" ", "")
 
 
+def score_text(score) -> str:
+    """The rules score on the 0-10 scale the dashboard reads.
+
+    lib/procurements.ts parses "**Score:** n/10" and the Clock and Moves render
+    and rank on that scale (a red badge at 8+). The relevance rules score
+    0-100 in practice (v3: shortlist at 40, possible at 20, 80 the highest
+    seen), so /10 maps them without inventing a second scale; anything above
+    100 clips at 10 rather than reading as an 11."""
+    return f"{min(10.0, round(score / 10, 1)):g}/10"
+
+
 def block_for(row, verdicts, bucket) -> str:
     best = max(verdicts.values(), key=lambda v: v.score)
     entities = [ENTITY[k] for k, v in verdicts.items() if v.bucket == bucket] or [ENTITY[best.lens]]
@@ -102,10 +124,20 @@ def block_for(row, verdicts, bucket) -> str:
         f"### {event_token(row)} — {row.event_name}",
         f"- **Department:** {row.department_name} ({row.department_code})",
         f"- **Deadline:** {deadline_text(row)}",
+        f"- **Score:** {score_text(best.score)}",
         f"- **Recommended entity:** {' / '.join(entities)}",
         f"- **Action:** {' · '.join(action_bits)}",
     ]
     return "\n".join(lines)
+
+
+def previous_ids(out_dir: Path, today_path: Path):
+    """Event tokens in the newest dated report before today's; None when there
+    is no earlier report, so a first run announces everything."""
+    prior = sorted(p for p in out_dir.glob("*-caleprocure.md") if p != today_path)
+    if not prior:
+        return None
+    return set(HEADING_RE.findall(prior[-1].read_text(encoding="utf-8")))
 
 
 def sort_key(item):
@@ -188,8 +220,19 @@ def main() -> int:
     ).expanduser()
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{today_pt.strftime('%Y-%m-%d')}-caleprocure.md"
+    seen_before = previous_ids(out_dir, out_path)
     out_path.write_text("\n".join(out), encoding="utf-8")
 
+    if ON_CHANGE:
+        listed = [(band, row) for band, items in shortlisted.items() for row, _v, _s in items]
+        new = [(band, row) for band, row in listed
+               if seen_before is None or event_token(row) not in seen_before]
+        if not new:
+            return 0   # nothing new since the last file: empty stdout, no announce
+        print(f"{len(new)} new since the previous scan:")
+        for band, row in new:
+            marker = "🔴" if band == "likely" else "🟡"
+            print(f"{marker} {event_token(row)} — {row.event_name} · due {deadline_text(row)}")
     print(f"{out_path}: {len(shortlisted['likely'])} high, {len(shortlisted['possible'])} medium, "
           f"{len(urgent)} urgent of {len(open_rows)} open events")
     return 0

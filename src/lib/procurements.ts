@@ -1,16 +1,21 @@
 /**
  * Opportunity extraction from procurement scan reports.
  *
- * The caleprocure-scan cron writes intelligence/procurements/YYYY-MM-DD-*.md
- * with a stable shape (the format is pinned in the cron prompt):
+ * scripts/caleprocure-scan.py writes intelligence/procurements/YYYY-MM-DD-*.md
+ * with a stable shape (the script pins it; before 2026-08-24 a cron prompt did):
  *
- *   ## 🔴 High Relevance (score 7-10)
- *   ### 0000039456 — EDD RFP 3475 for Salesforce M&O
- *   - **Department:** Employment Development Department
- *   - **Deadline:** 07/21/2026 12:00PM PDT
- *   - **Score:** 9/10
+ *   ## 🔴 High Relevance (shortlist — rules score ≥ 40)
+ *   ### 7100-0000039456 — EDD RFP 3475 for Salesforce M&O
+ *   - **Department:** Employment Development Dept (7100)
+ *   - **Deadline:** 9/21/2026 12:00PM PT
+ *   - **Score:** 7.5/10
  *   - **Recommended entity:** Infinite Solutions
- *   - **Action:** Review solicitation docs immediately...
+ *   - **Action:** consulting lens scored 75 (title: enterprise platform; ...)
+ *
+ * `Score` is the relevance rules' 0-100 score divided by ten, so it lands on
+ * the 0-10 scale the Clock and Moves already read. Files written between
+ * 2026-08-24 and 2026-09-14 carry no Score line (the number lived only inside
+ * the Action text) and parse with `score` undefined.
  *
  * The same event reappears in every daily scan while it's open, so we dedupe
  * by event id keeping the most recent mention.

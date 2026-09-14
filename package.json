@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/roadmap-test.ts && node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/crm-test.ts && node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/intake-test.ts && node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/security-test.ts",
+    "test": "node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/roadmap-test.ts && node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/crm-test.ts && node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/intake-test.ts && node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/security-test.ts && node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/leads-test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

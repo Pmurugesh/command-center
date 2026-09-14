@@ -1,0 +1,1075 @@
+<meta charset="utf-8">
+<title>Company OS Map</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:#F4F5F2;--surface:#FFFFFF;--ink:#14181C;--muted:#5B6570;--rule:#D8DCE0;--accent:#2A5D8F;--accent-soft:#E3ECF5;--band:#ECEEEA;
+--gap:#B42318;--gap-soft:#FBE9E7;--new:#1F7A4D;--new-soft:#E3F2E9;--code-bg:#ECEFF1}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0F1418;--surface:#171D23;--ink:#E4E8EC;--muted:#98A2AD;--rule:#2A333C;--accent:#7FB0E0;--accent-soft:#1B2B3B;--band:#141A20;--gap:#F08A80;--gap-soft:#3A1A17;--new:#7CC9A0;--new-soft:#14301F;--code-bg:#1F262E}}
+:root[data-theme="dark"]{--bg:#0F1418;--surface:#171D23;--ink:#E4E8EC;--muted:#98A2AD;--rule:#2A333C;--accent:#7FB0E0;--accent-soft:#1B2B3B;--band:#141A20;--gap:#F08A80;--gap-soft:#3A1A17;--new:#7CC9A0;--new-soft:#14301F;--code-bg:#1F262E}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:15.5px;line-height:1.6;padding-inline:20px;padding-block:0 80px}
+.wrap{max-width:1140px;margin:0 auto}header{padding-block:44px 22px;border-bottom:1px solid var(--rule)}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:"Newsreader",Georgia,serif;font-weight:500;font-size:44px;line-height:1.05;margin:10px 0 12px;letter-spacing:-.01em;text-wrap:balance}
+.lede{font-size:17px;color:var(--muted);max-width:68ch;margin:0}
+h2{font-family:"Newsreader",Georgia,serif;font-weight:500;font-size:29px;margin:44px 0 6px;text-wrap:balance}
+p{max-width:74ch;margin:8px 0}code{font-family:"IBM Plex Mono",monospace;font-size:.88em;background:var(--code-bg);padding:1px 5px;border-radius:3px}
+figure{margin:18px 0 6px;background:var(--surface);border:1px solid var(--rule);padding:12px}
+figure svg{max-width:100%;height:auto;display:block;color:var(--ink)}
+figcaption{font-size:13.5px;color:var(--muted);margin-top:10px;line-height:1.5;max-width:none}
+/* svg classes */
+.n rect{fill:var(--surface);stroke:currentColor;stroke-width:1}
+.n.gap rect{stroke:var(--gap);stroke-dasharray:4 3;fill:var(--gap-soft)}
+.n.new rect{stroke:var(--new);fill:var(--new-soft)}
+.n .t{font:600 12px "IBM Plex Sans",sans-serif;fill:currentColor}
+.n .s{font:11px "IBM Plex Sans",sans-serif;fill:var(--muted)}
+.n .note{font:10px "IBM Plex Mono",monospace;fill:var(--muted)}
+.gapdot{fill:var(--gap)}.gapnum{font:600 11px "IBM Plex Mono",monospace;fill:#fff}
+.e path{fill:none;stroke:currentColor;stroke-width:1.2}
+.e.gap path{stroke:var(--gap);stroke-dasharray:5 4}
+.e.new path{stroke:var(--new);stroke-width:1.6}
+.e .el{font:10.5px "IBM Plex Mono",monospace;fill:var(--muted)}
+.e.gap .el{fill:var(--gap)}.e.new .el{fill:var(--new)}
+.mk{fill:currentColor}.mk.gap{fill:var(--gap)}.mk.new{fill:var(--new)}
+.band{fill:var(--band);stroke:none}.bandlabel{font:600 10.5px "IBM Plex Mono",monospace;letter-spacing:.08em;fill:var(--muted)}
+.div{stroke:var(--rule);stroke-width:1}.col{font:600 11px "IBM Plex Mono",monospace;letter-spacing:.08em;fill:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--muted);margin:10px 0 0}
+.legend i{display:inline-block;width:26px;height:0;border-top:2px solid currentColor;vertical-align:middle;margin-right:6px}
+.legend .g{color:var(--gap)}.legend .g i{border-top-style:dashed}.legend .nw{color:var(--new)}
+.tablewrap{overflow-x:auto;margin:14px 0 8px;border:1px solid var(--rule);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;line-height:1.5}th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--rule)}
+th{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--bg)}tr:last-child td{border-bottom:0}
+td.k{font-weight:600;white-space:nowrap}td.num{width:1%}
+.dot{display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--gap);color:#fff;font:600 11px "IBM Plex Mono",monospace;text-align:center;line-height:22px}
+.os{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:14px 0}
+.os div{background:var(--surface);border:1px solid var(--rule);padding:12px 14px;font-size:14px}
+.os b{display:block;font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+@media (max-width:600px){h1{font-size:34px}h2{font-size:25px}}
+</style>
+<div class="wrap">
+<header><div class="eyebrow">Command center · the company as an operating system · 2026-09-14</div><h1>Company OS Map</h1>
+<p class="lede">The whole system in one drawing, then the one loop the business runs on, then each agent before and after the redesign. Red dashed means broken or missing today; green means added by the redesign; numbered dots are the gaps, listed once below Figure 1.</p></header>
+
+<h2>Read it as an operating system</h2>
+<div class="os">
+<div><b>Kernel</b>The operations git repo. One truth, every change a commit, synced both ways by the janitor. Nothing else holds a fact for long.</div>
+<div><b>Syscalls</b>The dashboard API. The only sanctioned write. Agents that wrote around it (crons, files, action items) are being routed through it.</div>
+<div><b>Processes</b>Six agents (judgment) and a dozen scripts (deterministic, zero tokens). The redesign moves work from agents to scripts wherever no judgment is needed.</div>
+<div><b>Scheduler</b>OpenClaw cron for agent turns, launchd for daemons. Declared in git, applied on deploy, alerting on failure.</div>
+<div><b>Devices</b>Mailbox, workbench, procurement export, Granola, calendar, public pages, repos. Three of them are blind today; no output device sends mail.</div>
+<div><b>Shell</b>Today and the dashboard pages for reading; Telegram for talking to Paladin. The team has neither.</div>
+</div>
+
+<figure><svg viewBox="0 0 1100 620" role="img" aria-label="The command center drawn as an operating system: users and shell, the API as the only write syscall, agents and scripts as processes, and schedulers stacked on the left; the operations git repo as the filesystem and the sensors as devices on the right; numbered dots mark gaps"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker><marker id="ar-gap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk gap"/></marker><marker id="ar-new" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk new"/></marker></defs><rect x="620" y="272" width="470" height="336" class="band"/><text x="628" y="285" class="bandlabel">SENSORS AND DEVICES</text>
+<rect x="620" y="10" width="470" height="250" class="band"/><text x="628" y="23" class="bandlabel">FILESYSTEM: ~/repos/operations (git; mini is truth, GitHub is the hub)</text>
+<rect x="10" y="352" width="560" height="70" class="band"/><text x="18" y="365" class="bandlabel">SCHEDULER</text>
+<rect x="10" y="190" width="560" height="150" class="band"/><text x="18" y="203" class="bandlabel">PROCESSES</text>
+<rect x="10" y="118" width="560" height="60" class="band"/><text x="18" y="131" class="bandlabel">SYSCALLS</text>
+<rect x="10" y="10" width="560" height="96" class="band"/><text x="18" y="23" class="bandlabel">USERS AND SHELL</text>
+<g class="n ok">
+<rect x="30" y="34" width="120" height="56" rx="4"/>
+<text x="40" y="51" class="t">Pavan</text>
+<text x="40" y="65" class="s">Telegram, dashboard</text>
+<text x="40" y="79" class="s">phone and laptop</text>
+</g>
+<g class="n gap">
+<rect x="160" y="34" width="150" height="56" rx="4"/>
+<text x="170" y="51" class="t">Ganapathy, Rani, Isaiah</text>
+<text x="170" y="65" class="s">own 85 of 108 contacts</text>
+<text x="170" y="79" class="s">no login, bot or channel</text>
+<circle cx="308" cy="36" r="9" class="gapdot"/><text x="308" y="40" class="gapnum" text-anchor="middle">4</text>
+</g>
+<g class="n ok">
+<rect x="320" y="34" width="120" height="56" rx="4"/>
+<text x="330" y="51" class="t">Dashboard</text>
+<text x="330" y="65" class="s">Today, /outreach,</text>
+<text x="330" y="79" class="s">/intake, /roadmap</text>
+</g>
+<g class="n ok">
+<rect x="450" y="34" width="110" height="56" rx="4"/>
+<text x="460" y="51" class="t">Telegram bot</text>
+<text x="460" y="65" class="s">deltas + failures</text>
+<text x="460" y="79" class="s">only</text>
+</g>
+<g class="n ok">
+<rect x="30" y="136" width="300" height="36" rx="4"/>
+<text x="40" y="153" class="t">Dashboard API: the only write</text>
+<text x="40" y="167" class="s">log, next action, drafts, mark-sent, resolve</text>
+</g>
+<g class="n gap">
+<rect x="340" y="136" width="110" height="36" rx="4"/>
+<text x="350" y="153" class="t">Send mail</text>
+<text x="350" y="167" class="s">does not exist</text>
+<circle cx="448" cy="138" r="9" class="gapdot"/><text x="448" y="142" class="gapnum" text-anchor="middle">5</text>
+</g>
+<g class="n new">
+<rect x="460" y="136" width="100" height="36" rx="4"/>
+<text x="470" y="153" class="t">log / next cmds</text>
+<text x="470" y="167" class="s">planned</text>
+</g>
+<g class="n ok">
+<rect x="30" y="210" width="100" height="52" rx="4"/>
+<text x="40" y="227" class="t">Paladin</text>
+<text x="40" y="241" class="s">opus, front door</text>
+<text x="40" y="255" class="s">files, answers, routes</text>
+</g>
+<g class="n ok">
+<rect x="138" y="210" width="100" height="52" rx="4"/>
+<text x="148" y="227" class="t">Capture</text>
+<text x="148" y="241" class="s">digest as a diff,</text>
+<text x="148" y="255" class="s">draft readiness</text>
+</g>
+<g class="n ok">
+<rect x="246" y="210" width="100" height="52" rx="4"/>
+<text x="256" y="227" class="t">Scout</text>
+<text x="256" y="241" class="s">on-demand</text>
+<text x="256" y="255" class="s">briefs only</text>
+</g>
+<g class="n ok">
+<rect x="354" y="210" width="100" height="52" rx="4"/>
+<text x="364" y="227" class="t">Forge</text>
+<text x="364" y="241" class="s">readiness: demo</text>
+<text x="364" y="255" class="s">tenant, BidPro</text>
+</g>
+<g class="n ok">
+<rect x="462" y="210" width="98" height="52" rx="4"/>
+<text x="472" y="227" class="t">Voice</text>
+<text x="472" y="241" class="s">collateral gate</text>
+<text x="472" y="255" class="s">web, price</text>
+</g>
+<g class="n ok">
+<rect x="30" y="274" width="100" height="52" rx="4"/>
+<text x="40" y="291" class="t">Scribe</text>
+<text x="40" y="305" class="s">judgment on a live</text>
+<text x="40" y="319" class="s">contact reply only</text>
+</g>
+<g class="n ok">
+<rect x="138" y="274" width="422" height="52" rx="4"/>
+<text x="148" y="291" class="t">Deterministic daemons (zero tokens)</text>
+<text x="148" y="305" class="s">bid-sync, lead-sync, caleprocure-scan, email-sync + scribe.ts,</text>
+<text x="148" y="319" class="s">generate-outreach, roadmap-check, heartbeat, sunday-brief, watch-sources, backup</text>
+</g>
+<g class="n ok">
+<rect x="30" y="372" width="250" height="40" rx="4"/>
+<text x="40" y="389" class="t">OpenClaw cron (13 jobs)</text>
+<text x="40" y="403" class="s">declared in cron-jobs.json,</text>
+<text x="40" y="417" class="s">applied on deploy, alerts on</text>
+</g>
+<g class="n ok">
+<rect x="300" y="372" width="260" height="40" rx="4"/>
+<text x="310" y="389" class="t">launchd</text>
+<text x="310" y="403" class="s">dashboard, deploy, email-sync 15m,</text>
+<text x="310" y="417" class="s">heartbeat 1h, janitor 2m, backup</text>
+</g>
+<g class="n ok">
+<rect x="640" y="32" width="210" height="62" rx="4"/>
+<text x="650" y="49" class="t">crm/</text>
+<text x="650" y="63" class="s">108 contacts, drafts, meetings, leads</text>
+<text x="650" y="77" class="s">98 identified = inventory, not pipeline</text>
+</g>
+<g class="n gap">
+<rect x="870" y="32" width="210" height="62" rx="4"/>
+<text x="880" y="49" class="t">bids/</text>
+<text x="880" y="63" class="s">22 folders mirrored from the workbench</text>
+<text x="880" y="77" class="s">7 open, none with a deadline</text>
+<circle cx="1078" cy="34" r="9" class="gapdot"/><text x="1078" y="38" class="gapnum" text-anchor="middle">9</text>
+</g>
+<g class="n ok">
+<rect x="640" y="106" width="210" height="62" rx="4"/>
+<text x="650" y="123" class="t">roadmap/</text>
+<text x="650" y="137" class="s">72 milestones, decidable proofs</text>
+<text x="650" y="151" class="s">_status.md derived every 5 min</text>
+</g>
+<g class="n gap">
+<rect x="870" y="106" width="210" height="62" rx="4"/>
+<text x="880" y="123" class="t">intelligence/</text>
+<text x="880" y="137" class="s">procurements alive; watch/ new</text>
+<text x="880" y="151" class="s">alerts, weekly, competitors dead</text>
+<circle cx="1078" cy="108" r="9" class="gapdot"/><text x="1078" y="112" class="gapnum" text-anchor="middle">10</text>
+</g>
+<g class="n new">
+<rect x="640" y="180" width="210" height="62" rx="4"/>
+<text x="650" y="197" class="t">collateral/ readiness/ gtm/</text>
+<text x="650" y="211" class="s">1 of 3 one-pagers; readiness new</text>
+<text x="650" y="225" class="s">price book still a draft</text>
+</g>
+<g class="n ok">
+<rect x="870" y="180" width="210" height="62" rx="4"/>
+<text x="880" y="197" class="t">agents/</text>
+<text x="880" y="211" class="s">SOUL, CONTEXT, TOOLS per agent</text>
+<text x="880" y="225" class="s">shared/ NOW, RED-LINES, DECISIONS</text>
+</g>
+<g class="n gap">
+<rect x="640" y="294" width="210" height="56" rx="4"/>
+<text x="650" y="311" class="t">Mailbox (IMAP)</text>
+<text x="650" y="325" class="s">pavanm@ only; Sent: 1 msg / 30 d</text>
+<text x="650" y="339" class="s">team mail invisible</text>
+<circle cx="848" cy="296" r="9" class="gapdot"/><text x="848" y="300" class="gapnum" text-anchor="middle">1</text>
+</g>
+<g class="n ok">
+<rect x="870" y="294" width="210" height="56" rx="4"/>
+<text x="880" y="311" class="t">Bid workbench (qual-table)</text>
+<text x="880" y="325" class="s">bids + discovery events</text>
+<text x="880" y="339" class="s">read-only API, no due dates</text>
+</g>
+<g class="n ok">
+<rect x="640" y="364" width="210" height="56" rx="4"/>
+<text x="650" y="381" class="t">CaleProcure export</text>
+<text x="650" y="395" class="s">suppliers.fiscal.ca.gov</text>
+<text x="650" y="409" class="s">daily, 370 open events</text>
+</g>
+<g class="n gap">
+<rect x="870" y="364" width="210" height="56" rx="4"/>
+<text x="880" y="381" class="t">Granola</text>
+<text x="880" y="395" class="s">no business meeting since 08-20</text>
+<text x="880" y="409" class="s">OEIS meetings entered by recall</text>
+<circle cx="1078" cy="366" r="9" class="gapdot"/><text x="1078" y="370" class="gapnum" text-anchor="middle">2</text>
+</g>
+<g class="n gap">
+<rect x="640" y="434" width="210" height="56" rx="4"/>
+<text x="650" y="451" class="t">Calendar feed</text>
+<text x="650" y="465" class="s">built 08-24, never configured</text>
+<text x="650" y="479" class="s">scoreboard counts Granola instead</text>
+<circle cx="848" cy="436" r="9" class="gapdot"/><text x="848" y="440" class="gapnum" text-anchor="middle">3</text>
+</g>
+<g class="n new">
+<rect x="870" y="434" width="210" height="56" rx="4"/>
+<text x="880" y="451" class="t">Public pages (new sensor)</text>
+<text x="880" y="465" class="s">CDT, governor, DGS SLP, AB 412</text>
+<text x="880" y="479" class="s">hashed; speaks on change</text>
+</g>
+<g class="n ok">
+<rect x="640" y="504" width="210" height="56" rx="4"/>
+<text x="650" y="521" class="t">Repos on the mini</text>
+<text x="650" y="535" class="s">Nexus main, qual_table staging,</text>
+<text x="650" y="549" class="s">contract-management, 2 websites</text>
+</g>
+<g class="n ok">
+<rect x="870" y="504" width="210" height="56" rx="4"/>
+<text x="880" y="521" class="t">Keychain + sqlite stores</text>
+<text x="880" y="535" class="s">cron store, auth profiles</text>
+<text x="880" y="549" class="s">now backed up nightly</text>
+</g>
+<g class="e ok"><path d="M380.0,90 L380.0,113.0 L180.0,113.0 L180.0,136" marker-end="url(#ar)"/>
+<text x="286.0" y="109.0" class="el" text-anchor="start">same-origin only</text>
+</g>
+<g class="e ok"><path d="M150,50.0 L450,50.0" marker-end="url(#ar)"/>
+<text x="300.0" y="44.0" class="el" text-anchor="middle">talks to Paladin</text>
+</g>
+<g class="e new"><path d="M275.0,90 L275.0,113.0 L550.0,113.0 L550.0,136" marker-end="url(#ar-new)"/>
+<text x="418.5" y="109.0" class="el" text-anchor="start">decision 3</text>
+</g>
+<g class="e ok"><path d="M95.0,372 L95.0,317.0 L20.0,317.0 L20.0,262" marker-end="url(#ar)"/>
+<text x="63.5" y="313.0" class="el" text-anchor="start">runs agents</text>
+</g>
+<g class="e ok"><path d="M490.0,372 L490.0,349.0 L409.0,349.0 L409.0,326" marker-end="url(#ar)"/>
+<text x="455.5" y="345.0" class="el" text-anchor="start">runs daemons</text>
+</g>
+<g class="e new"><path d="M60.0,210 L60.0,191.0 L160.0,191.0 L160.0,172" marker-end="url(#ar-new)"/>
+<text x="116.0" y="187.0" class="el" text-anchor="start">writes</text>
+</g>
+<g class="e new"><path d="M188.0,210 L188.0,191.0 L180.0,191.0 L180.0,172" marker-end="url(#ar-new)"/>
+<text x="190.0" y="187.0" class="el" text-anchor="start">PATCH ready</text>
+</g>
+<g class="e ok"><path d="M100.0,274 L100.0,223.0 L200.0,223.0 L200.0,172" marker-end="url(#ar)"/>
+<text x="156.0" y="219.0" class="el" text-anchor="start">via scribe.ts</text>
+</g>
+<g class="e ok"><path d="M330,154.0 L485.0,154.0 L485.0,63.0 L640,63.0" marker-end="url(#ar)"/>
+<text x="485.0" y="58.0" class="el" text-anchor="middle">writes, commits</text>
+</g>
+<g class="e ok"><path d="M560,286.0 L600.0,286.0 L600.0,197.0 L640,197.0" marker-end="url(#ar)"/>
+<text x="600.0" y="192.0" class="el" text-anchor="middle">reads and writes</text>
+</g>
+<g class="e gap"><path d="M640,330.0 L600.0,330.0 L600.0,308.0 L560,308.0" marker-end="url(#ar-gap)"/>
+<text x="600.0" y="303.0" class="el" text-anchor="middle">email-sync 15m</text>
+</g>
+<g class="e ok"><path d="M870,340.0 L715.0,340.0 L715.0,318.0 L560,318.0" marker-end="url(#ar)"/>
+<text x="715.0" y="313.0" class="el" text-anchor="middle">bid-sync hourly</text>
+</g>
+<g class="e ok"><path d="M640,414.0 L600.0,414.0 L600.0,322.0 L560,322.0" marker-end="url(#ar)"/>
+<text x="600.0" y="317.0" class="el" text-anchor="middle">daily 07:00</text>
+</g>
+<g class="e gap"><path d="M870,382.0 L554.0,382.0 L554.0,226.0 L238,226.0" marker-end="url(#ar-gap)"/>
+<text x="554.0" y="221.0" class="el" text-anchor="middle">granola-sync</text>
+</g>
+<g class="e gap"><path d="M640,468.0 L540.0,468.0 L540.0,68.0 L440,68.0" marker-end="url(#ar-gap)"/>
+<text x="540.0" y="63.0" class="el" text-anchor="middle">never wired</text>
+</g>
+<g class="e new"><path d="M870,486.0 L715.0,486.0 L715.0,324.0 L560,324.0" marker-end="url(#ar-new)"/>
+<text x="715.0" y="319.0" class="el" text-anchor="middle">watch-sources</text>
+</g>
+<g class="e ok"><path d="M640,544.0 L547.0,544.0 L547.0,248.0 L454,248.0" marker-end="url(#ar)"/>
+<text x="547.0" y="243.0" class="el" text-anchor="middle">reads at origin</text>
+</g></svg><figcaption>Figure 1. The system as an operating system. The left column is the stack a request moves down: a person or a schedule triggers a process, and the only way a process changes the company's state is the API. The right column is what that state lives in and where it comes from. Red dashed arrows and red boxes are numbered gaps; green is what the redesign adds.</figcaption></figure>
+<div class="legend"><span><i></i>live path</span><span class="g"><i></i>gap (numbered)</span><span class="nw"><i></i>added by the redesign</span></div>
+
+<h2>The twelve gaps</h2>
+<div class="tablewrap"><table><thead><tr><th></th><th>Gap</th><th>What the evidence says</th><th>What closes it</th></tr></thead><tbody><tr><td class="num"><span class="dot">1</span></td><td class="k">Outbound mail is invisible</td><td>The synced mailbox has one message in Sent in 30 days; whoever sends (Pavan, Saravanan, Ganapathy) sends from somewhere else. Replies cannot be matched to sends the system never saw.</td><td>Decision 2: team Sent folders or a crm@ bcc address.</td></tr><tr><td class="num"><span class="dot">2</span></td><td class="k">Granola does not see sales meetings</td><td>No business meeting entered Granola after Aug 20; both OEIS meetings reached the CRM by recall on Sep 8. granola-sync ran 14 times for zero output.</td><td>Keep it cheap (done); record meetings through Paladin (&quot;the OEIS meeting went well&quot; files a note) or the dashboard post-meeting trigger.</td></tr><tr><td class="num"><span class="dot">3</span></td><td class="k">Calendar feed never configured</td><td>Built Aug 24, calendar.json never created; meetings and demos on the scoreboard are counted from Granola.</td><td>One file on the mini with the secret iCal URLs; 5 minutes.</td></tr><tr><td class="num"><span class="dot">4</span></td><td class="k">The team has no write path</td><td>Ganapathy, Rani and Isaiah own 85 of 108 contacts and cannot log a touch; the daily brief assigned them work in a channel only Pavan reads.</td><td>Decision 3: the Paladin bot with log/next commands.</td></tr><tr><td class="num"><span class="dot">5</span></td><td class="k">No send device</td><td>Nothing in the system can send mail; every loop ends at Pavan sending from his own client and typing &quot;sent&quot;.</td><td>Decision 1: a send route on a per-draft yes, or keep it human.</td></tr><tr><td class="num"><span class="dot">6</span></td><td class="k">Agents narrate instead of writing</td><td>Every agent produced messages; none produced records. 19 Capture briefs, 0 touches; 18 Voice ideas, 0 outcomes; 17 Scribe items, 0 checked.</td><td>Wave 1: every agent ends in an API write or a file a proof can read.</td></tr><tr><td class="num"><span class="dot">7</span></td><td class="k">Two health systems disagreed</td><td>Today said all green from cron errors alone while the heartbeat file listed five late pipelines and nobody read it.</td><td>Failure alerts on (done); merge the heartbeat findings into the Today dot (plan item 7).</td></tr><tr><td class="num"><span class="dot">8</span></td><td class="k">The cron store lived only on the mini</td><td>Nine of 13 jobs had no installer; a disk failure would have lost them and every agent memory.</td><td>Done: nightly backup, cron-store export to git, declarative cron-jobs.json (wave 1).</td></tr><tr><td class="num"><span class="dot">9</span></td><td class="k">Bids without deadlines, leads without expiry</td><td>All 7 open workbench bids have no due date; the 6 stored leads all closed in August; the EDD RFP closing Sep 21 was dropped by the product-only lens.</td><td>Lead expiry in wave 1; due dates are a BidPro intake rule; decision 4 for IS leads.</td></tr><tr><td class="num"><span class="dot">10</span></td><td class="k">Dead streams rendered as live</td><td>/intel shows a weekly essay and dailies from a dead script; /health shows May reports as current; competitors dead since June.</td><td>Wave 1 deletions and archive; point /health at readiness/.</td></tr><tr><td class="num"><span class="dot">11</span></td><td class="k">The filter drops the business and keeps the expo</td><td>47 of 55 messages filtered, including CSJ and CalHHS client threads; six SMUD marketing mails kept on a keyword.</td><td>Wave 1: address-based rules, team addresses, no keyword fallback.</td></tr><tr><td class="num"><span class="dot">12</span></td><td class="k">Dashboard uploads never reached an agent</td><td>The intake trigger produced zero sessions on any agent since it was built.</td><td>Wave 1: target Scribe or Capture with a session id and a receipt.</td></tr></tbody></table></div>
+
+<h2>The loop the business runs on</h2>
+<figure><svg viewBox="0 0 1100 330" role="img" aria-label="The follow-up loop as a request path: a deal event enters through Pavan or the mailbox, is filed through the API, becomes a draft, is verified, is put in front of Pavan, is sent by a human, and the reply is detected back into the CRM"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker><marker id="ar-gap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk gap"/></marker><marker id="ar-new" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk new"/></marker></defs><g class="n ok">
+<rect x="20" y="40" width="150" height="56" rx="4"/>
+<text x="30" y="57" class="t">Deal event</text>
+<text x="30" y="71" class="s">Pavan says it on Telegram</text>
+<text x="30" y="85" class="s">or a contact emails</text>
+</g>
+<g class="n new">
+<rect x="210" y="40" width="150" height="56" rx="4"/>
+<text x="220" y="57" class="t">Paladin files it</text>
+<text x="220" y="71" class="s">POST log, meeting note,</text>
+<text x="220" y="85" class="s">next action + due date</text>
+</g>
+<g class="n ok">
+<rect x="400" y="40" width="150" height="56" rx="4"/>
+<text x="410" y="57" class="t">Draft exists</text>
+<text x="410" y="71" class="s">dashboard crm-due or</text>
+<text x="410" y="85" class="s">post-meeting trigger</text>
+</g>
+<g class="n new">
+<rect x="590" y="40" width="150" height="56" rx="4"/>
+<text x="600" y="57" class="t">Capture verifies</text>
+<text x="600" y="71" class="s">07:40 readiness:</text>
+<text x="600" y="85" class="s">claims, thread, leaks</text>
+</g>
+<g class="n new">
+<rect x="780" y="40" width="150" height="56" rx="4"/>
+<text x="790" y="57" class="t">Morning digest</text>
+<text x="790" y="71" class="s">08:00, a diff:</text>
+<text x="790" y="85" class="s">waiting on your word</text>
+</g>
+<g class="n ok">
+<rect x="780" y="170" width="150" height="56" rx="4"/>
+<text x="790" y="187" class="t">Pavan sends</text>
+<text x="790" y="201" class="s">from his own client</text>
+<text x="790" y="215" class="s">replies: sent &lt;slug&gt;</text>
+<circle cx="928" cy="172" r="9" class="gapdot"/><text x="928" y="176" class="gapnum" text-anchor="middle">5</text>
+</g>
+<g class="n new">
+<rect x="590" y="170" width="150" height="56" rx="4"/>
+<text x="600" y="187" class="t">mark-sent</text>
+<text x="600" y="201" class="s">logs the touch, due date</text>
+<text x="600" y="215" class="s">moves to send + 10 days</text>
+</g>
+<g class="n gap">
+<rect x="400" y="170" width="150" height="56" rx="4"/>
+<text x="410" y="187" class="t">Reply arrives</text>
+<text x="410" y="201" class="s">needs INBOX and Sent</text>
+<text x="410" y="215" class="s">of whoever sent</text>
+<circle cx="548" cy="172" r="9" class="gapdot"/><text x="548" y="176" class="gapnum" text-anchor="middle">1</text>
+</g>
+<g class="n new">
+<rect x="210" y="170" width="150" height="56" rx="4"/>
+<text x="220" y="187" class="t">scribe.ts detects it</text>
+<text x="220" y="201" class="s">replied: due = today;</text>
+<text x="220" y="215" class="s">Scribe judges intent</text>
+</g>
+<g class="n ok">
+<rect x="20" y="170" width="150" height="56" rx="4"/>
+<text x="30" y="187" class="t">CRM is true</text>
+<text x="30" y="201" class="s">stage, last touch,</text>
+<text x="30" y="215" class="s">next action, owner</text>
+</g>
+<g class="e new"><path d="M170,68.0 L210,68.0" marker-end="url(#ar-new)"/>
+<text x="190.0" y="62.0" class="el" text-anchor="middle">same turn</text>
+</g>
+<g class="e ok"><path d="M360,68.0 L400,68.0" marker-end="url(#ar)"/>
+</g>
+<g class="e new"><path d="M550,68.0 L590,68.0" marker-end="url(#ar-new)"/>
+<text x="570.0" y="62.0" class="el" text-anchor="middle">PATCH ready</text>
+</g>
+<g class="e ok"><path d="M740,68.0 L780,68.0" marker-end="url(#ar)"/>
+</g>
+<g class="e ok"><path d="M855.0,96 L855.0,170" marker-end="url(#ar)"/>
+<text x="861.0" y="129.0" class="el" text-anchor="start">one word</text>
+</g>
+<g class="e new"><path d="M780,198.0 L740,198.0" marker-end="url(#ar-new)"/>
+<text x="760.0" y="192.0" class="el" text-anchor="middle">Paladin calls API</text>
+</g>
+<g class="e ok"><path d="M590,198.0 L550,198.0" marker-end="url(#ar)"/>
+<text x="570.0" y="192.0" class="el" text-anchor="middle">wait</text>
+</g>
+<g class="e gap"><path d="M400,198.0 L360,198.0" marker-end="url(#ar-gap)"/>
+<text x="380.0" y="192.0" class="el" text-anchor="middle">email-sync 15m</text>
+</g>
+<g class="e ok"><path d="M210,198.0 L170,198.0" marker-end="url(#ar)"/>
+<text x="190.0" y="192.0" class="el" text-anchor="middle">API</text>
+</g>
+<g class="n gap">
+<rect x="20" y="262" width="1060" height="44" rx="4"/>
+<text x="30" y="279" class="t">Where it broke in the last 30 days</text>
+<text x="30" y="293" class="s">DWR meeting never filed (e2) · three drafts unsent 5 days, never surfaced (e4, e5) · Robert Payne send did not move the due date (e7) · his reply would be invisible (e8) · 1 touch filed by the pipeline (e9)</text>
+</g></svg><figcaption>Figure 2. The one loop the business runs on. Every green step is code or a prompt in wave 1. The two red steps are sensors: a reply can only be detected if the pipeline reads the Sent folder of whoever sent (gap 1), and step e6 stays human until Pavan rules on machine sends (gap 5).</figcaption></figure>
+
+<h2>Each agent, before and after</h2>
+<p>Left of the divider is measured from 30 days of transcripts; right is the wave 1 design. The gap dots reuse the numbering above.</p>
+<figure><svg viewBox="0 0 1100 300" role="img" aria-label="Paladin before and after: today Telegram messages are answered from memory, facts die in the chat, a heartbeat polls to no purpose, and it edits crons; after, every deal turn reads NOW.md and the contact file, files through the API, and routes documents to specialists"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker><marker id="ar-gap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk gap"/></marker><marker id="ar-new" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk new"/></marker></defs><line x1="550" y1="8" x2="550" y2="292" class="div"/><text x="536" y="20" class="col" text-anchor="end">TODAY</text><text x="564" y="20" class="col">AFTER THE REDESIGN</text>
+<g class="n ok">
+<rect x="20" y="30" width="140" height="50" rx="4"/>
+<text x="30" y="47" class="t">Pavan on Telegram</text>
+<text x="30" y="61" class="s">91 msgs in 30 days</text>
+<text x="30" y="75" class="s">12 facts to file</text>
+</g>
+<g class="n gap">
+<rect x="200" y="30" width="150" height="50" rx="4"/>
+<text x="210" y="47" class="t">Paladin</text>
+<text x="210" y="61" class="s">31% of turns read nothing</text>
+<text x="210" y="75" class="s">did not know Pindy 09-09</text>
+<circle cx="348" cy="32" r="9" class="gapdot"/><text x="348" y="36" class="gapnum" text-anchor="middle">6</text>
+</g>
+<g class="n ok">
+<rect x="390" y="30" width="140" height="50" rx="4"/>
+<text x="400" y="47" class="t">Reply</text>
+<text x="400" y="61" class="s">median 1,745 chars</text>
+<text x="400" y="75" class="s">no paths</text>
+</g>
+<g class="n gap">
+<rect x="200" y="120" width="150" height="50" rx="4"/>
+<text x="210" y="137" class="t">Self-made crons, pollers</text>
+<text x="210" y="151" class="s">openclaw edits by proxy</text>
+<text x="210" y="165" class="s">a 3-minute poller</text>
+</g>
+<g class="n gap">
+<rect x="390" y="120" width="140" height="50" rx="4"/>
+<text x="400" y="137" class="t">Heartbeat 30m</text>
+<text x="400" y="151" class="s">910 HEARTBEAT_OK</text>
+<text x="400" y="165" class="s">$24 to $32 a month</text>
+</g>
+<g class="n gap">
+<rect x="20" y="210" width="140" height="50" rx="4"/>
+<text x="30" y="227" class="t">CRM</text>
+<text x="30" y="241" class="s">DWR meeting never filed</text>
+<text x="30" y="255" class="s">2 log lines in 30 days</text>
+</g>
+<g class="n ok">
+<rect x="200" y="210" width="150" height="50" rx="4"/>
+<text x="210" y="227" class="t">Forge, Voice</text>
+<text x="210" y="241" class="s">19 delegations, incl. a</text>
+<text x="210" y="255" class="s">dashboard feature build</text>
+</g>
+<g class="n ok">
+<rect x="580" y="30" width="140" height="50" rx="4"/>
+<text x="590" y="47" class="t">Pavan on Telegram</text>
+<text x="590" y="61" class="s">also: team log/next</text>
+<text x="590" y="75" class="s">commands, if he says yes</text>
+</g>
+<g class="n new">
+<rect x="760" y="30" width="150" height="50" rx="4"/>
+<text x="770" y="47" class="t">Paladin reads first</text>
+<text x="770" y="61" class="s">NOW.md, the contact file,</text>
+<text x="770" y="75" class="s">the draft, DECISIONS</text>
+</g>
+<g class="n new">
+<rect x="950" y="30" width="130" height="50" rx="4"/>
+<text x="960" y="47" class="t">Reply</text>
+<text x="960" y="61" class="s">count, age, path</text>
+<text x="960" y="75" class="s">under 600 chars</text>
+</g>
+<g class="n new">
+<rect x="760" y="120" width="150" height="50" rx="4"/>
+<text x="770" y="137" class="t">Dashboard API</text>
+<text x="770" y="151" class="s">log, next action,</text>
+<text x="770" y="165" class="s">new contact, mark-sent</text>
+</g>
+<g class="n ok">
+<rect x="950" y="120" width="130" height="50" rx="4"/>
+<text x="960" y="137" class="t">CRM</text>
+<text x="960" y="151" class="s">true the same turn</text>
+</g>
+<g class="n ok">
+<rect x="760" y="210" width="150" height="50" rx="4"/>
+<text x="770" y="227" class="t">Specialists</text>
+<text x="770" y="241" class="s">one delegation per turn</text>
+<text x="770" y="255" class="s">documents only</text>
+</g>
+<g class="n new">
+<rect x="950" y="210" width="130" height="50" rx="4"/>
+<text x="960" y="227" class="t">Sunday brief</text>
+<text x="960" y="241" class="s">script, zero tokens</text>
+<text x="960" y="255" class="s">owed + drafts + leads</text>
+</g>
+<g class="e ok"><path d="M160,55.0 L200,55.0" marker-end="url(#ar)"/>
+</g>
+<g class="e gap"><path d="M350,55.0 L390,55.0" marker-end="url(#ar-gap)"/>
+<text x="370.0" y="49.0" class="el" text-anchor="middle">from memory</text>
+</g>
+<g class="e gap"><path d="M275.0,80 L275.0,120" marker-end="url(#ar-gap)"/>
+<text x="281.0" y="96.0" class="el" text-anchor="start">exec openclaw</text>
+</g>
+<g class="e gap"><path d="M200,55.0 L180.0,55.0 L180.0,235.0 L160,235.0" marker-end="url(#ar-gap)"/>
+<text x="180.0" y="50.0" class="el" text-anchor="middle">rarely</text>
+</g>
+<g class="e ok"><path d="M315.0,80 L315.0,210" marker-end="url(#ar)"/>
+<text x="321.0" y="141.0" class="el" text-anchor="start">delegates</text>
+</g>
+<g class="e gap"><path d="M390,145.0 L370.0,145.0 L370.0,55.0 L350,55.0" marker-end="url(#ar-gap)"/>
+</g>
+<g class="e ok"><path d="M720,55.0 L760,55.0" marker-end="url(#ar)"/>
+</g>
+<g class="e new"><path d="M910,55.0 L950,55.0" marker-end="url(#ar-new)"/>
+<text x="930.0" y="49.0" class="el" text-anchor="middle">numbers + paths</text>
+</g>
+<g class="e new"><path d="M835.0,80 L835.0,120" marker-end="url(#ar-new)"/>
+<text x="841.0" y="96.0" class="el" text-anchor="start">writes</text>
+</g>
+<g class="e new"><path d="M910,145.0 L950,145.0" marker-end="url(#ar-new)"/>
+</g>
+<g class="e ok"><path d="M785.0,80 L785.0,210" marker-end="url(#ar)"/>
+<text x="791.0" y="141.0" class="el" text-anchor="start">routes</text>
+</g></svg><figcaption>Figure 3. Paladin. Today the chat is a dead end for facts and a side door for infrastructure. After: read before answering, file through the API in the same turn, never touch the machine; heartbeat off (done), opus-4-7 cache fixed (wave 2).</figcaption></figure><figure><svg viewBox="0 0 1100 300" role="img" aria-label="Capture before and after: today a daily brief re-narrates the same items and never reads the drafts; after, a readiness job verifies each draft, the morning digest is a diff that asks for one word, and the word becomes a logged touch"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker><marker id="ar-gap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk gap"/></marker><marker id="ar-new" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk new"/></marker></defs><line x1="550" y1="8" x2="550" y2="292" class="div"/><text x="536" y="20" class="col" text-anchor="end">TODAY</text><text x="564" y="20" class="col">AFTER THE REDESIGN</text>
+<g class="n gap">
+<rect x="20" y="30" width="150" height="50" rx="4"/>
+<text x="30" y="47" class="t">priority-outreach.md</text>
+<text x="30" y="61" class="s">generated view + 17 stale</text>
+<text x="30" y="75" class="s">email action items</text>
+</g>
+<g class="n gap">
+<rect x="200" y="30" width="150" height="50" rx="4"/>
+<text x="210" y="47" class="t">Daily brief 08:00</text>
+<text x="210" y="61" class="s">0.71 overlap day to day</text>
+<text x="210" y="75" class="s">5 of 7 claims wrong</text>
+<circle cx="348" cy="32" r="9" class="gapdot"/><text x="348" y="36" class="gapnum" text-anchor="middle">6</text>
+</g>
+<g class="n ok">
+<rect x="390" y="30" width="140" height="50" rx="4"/>
+<text x="400" y="47" class="t">Telegram</text>
+<text x="400" y="61" class="s">16 briefs, 0 touches</text>
+<text x="400" y="75" class="s">assigns work to the team</text>
+</g>
+<g class="n gap">
+<rect x="20" y="120" width="150" height="50" rx="4"/>
+<text x="30" y="137" class="t">crm/drafts</text>
+<text x="30" y="151" class="s">3 unsent, 5 days</text>
+<text x="30" y="165" class="s">never read by Capture</text>
+</g>
+<g class="n gap">
+<rect x="200" y="120" width="150" height="50" rx="4"/>
+<text x="210" y="137" class="t">Friday brief</text>
+<text x="210" y="151" class="s">git-log counts</text>
+<text x="210" y="165" class="s">headlined a false win</text>
+</g>
+<g class="n gap">
+<rect x="20" y="210" width="150" height="50" rx="4"/>
+<text x="30" y="227" class="t">granola-sync</text>
+<text x="30" y="241" class="s">0 meetings archived</text>
+<text x="30" y="255" class="s">edited its own cron 09-01</text>
+</g>
+<g class="n gap">
+<rect x="390" y="210" width="140" height="50" rx="4"/>
+<text x="400" y="227" class="t">Bids (workbench)</text>
+<text x="400" y="241" class="s">7 open, no due date</text>
+<text x="400" y="255" class="s">0 drafting</text>
+<circle cx="528" cy="212" r="9" class="gapdot"/><text x="528" y="216" class="gapnum" text-anchor="middle">9</text>
+</g>
+<g class="n ok">
+<rect x="580" y="30" width="150" height="50" rx="4"/>
+<text x="590" y="47" class="t">crm/drafts</text>
+<text x="590" y="61" class="s">every unsent draft</text>
+</g>
+<g class="n new">
+<rect x="760" y="30" width="150" height="50" rx="4"/>
+<text x="770" y="47" class="t">Readiness 07:40</text>
+<text x="770" y="61" class="s">verify-drafts, verify-claims,</text>
+<text x="770" y="75" class="s">thread, leaks, sender</text>
+</g>
+<g class="n new">
+<rect x="950" y="30" width="130" height="50" rx="4"/>
+<text x="960" y="47" class="t">PATCH ready</text>
+<text x="960" y="61" class="s">checks, why_now</text>
+<text x="960" y="75" class="s">once per draft</text>
+</g>
+<g class="n new">
+<rect x="760" y="120" width="150" height="50" rx="4"/>
+<text x="770" y="137" class="t">Digest 08:00</text>
+<text x="770" y="151" class="s">a diff: waiting on</text>
+<text x="770" y="165" class="s">your word, changed, broken</text>
+</g>
+<g class="n ok">
+<rect x="950" y="120" width="130" height="50" rx="4"/>
+<text x="960" y="137" class="t">Pavan</text>
+<text x="960" y="151" class="s">sent / no / later</text>
+<text x="960" y="165" class="s">one word</text>
+</g>
+<g class="n new">
+<rect x="760" y="210" width="150" height="50" rx="4"/>
+<text x="770" y="227" class="t">Paladin -&gt; API</text>
+<text x="770" y="241" class="s">mark-sent, due + 10 d</text>
+<text x="770" y="255" class="s">log line via pavan</text>
+</g>
+<g class="n new">
+<rect x="950" y="210" width="130" height="50" rx="4"/>
+<text x="960" y="227" class="t">Friday numbers</text>
+<text x="960" y="241" class="s">touches, drafts, pace</text>
+<text x="960" y="255" class="s">API only, no git log</text>
+</g>
+<g class="e gap"><path d="M170,55.0 L200,55.0" marker-end="url(#ar-gap)"/>
+<text x="185.0" y="49.0" class="el" text-anchor="middle">reads</text>
+</g>
+<g class="e ok"><path d="M350,55.0 L390,55.0" marker-end="url(#ar)"/>
+</g>
+<g class="e gap"><path d="M170,145.0 L185.0,145.0 L185.0,55.0 L200,55.0" marker-end="url(#ar-gap)"/>
+<text x="185.0" y="50.0" class="el" text-anchor="middle">never</text>
+</g>
+<g class="e ok"><path d="M460.0,210 L460.0,80" marker-end="url(#ar)"/>
+<text x="466.0" y="141.0" class="el" text-anchor="start">staffing table</text>
+</g>
+<g class="e ok"><path d="M730,55.0 L760,55.0" marker-end="url(#ar)"/>
+</g>
+<g class="e new"><path d="M910,55.0 L950,55.0" marker-end="url(#ar-new)"/>
+</g>
+<g class="e new"><path d="M835.0,80 L835.0,120" marker-end="url(#ar-new)"/>
+<text x="841.0" y="96.0" class="el" text-anchor="start">ready drafts</text>
+</g>
+<g class="e new"><path d="M910,145.0 L950,145.0" marker-end="url(#ar-new)"/>
+</g>
+<g class="e new"><path d="M1015.0,170 L1015.0,190.0 L835.0,190.0 L835.0,210" marker-end="url(#ar-new)"/>
+<text x="931.0" y="186.0" class="el" text-anchor="start">reply</text>
+</g></svg><figcaption>Figure 4. Capture. The daily review is deleted; two jobs replace it, both ending in an API write. Bids stay read-only (they live in the workbench; the missing due dates are a BidPro data gap, gap 9).</figcaption></figure><figure><svg viewBox="0 0 1100 300" role="img" aria-label="Scout before and after: today two crons wrap a dead script and the weekly essay is unread while leads expire in the store; after, scripts own the deadline board and Scout writes briefs only on demand"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker><marker id="ar-gap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk gap"/></marker><marker id="ar-new" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk new"/></marker></defs><line x1="550" y1="8" x2="550" y2="292" class="div"/><text x="536" y="20" class="col" text-anchor="end">TODAY</text><text x="564" y="20" class="col">AFTER THE REDESIGN</text>
+<g class="n gap">
+<rect x="20" y="30" width="150" height="50" rx="4"/>
+<text x="30" y="47" class="t">research-scan.sh</text>
+<text x="30" y="61" class="s">claude -p, SIGKILL every</text>
+<text x="30" y="75" class="s">run since 08-26; 401 before</text>
+</g>
+<g class="n gap">
+<rect x="200" y="30" width="150" height="50" rx="4"/>
+<text x="210" y="47" class="t">Wed scan + Sun weekly</text>
+<text x="210" y="61" class="s">fallback web research</text>
+<text x="210" y="75" class="s">3,000-word essay</text>
+<circle cx="348" cy="32" r="9" class="gapdot"/><text x="348" y="36" class="gapnum" text-anchor="middle">6</text>
+</g>
+<g class="n gap">
+<rect x="390" y="30" width="140" height="50" rx="4"/>
+<text x="400" y="47" class="t">weekly/ alerts/</text>
+<text x="400" y="61" class="s">same asks 3 weeks running</text>
+<text x="400" y="75" class="s">zero [DECISION] ever</text>
+<circle cx="528" cy="32" r="9" class="gapdot"/><text x="528" y="36" class="gapnum" text-anchor="middle">10</text>
+</g>
+<g class="n ok">
+<rect x="20" y="120" width="150" height="50" rx="4"/>
+<text x="30" y="137" class="t">caleprocure-scan</text>
+<text x="30" y="151" class="s">alive, $0</text>
+<text x="30" y="165" class="s">announces repeats daily</text>
+</g>
+<g class="n gap">
+<rect x="200" y="120" width="150" height="50" rx="4"/>
+<text x="210" y="137" class="t">lead-sync</text>
+<text x="210" y="151" class="s">product lens only</text>
+<text x="210" y="165" class="s">no expiry</text>
+</g>
+<g class="n gap">
+<rect x="390" y="120" width="140" height="50" rx="4"/>
+<text x="400" y="137" class="t">crm/leads</text>
+<text x="400" y="151" class="s">6 rows, all expired</text>
+<text x="400" y="165" class="s">EDD RFP (09-21) absent</text>
+<circle cx="528" cy="122" r="9" class="gapdot"/><text x="528" y="126" class="gapnum" text-anchor="middle">9</text>
+</g>
+<g class="n gap">
+<rect x="20" y="210" width="150" height="50" rx="4"/>
+<text x="30" y="227" class="t">competitors/ agencies/</text>
+<text x="30" y="241" class="s">dead since 06-29;</text>
+<text x="30" y="255" class="s">static since 08-21</text>
+</g>
+<g class="n new">
+<rect x="580" y="30" width="150" height="50" rx="4"/>
+<text x="590" y="47" class="t">watch-sources 06:00</text>
+<text x="590" y="61" class="s">4 public pages, hash</text>
+<text x="590" y="75" class="s">speaks on change</text>
+</g>
+<g class="n new">
+<rect x="760" y="30" width="150" height="50" rx="4"/>
+<text x="770" y="47" class="t">caleprocure 07:00</text>
+<text x="770" y="61" class="s">new ids only</text>
+<text x="770" y="75" class="s">score line parsed</text>
+</g>
+<g class="n ok">
+<rect x="950" y="30" width="130" height="50" rx="4"/>
+<text x="960" y="47" class="t">Today clock</text>
+<text x="960" y="61" class="s">deadlines 14 days</text>
+<text x="960" y="75" class="s">real leads only</text>
+</g>
+<g class="n new">
+<rect x="760" y="120" width="150" height="50" rx="4"/>
+<text x="770" y="137" class="t">lead-sync 07:30, 16:00</text>
+<text x="770" y="151" class="s">expire past close date</text>
+<text x="770" y="165" class="s">IS lens if Pavan says</text>
+</g>
+<g class="n new">
+<rect x="950" y="120" width="130" height="50" rx="4"/>
+<text x="960" y="137" class="t">crm/leads</text>
+<text x="960" y="151" class="s">triage: new / expired</text>
+<text x="960" y="165" class="s">zero stale rows</text>
+</g>
+<g class="n new">
+<rect x="580" y="210" width="150" height="50" rx="4"/>
+<text x="590" y="227" class="t">sunday-brief.ts</text>
+<text x="590" y="241" class="s">deterministic, 20:00</text>
+<text x="590" y="255" class="s">Telegram + dashboard</text>
+</g>
+<g class="n new">
+<rect x="760" y="210" width="150" height="50" rx="4"/>
+<text x="770" y="227" class="t">Scout on demand</text>
+<text x="770" y="241" class="s">one-page brief on an</text>
+<text x="770" y="255" class="s">event id or agency</text>
+</g>
+<g class="n new">
+<rect x="950" y="210" width="130" height="50" rx="4"/>
+<text x="960" y="227" class="t">intelligence/briefs</text>
+<text x="960" y="241" class="s">sourced, cited</text>
+<text x="960" y="255" class="s">read by Paladin</text>
+</g>
+<g class="e gap"><path d="M170,55.0 L200,55.0" marker-end="url(#ar-gap)"/>
+<text x="185.0" y="49.0" class="el" text-anchor="middle">wraps</text>
+</g>
+<g class="e gap"><path d="M350,55.0 L390,55.0" marker-end="url(#ar-gap)"/>
+<text x="370.0" y="49.0" class="el" text-anchor="middle">writes</text>
+</g>
+<g class="e gap"><path d="M350,145.0 L390,145.0" marker-end="url(#ar-gap)"/>
+</g>
+<g class="e ok"><path d="M170,145.0 L200,145.0" marker-end="url(#ar)"/>
+<text x="185.0" y="139.0" class="el" text-anchor="middle">same export</text>
+</g>
+<g class="e new"><path d="M910,55.0 L950,55.0" marker-end="url(#ar-new)"/>
+</g>
+<g class="e new"><path d="M910,145.0 L950,145.0" marker-end="url(#ar-new)"/>
+</g>
+<g class="e ok"><path d="M1015.0,120 L1015.0,80" marker-end="url(#ar)"/>
+</g>
+<g class="e new"><path d="M910,235.0 L950,235.0" marker-end="url(#ar-new)"/>
+</g>
+<g class="e ok"><path d="M730,235.0 L760,235.0" marker-end="url(#ar)"/>
+<text x="745.0" y="229.0" class="el" text-anchor="middle">Paladin asks</text>
+</g></svg><figcaption>Figure 5. Scout. The Wednesday scan is deleted; the weekly becomes a script; two sensors (page watch, lead expiry) replace research nobody read. Whether Infinite Solutions leads get a store is decision 4.</figcaption></figure><figure><svg viewBox="0 0 1100 300" role="img" aria-label="Forge before and after: today a Monday 03:00 grep-count scan describes the previous week and litters dead citations; after, twice-weekly readiness files measure distance from the roadmap definitions of demo-tenant live and BidPro live"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker><marker id="ar-gap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk gap"/></marker><marker id="ar-new" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk new"/></marker></defs><line x1="550" y1="8" x2="550" y2="292" class="div"/><text x="536" y="20" class="col" text-anchor="end">TODAY</text><text x="564" y="20" class="col">AFTER THE REDESIGN</text>
+<g class="n gap">
+<rect x="20" y="30" width="150" height="50" rx="4"/>
+<text x="30" y="47" class="t">Nexus at 03:00 Monday</text>
+<text x="30" y="61" class="s">before the week&#x27;s commits</text>
+<text x="30" y="75" class="s">land at noon</text>
+</g>
+<g class="n gap">
+<rect x="200" y="30" width="150" height="50" rx="4"/>
+<text x="210" y="47" class="t">Weekly scan</text>
+<text x="210" y="61" class="s">grep counts, no scanner</text>
+<text x="210" y="75" class="s">carry-forward text</text>
+<circle cx="348" cy="32" r="9" class="gapdot"/><text x="348" y="36" class="gapnum" text-anchor="middle">6</text>
+</g>
+<g class="n gap">
+<rect x="390" y="30" width="140" height="50" rx="4"/>
+<text x="400" y="47" class="t">codebase-reports/</text>
+<text x="400" y="61" class="s">88 of 116 dead citations</text>
+<text x="400" y="75" class="s">11 May reports &quot;current&quot;</text>
+<circle cx="528" cy="32" r="9" class="gapdot"/><text x="528" y="36" class="gapnum" text-anchor="middle">10</text>
+</g>
+<g class="n gap">
+<rect x="390" y="120" width="140" height="50" rx="4"/>
+<text x="400" y="137" class="t">/health page</text>
+<text x="400" y="151" class="s">renders May as now</text>
+</g>
+<g class="n gap">
+<rect x="20" y="120" width="150" height="50" rx="4"/>
+<text x="30" y="137" class="t">14 disabled cron rows</text>
+<text x="30" y="151" class="s">March/May scans</text>
+<text x="30" y="165" class="s">never cleaned</text>
+</g>
+<g class="n ok">
+<rect x="200" y="210" width="150" height="50" rx="4"/>
+<text x="210" y="227" class="t">On-demand Forge</text>
+<text x="210" y="241" class="s">OEIS demo check 08-26,</text>
+<text x="210" y="255" class="s">RFI verification: good</text>
+</g>
+<g class="n gap">
+<rect x="20" y="210" width="150" height="50" rx="4"/>
+<text x="30" y="227" class="t">Roadmap #1</text>
+<text x="30" y="241" class="s">hosted demo tenant</text>
+<text x="30" y="255" class="s">proof is a hand flag</text>
+</g>
+<g class="n ok">
+<rect x="580" y="30" width="150" height="50" rx="4"/>
+<text x="590" y="47" class="t">Nexus main + qual_table</text>
+<text x="590" y="61" class="s">origin/staging via git show</text>
+<text x="590" y="75" class="s">synced 06:00 Mon/Thu</text>
+</g>
+<g class="n new">
+<rect x="760" y="30" width="150" height="50" rx="4"/>
+<text x="770" y="47" class="t">Readiness run</text>
+<text x="770" y="61" class="s">8 demo scenarios; 5 bid</text>
+<text x="770" y="75" class="s">sections; 4 literals</text>
+</g>
+<g class="n new">
+<rect x="950" y="30" width="130" height="50" rx="4"/>
+<text x="960" y="47" class="t">readiness/*.md</text>
+<text x="960" y="61" class="s">two files, overwritten</text>
+<text x="960" y="75" class="s">frontmatter = facts</text>
+</g>
+<g class="n ok">
+<rect x="760" y="120" width="150" height="50" rx="4"/>
+<text x="770" y="137" class="t">Definitions (not his)</text>
+<text x="770" y="151" class="s">roadmap Done when,</text>
+<text x="770" y="165" class="s">DECISIONS 2026-09-08</text>
+</g>
+<g class="n new">
+<rect x="950" y="120" width="130" height="50" rx="4"/>
+<text x="960" y="137" class="t">Roadmap proofs</text>
+<text x="960" y="151" class="s">cite readiness fields</text>
+<text x="960" y="165" class="s">Pavan flips the flag</text>
+</g>
+<g class="n new">
+<rect x="950" y="210" width="130" height="50" rx="4"/>
+<text x="960" y="227" class="t">Claims to check</text>
+<text x="960" y="241" class="s">registry vs plan;</text>
+<text x="960" y="255" class="s">never edits knowledge</text>
+</g>
+<g class="n new">
+<rect x="580" y="210" width="150" height="50" rx="4"/>
+<text x="590" y="227" class="t">Short-circuit</text>
+<text x="590" y="241" class="s">heads unchanged -&gt;</text>
+<text x="590" y="255" class="s">NOTHING_NEW, $0.05</text>
+</g>
+<g class="e gap"><path d="M170,55.0 L200,55.0" marker-end="url(#ar-gap)"/>
+</g>
+<g class="e gap"><path d="M350,55.0 L390,55.0" marker-end="url(#ar-gap)"/>
+<text x="370.0" y="49.0" class="el" text-anchor="middle">dated files</text>
+</g>
+<g class="e gap"><path d="M460.0,80 L460.0,120" marker-end="url(#ar-gap)"/>
+</g>
+<g class="e gap"><path d="M170,235.0 L200,235.0" marker-end="url(#ar-gap)"/>
+<text x="185.0" y="229.0" class="el" text-anchor="middle">never asked</text>
+</g>
+<g class="e ok"><path d="M730,55.0 L760,55.0" marker-end="url(#ar)"/>
+</g>
+<g class="e ok"><path d="M835.0,120 L835.0,80" marker-end="url(#ar)"/>
+<text x="841.0" y="96.0" class="el" text-anchor="start">compared against</text>
+</g>
+<g class="e new"><path d="M910,55.0 L950,55.0" marker-end="url(#ar-new)"/>
+<text x="930.0" y="49.0" class="el" text-anchor="middle">overwrite</text>
+</g>
+<g class="e new"><path d="M1015.0,80 L1015.0,120" marker-end="url(#ar-new)"/>
+</g>
+<g class="e new"><path d="M910,73.0 L930.0,73.0 L930.0,253.0 L950,253.0" marker-end="url(#ar-new)"/>
+</g>
+<g class="e ok"><path d="M730,225.0 L745.0,225.0 L745.0,45.0 L760,45.0" marker-end="url(#ar)"/>
+<text x="745.0" y="40.0" class="el" text-anchor="middle">gate</text>
+</g></svg><figcaption>Figure 6. Forge. Security scanning of a platform with no deployment was the wrong job; the demo tenant is the board's number one item and its proof is a hand flag. Readiness files give the proof engine something machine-readable.</figcaption></figure><figure><svg viewBox="0 0 1100 300" role="img" aria-label="Voice before and after: today Monday content ideas time out and pile up unused and a Friday library review is never acted on; after, a Tuesday gate produces the one missing Phase 0 or SLP artifact per run for approval"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker><marker id="ar-gap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk gap"/></marker><marker id="ar-new" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk new"/></marker></defs><line x1="550" y1="8" x2="550" y2="292" class="div"/><text x="536" y="20" class="col" text-anchor="end">TODAY</text><text x="564" y="20" class="col">AFTER THE REDESIGN</text>
+<g class="n gap">
+<rect x="20" y="30" width="150" height="50" rx="4"/>
+<text x="30" y="47" class="t">Monday ideas 08:00</text>
+<text x="30" y="61" class="s">reads 12 to 19 files,</text>
+<text x="30" y="75" class="s">thinking high -&gt; timeout</text>
+</g>
+<g class="n gap">
+<rect x="200" y="30" width="150" height="50" rx="4"/>
+<text x="210" y="47" class="t">content/suggestions</text>
+<text x="210" y="61" class="s">18 files, 18 suggested,</text>
+<text x="210" y="75" class="s">0 picked, 0 posted</text>
+<circle cx="348" cy="32" r="9" class="gapdot"/><text x="348" y="36" class="gapnum" text-anchor="middle">6</text>
+</g>
+<g class="n gap">
+<rect x="390" y="30" width="140" height="50" rx="4"/>
+<text x="400" y="47" class="t">Telegram</text>
+<text x="400" y="61" class="s">6 messages, 0 replies</text>
+<text x="400" y="75" class="s">since 08-28</text>
+</g>
+<g class="n gap">
+<rect x="20" y="120" width="150" height="50" rx="4"/>
+<text x="30" y="137" class="t">Friday library review</text>
+<text x="30" y="151" class="s">same finding 3 weeks</text>
+<text x="30" y="165" class="s">cannot edit bids/</text>
+</g>
+<g class="n gap">
+<rect x="200" y="120" width="150" height="50" rx="4"/>
+<text x="210" y="137" class="t">collateral/one-pagers</text>
+<text x="210" y="151" class="s">candor.md by Pavan;</text>
+<text x="210" y="165" class="s">govhire, reporting absent</text>
+</g>
+<g class="n gap">
+<rect x="20" y="210" width="150" height="50" rx="4"/>
+<text x="30" y="227" class="t">Websites (June)</text>
+<text x="30" y="241" class="s">HireCA 28 places, no</text>
+<text x="30" y="255" class="s">/pricing, demo -&gt; /contact</text>
+</g>
+<g class="n gap">
+<rect x="390" y="210" width="140" height="50" rx="4"/>
+<text x="400" y="227" class="t">SLP + Phase 0</text>
+<text x="400" y="241" class="s">wait on price page,</text>
+<text x="400" y="255" class="s">one-pagers, demo path</text>
+</g>
+<g class="n ok">
+<rect x="580" y="30" width="150" height="50" rx="4"/>
+<text x="590" y="47" class="t">roadmap/_status.md</text>
+<text x="590" y="61" class="s">web-* proofs false?</text>
+<text x="590" y="75" class="s">pick the first</text>
+</g>
+<g class="n new">
+<rect x="760" y="30" width="150" height="50" rx="4"/>
+<text x="770" y="47" class="t">Collateral gate Tue</text>
+<text x="770" y="61" class="s">one artifact per run</text>
+<text x="770" y="75" class="s">thinking medium</text>
+</g>
+<g class="n new">
+<rect x="950" y="30" width="130" height="50" rx="4"/>
+<text x="960" y="47" class="t">one-pagers</text>
+<text x="960" y="61" class="s">govhire, reporting</text>
+<text x="960" y="75" class="s">claims cite knowledge</text>
+</g>
+<g class="n ok">
+<rect x="760" y="120" width="150" height="50" rx="4"/>
+<text x="770" y="137" class="t">Sources</text>
+<text x="770" y="151" class="s">registry, price book,</text>
+<text x="770" y="165" class="s">platform-knowledge, voice</text>
+</g>
+<g class="n new">
+<rect x="950" y="120" width="130" height="50" rx="4"/>
+<text x="960" y="137" class="t">voice/* branches</text>
+<text x="960" y="151" class="s">truth pass, /pricing;</text>
+<text x="960" y="165" class="s">diff for Pavan, no push</text>
+</g>
+<g class="n ok">
+<rect x="950" y="210" width="130" height="50" rx="4"/>
+<text x="960" y="227" class="t">Pavan approves</text>
+<text x="960" y="241" class="s">pushes the branch;</text>
+<text x="960" y="255" class="s">proofs go green</text>
+</g>
+<g class="n gap">
+<rect x="580" y="210" width="150" height="50" rx="4"/>
+<text x="590" y="227" class="t">Content ideas</text>
+<text x="590" y="241" class="s">disabled until one</text>
+<text x="590" y="255" class="s">outcome is ever recorded</text>
+</g>
+<g class="e gap"><path d="M170,55.0 L200,55.0" marker-end="url(#ar-gap)"/>
+</g>
+<g class="e gap"><path d="M350,55.0 L390,55.0" marker-end="url(#ar-gap)"/>
+</g>
+<g class="e gap"><path d="M350,165.0 L370.0,165.0 L370.0,255.0 L390,255.0" marker-end="url(#ar-gap)"/>
+<text x="370.0" y="160.0" class="el" text-anchor="middle">blocks</text>
+</g>
+<g class="e gap"><path d="M170,235.0 L390,235.0" marker-end="url(#ar-gap)"/>
+<text x="280.0" y="229.0" class="el" text-anchor="middle">blocks</text>
+</g>
+<g class="e ok"><path d="M730,55.0 L760,55.0" marker-end="url(#ar)"/>
+</g>
+<g class="e ok"><path d="M835.0,120 L835.0,80" marker-end="url(#ar)"/>
+<text x="841.0" y="96.0" class="el" text-anchor="start">reads only</text>
+</g>
+<g class="e new"><path d="M910,55.0 L950,55.0" marker-end="url(#ar-new)"/>
+<text x="930.0" y="49.0" class="el" text-anchor="middle">writes</text>
+</g>
+<g class="e new"><path d="M910,73.0 L930.0,73.0 L930.0,163.0 L950,163.0" marker-end="url(#ar-new)"/>
+<text x="930.0" y="68.0" class="el" text-anchor="middle">branch + diff</text>
+</g>
+<g class="e new"><path d="M1015.0,170 L1015.0,210" marker-end="url(#ar-new)"/>
+</g></svg><figcaption>Figure 7. Voice. Content resumes only after one outcome exists; until then every run lands on an artifact three blocked contacts and four milestones are waiting for.</figcaption></figure><figure><svg viewBox="0 0 1100 300" role="img" aria-label="Scribe and the intake loop before and after: today one mailbox with no Sent folder feeds a filter that drops client threads and a model that writes action items nobody reads; after, code files touches and detects replies, and the model judges only a live contact&#x27;s inbound"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker><marker id="ar-gap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk gap"/></marker><marker id="ar-new" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk new"/></marker></defs><line x1="550" y1="8" x2="550" y2="292" class="div"/><text x="536" y="20" class="col" text-anchor="end">TODAY</text><text x="564" y="20" class="col">AFTER THE REDESIGN</text>
+<g class="n gap">
+<rect x="20" y="30" width="150" height="50" rx="4"/>
+<text x="30" y="47" class="t">pavanm@ INBOX</text>
+<text x="30" y="61" class="s">Sent: 1 msg in 30 days</text>
+<text x="30" y="75" class="s">team mailboxes absent</text>
+<circle cx="168" cy="32" r="9" class="gapdot"/><text x="168" y="36" class="gapnum" text-anchor="middle">1</text>
+</g>
+<g class="n gap">
+<rect x="200" y="30" width="150" height="50" rx="4"/>
+<text x="210" y="47" class="t">sync-email filter</text>
+<text x="210" y="61" class="s">47 of 55 dropped incl.</text>
+<text x="210" y="75" class="s">CSJ + CalHHS threads</text>
+<circle cx="348" cy="32" r="9" class="gapdot"/><text x="348" y="36" class="gapnum" text-anchor="middle">11</text>
+</g>
+<g class="n gap">
+<rect x="390" y="30" width="140" height="50" rx="4"/>
+<text x="400" y="47" class="t">scribe.ts</text>
+<text x="400" y="61" class="s">1 touch filed / 30 d</text>
+<text x="400" y="75" class="s">no reply detection</text>
+</g>
+<g class="n gap">
+<rect x="200" y="120" width="150" height="50" rx="4"/>
+<text x="210" y="137" class="t">Scribe LLM</text>
+<text x="210" y="151" class="s">reads 89 files to file</text>
+<text x="210" y="165" class="s">one mail; $0.39 no-ops</text>
+<circle cx="348" cy="122" r="9" class="gapdot"/><text x="348" y="126" class="gapnum" text-anchor="middle">6</text>
+</g>
+<g class="n gap">
+<rect x="390" y="120" width="140" height="50" rx="4"/>
+<text x="400" y="137" class="t">action-items.md</text>
+<text x="400" y="151" class="s">17 open, 0 checked</text>
+<text x="400" y="165" class="s">enrichments: 0 readers</text>
+</g>
+<g class="n gap">
+<rect x="20" y="210" width="150" height="50" rx="4"/>
+<text x="30" y="227" class="t">Robert Payne</text>
+<text x="30" y="241" class="s">sent 09-01; due date</text>
+<text x="30" y="255" class="s">still 07-29; reply invisible</text>
+</g>
+<g class="n gap">
+<rect x="390" y="210" width="140" height="50" rx="4"/>
+<text x="400" y="227" class="t">/intake queue</text>
+<text x="400" y="241" class="s">18 pending, oldest 02-26</text>
+<text x="400" y="255" class="s">team + own gmail queued</text>
+</g>
+<g class="n new">
+<rect x="580" y="30" width="150" height="50" rx="4"/>
+<text x="590" y="47" class="t">INBOX + Sent, N accounts</text>
+<text x="590" y="61" class="s">one env file each, or</text>
+<text x="590" y="75" class="s">crm@ the team bcc&#x27;s</text>
+</g>
+<g class="n new">
+<rect x="760" y="30" width="150" height="50" rx="4"/>
+<text x="770" y="47" class="t">sync-email (fixed)</text>
+<text x="770" y="61" class="s">CRM address -&gt; stage;</text>
+<text x="770" y="75" class="s">team = us; no keyword bait</text>
+</g>
+<g class="n new">
+<rect x="950" y="30" width="130" height="50" rx="4"/>
+<text x="960" y="47" class="t">scribe.ts</text>
+<text x="960" y="61" class="s">touch in/out with sender;</text>
+<text x="960" y="75" class="s">reply -&gt; due = today</text>
+</g>
+<g class="n new">
+<rect x="950" y="120" width="130" height="50" rx="4"/>
+<text x="960" y="137" class="t">CRM</text>
+<text x="960" y="151" class="s">due date never older</text>
+<text x="960" y="165" class="s">than the last send</text>
+</g>
+<g class="n new">
+<rect x="760" y="120" width="150" height="50" rx="4"/>
+<text x="770" y="137" class="t">Scribe LLM (packet)</text>
+<text x="770" y="151" class="s">only on a live contact&#x27;s</text>
+<text x="770" y="165" class="s">inbound; one JSON</text>
+</g>
+<g class="n new">
+<rect x="760" y="210" width="150" height="50" rx="4"/>
+<text x="770" y="227" class="t">Review row + Telegram</text>
+<text x="770" y="241" class="s">needs reply today?</text>
+<text x="770" y="255" class="s">rows stale after 30 d</text>
+</g>
+<g class="n new">
+<rect x="580" y="210" width="150" height="50" rx="4"/>
+<text x="590" y="227" class="t">Team log path</text>
+<text x="590" y="241" class="s">Paladin log / next</text>
+<text x="590" y="255" class="s">commands, decision 3</text>
+</g>
+<g class="e gap"><path d="M170,55.0 L200,55.0" marker-end="url(#ar-gap)"/>
+</g>
+<g class="e gap"><path d="M350,55.0 L390,55.0" marker-end="url(#ar-gap)"/>
+<text x="370.0" y="49.0" class="el" text-anchor="middle">9 staged</text>
+</g>
+<g class="e ok"><path d="M400.0,80 L400.0,100.0 L215.0,100.0 L215.0,120" marker-end="url(#ar)"/>
+<text x="313.5" y="96.0" class="el" text-anchor="start">gate</text>
+</g>
+<g class="e gap"><path d="M350,145.0 L390,145.0" marker-end="url(#ar-gap)"/>
+</g>
+<g class="e gap"><path d="M170,221.0 L280.0,221.0 L280.0,41.0 L390,41.0" marker-end="url(#ar-gap)"/>
+<text x="280.0" y="36.0" class="el" text-anchor="middle">no Sent</text>
+</g>
+<g class="e ok"><path d="M730,55.0 L760,55.0" marker-end="url(#ar)"/>
+</g>
+<g class="e ok"><path d="M910,55.0 L950,55.0" marker-end="url(#ar)"/>
+<text x="930.0" y="49.0" class="el" text-anchor="middle">staged</text>
+</g>
+<g class="e new"><path d="M1015.0,80 L1015.0,120" marker-end="url(#ar-new)"/>
+<text x="1021.0" y="96.0" class="el" text-anchor="start">API</text>
+</g>
+<g class="e new"><path d="M950,71.0 L930.0,71.0 L930.0,161.0 L910,161.0" marker-end="url(#ar-new)"/>
+<text x="930.0" y="66.0" class="el" text-anchor="middle">packet</text>
+</g>
+<g class="e new"><path d="M835.0,170 L835.0,210" marker-end="url(#ar-new)"/>
+</g></svg><figcaption>Figure 8. Scribe. The model stops being the pipeline; code is. Two sensors (team Sent folders, decision 2) and one input path (team commands, decision 3) are Pavan's to grant.</figcaption></figure>
+
+<h2>What the OS still lacks after wave 1</h2>
+<p>Four things are not code and cannot be merged: a send device (gap 5), the team's Sent folders or a shared address (gap 1), the team's channel (gap 4), and a ruling on whether Infinite Solutions leads belong in the store (gap 9). Everything else in red has a PR or a mini-session step. Two more are worth naming because no diagram shows them: the roadmap and the CRM are still two vocabularies for the same deals (a milestone "reached verbal-commitment" is the contact's stage rendered three times on Today), and the price is the one fact the whole GTM layer keys on and it still lives in a draft.</p>
+</div>

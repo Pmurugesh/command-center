@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install the two qual-table connectors as OpenClaw crons on the Mac mini:
 #   bid-sync   — weekdays, hourly 07:00–18:00 PT, scripts/sync-bids.ts
-#   lead-sync  — weekdays 07:30 PT,               scripts/sync-leads.ts
+#   lead-sync  — weekdays 07:30 and 16:30 PT,     scripts/sync-leads.ts
 #
 # Both read the workbench with the service account whose five values live in
 # ~/.openclaw/workspace/.credentials/qual-table.env (mode 600, outside git;
@@ -83,6 +83,8 @@ register() {
 
 echo "==> Registering crons"
 register bid-sync  "0 7-18 * * 1-5" "sync-bids.ts --on-change"  "Mirror qual-table bids into operations/bids/*/.status.json (read-only, one GET per run) — Phase 11 connector, 2026-09-08"
-register lead-sync "30 7 * * 1-5"   "sync-leads.ts --on-change" "Score qual-table discovery events through the product lens into crm/leads (read-only) — M3, scheduled 2026-09-08"
+# Twice a day since the 2026-09-14 agent redesign, so an event posted after
+# the morning run is scored the same day instead of the next.
+register lead-sync "30 7,16 * * 1-5" "sync-leads.ts --on-change" "Score qual-table discovery events through the product lens into crm/leads (read-only) — M3, scheduled 2026-09-08, twice daily 2026-09-14"
 
 echo "==> Done. Verify with: openclaw cron run $(job_id bid-sync)  (then tail ~/.openclaw/logs/bid-sync.log)"

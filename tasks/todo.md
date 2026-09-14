@@ -2698,3 +2698,20 @@ Then (two weeks): one health verdict (merge heartbeat into Today), pipeline coun
 DECISIONS / GLOSSARY / crm README, deploy-in-scratch-dir with rollback, locks on every
 `_status.md` writer. See the report §6 for the full ordered list and §7 for the three
 decisions only Pavan can make.
+
+## Agent redesign, wave 1 — 2026-09-14 (PRs open, nothing merged yet)
+
+Design: `docs/agent-redesign-2026-09-14.md`; map: `docs/company-os-map-2026-09-14.html` (PR #62).
+Merge order matters: #64 (Scout scripts) → #65 (intake + reply detection + drafts) → #63
+(declarative cron-jobs.json + installer; its jobs call scripts from #64/#65) → operations #2
+(agent files; its second commit deletes research-scan.sh, which the live Sunday cron calls
+until #63 replaces it).
+
+- [ ] #64 `sunday-brief.ts`, `watch-sources.ts`, lead expiry, caleprocure `--on-change`, heartbeat pipelines
+- [ ] #65 sync-email rules (novaerasol.com, team addresses, no keyword bait), scribe.ts reply detector + due-date reset, drafts PATCH ready/checks/why_now, mark-sent advances due date, intake → scribe/sales with receipt
+- [ ] #63 cron-jobs.json: delete daily-intel-scan, sales-daily-bid-review, voice-weekly-content-review + 14 disabled rows; disable voice-monday; add sales-morning-digest, sales-draft-readiness, intel-watch-sources, voice-collateral-gate; rewrite Friday brief, Forge readiness, weekly → command; toolsAllow restricted
+- [ ] operations #2 commit 1 (Paladin sections, per-agent CONTEXT/TOOLS, NOTIFY rows, SB tag) and commit 2 (deletions + archive)
+- [ ] After merge, verify on the mini: `[install-cron-jobs]` lines in command-center-deploy.log; first bid-sync silent run; first `readiness/*.md` on Mon/Thu 06:00; `intake-<day>` session appears
+- [ ] Wave 2 (mini session): opus-4-7 cacheRetention or drop the override; deny main cron/session tools; memory index; scrub intel session 767de2c1; rotate CaleProcure password; rotate the Anthropic key
+- [ ] Decisions (Pavan): machine send on `yes <slug>`; team Sent mailboxes vs crm@; team on the Paladin bot; IS leads in the store; deletions; content paused
+- [ ] Measure Fri 2026-10-02: drafts >3d, touches on OEIS + CDT, expired leads, dead citations in readiness/, one-pagers filed, Telegram msgs/week, spend
