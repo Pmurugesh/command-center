@@ -24,9 +24,9 @@
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
-import { PATHS } from '../src/lib/paths.ts'
+import { PATHS, platformDir } from '../src/lib/paths.ts'
 
-const PLATFORM = path.join(os.homedir(), 'infiniteai_platform')
+const PLATFORM = platformDir()
 // Operations docs legitimately cite BOTH repos: platform paths for product
 // capability claims, and command-center paths for the tooling that supports
 // them. Checking only the platform reported every dashboard citation as dead.

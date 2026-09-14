@@ -1,3 +1,4 @@
+import fs from 'fs'
 import path from 'path'
 
 const HOME = process.env.HOME || '/Users/paladin'
@@ -85,4 +86,19 @@ export const REPO_CANDIDATES: Record<string, string[]> = {
   'infiniteai-website': [path.join(HOME, 'repos/infiniteai-website')],
   'is-website': [path.join(HOME, 'repos/is-website')],
 }
+
+/**
+ * Where the platform clone lives on THIS machine. `PLATFORM_DIR` wins when
+ * set; otherwise the first `REPO_CANDIDATES.Nexus` entry that exists
+ * (`~/repos/Nexus` on the mini, `~/infiniteai_platform` on the MacBook). The
+ * scripts that verify claims and regenerate the registry used to hardcode the
+ * MacBook path, which is why neither could run under a cron on the mini.
+ */
+export function platformDir(): string {
+  const env = process.env.PLATFORM_DIR
+  if (env) return env
+  const candidates = REPO_CANDIDATES['Nexus']
+  return candidates.find(p => fs.existsSync(p)) ?? candidates[0]
+}
+
 export const OUTREACH_PATH = path.join(HOME, 'repos/operations/intelligence/priority-outreach.md')
