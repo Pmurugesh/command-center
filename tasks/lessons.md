@@ -343,3 +343,13 @@ reads), refusing it is not rigour, it is a board that lies by omission. The entr
   commits in unchanged (fast-forward or `--no-ff`, never rebase or squash) and land the PR with a
   merge commit: an open PR whose head becomes reachable from main closes as merged by itself; a
   rewritten SHA leaves it open beside a duplicate of its own fix.
+- **[2026-09-11]** The brief for /bids and /channels named table headers as offenders (right edges
+  422, 518, 442). Both tables already scrolled in their own box, so those rects were clipped and cost
+  the page nothing; the header's actions row (522 → 147) and one label (400 → 25) were the whole
+  overflow. **A rect past `main`'s edge is an offender only if no ancestor between it and `main` clips
+  it**, and the arithmetic has to close: `main` overflow = rightmost unclipped edge − viewport width.
+  A lookalike offender invites a fix nobody needed.
+- **[2026-09-11]** /intake read 860 in one sweep and 0 in the next with no change to its code. Its
+  review queue fetches after mount, and a 1.5s timer sometimes measured before the rows arrived.
+  **A 0 from a sweep is only as good as its wait**: on a page that fetches client-side, wait for the
+  content (a row count), not a timer.
