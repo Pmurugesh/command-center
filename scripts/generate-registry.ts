@@ -18,12 +18,11 @@
  * Run:  node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/generate-registry.ts
  */
 import fs from 'fs/promises'
-import os from 'os'
 import path from 'path'
-import { PATHS } from '../src/lib/paths.ts'
+import { PATHS, platformDir } from '../src/lib/paths.ts'
 import { runCommandArgs } from '../src/lib/shell.ts'
 
-const PLATFORM = path.join(os.homedir(), 'infiniteai_platform')
+const PLATFORM = platformDir()
 const REGISTRY = path.join(PATHS.operationsRoot, 'products/_registry.md')
 const REF = 'origin/main'
 
