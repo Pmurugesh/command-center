@@ -18,6 +18,7 @@ import matter from 'gray-matter'
 import { PATHS } from './paths'
 import { runCommandArgs } from './shell'
 import { getContact } from './crm'
+import { isVia } from './scribe-rules'
 import type { CrmContact, CrmLogEntry } from '@/types'
 import { safeSlug } from './store'
 
@@ -49,6 +50,51 @@ export interface FollowupDraft {
    *  drafting agent. Never rendered into the body: this is where CRM shorthand
    *  such as next_action and blocked_on lives so it cannot leak into prose. */
   notes?: string
+  /** A human (or Capture) has read this and it is fit to send as-is. Distinct
+   *  from `edited`, which only says the text was touched. */
+  ready?: boolean
+  /** What was verified before calling it ready — internal, one line per check. */
+  checks?: string
+  /** Why this contact, now — the trigger in words, for the sender. Internal. */
+  whyNow?: string
+}
+
+/** Fields PATCH /api/crm/drafts/[slug] may set without an `action`. */
+export interface DraftMetaPatch {
+  ready?: boolean
+  checks?: string
+  whyNow?: string
+}
+
+/**
+ * Validate a PATCH body that sets draft metadata. Unknown keys are ignored;
+ * a present key of the wrong type is an error, so a client that sends
+ * `ready: "yes"` learns about it instead of silently persisting nothing.
+ */
+export function parseDraftPatch(
+  body: unknown,
+): { ok: true; patch: DraftMetaPatch } | { ok: false; error: string } {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { ok: false, error: 'Body must be a JSON object' }
+  }
+  const b = body as Record<string, unknown>
+  const patch: DraftMetaPatch = {}
+  if ('ready' in b) {
+    if (typeof b.ready !== 'boolean') return { ok: false, error: 'ready must be a boolean' }
+    patch.ready = b.ready
+  }
+  if ('checks' in b) {
+    if (typeof b.checks !== 'string') return { ok: false, error: 'checks must be a string' }
+    patch.checks = b.checks
+  }
+  if ('why_now' in b) {
+    if (typeof b.why_now !== 'string') return { ok: false, error: 'why_now must be a string' }
+    patch.whyNow = b.why_now
+  }
+  if (!Object.keys(patch).length) {
+    return { ok: false, error: 'Nothing to update: expected action, ready, checks or why_now' }
+  }
+  return { ok: true, patch }
 }
 
 /** Enriched view for the /outreach queue: computed priority + contact info. */
@@ -153,7 +199,8 @@ export function buildDraft(
   const who = firstName(contact.name)
 
   const recent = [...log].sort((a, b) => b.date.localeCompare(a.date))
-  const lastEmail = recent.find(l => l.via === 'email-in' || l.via === 'email-out')
+  // `email-out` may carry the sending account (`email-out pavanm@…`): prefix match.
+  const lastEmail = recent.find(l => isVia(l.via, 'email-in') || isVia(l.via, 'email-out'))
   const quoted = lastEmail?.text.match(/"([^"]+)"/)?.[1]
   // Threading on the real prior subject carries the shared context implicitly,
   // which is why the body no longer has to try to restate it.
@@ -177,7 +224,7 @@ export function buildDraft(
   // Internal-only. Assembled for the human editing the draft, never sent.
   const ADMIN = /^(seeded|imported|created|added|migrated|backfilled)\b/i
   const context = recent.find(l =>
-    l.via !== 'email-in' && l.via !== 'email-out' && !ADMIN.test(l.text.trim())
+    !isVia(l.via, 'email-in') && !isVia(l.via, 'email-out') && !ADMIN.test(l.text.trim())
   )
   const notes = [
     // owner can be several people ('Ganapathy, Rani') and is the ACCOUNT owner,
@@ -284,6 +331,9 @@ export async function readDraft(slug: string): Promise<FollowupDraft | null> {
       updatedAt: typeof data.updated_at === 'string' ? data.updated_at : undefined,
       sender: typeof data.sender === 'string' ? data.sender : undefined,
       notes: typeof data.notes === 'string' ? data.notes : undefined,
+      ready: data.ready === true ? true : undefined,
+      checks: typeof data.checks === 'string' ? data.checks : undefined,
+      whyNow: typeof data.why_now === 'string' ? data.why_now : undefined,
     }
   } catch {
     return null
@@ -322,6 +372,9 @@ export async function writeDraft(d: FollowupDraft): Promise<FollowupDraft> {
   if (next.agingSince) meta.aging_since = next.agingSince
   if (next.sender) meta.sender = next.sender
   if (next.notes) meta.notes = next.notes
+  if (next.ready !== undefined) meta.ready = next.ready
+  if (next.checks) meta.checks = next.checks
+  if (next.whyNow) meta.why_now = next.whyNow
 
   const fileContent = matter.stringify(`\n${next.body.trim()}\n`, meta)
   await fs.writeFile(draftPath(next.slug), fileContent, 'utf-8')

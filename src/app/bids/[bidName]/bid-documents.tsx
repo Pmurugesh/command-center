@@ -1,6 +1,8 @@
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { FileText, File } from 'lucide-react'
 import type { DocumentFile } from '@/types'
+import type { IntakeReceipt } from '@/lib/intake'
+import { isoToLocalDate } from '@/lib/dates'
 import { BidUpload } from './bid-upload'
 
 function formatSize(bytes: number): string {
@@ -19,7 +21,18 @@ const typeIcons: Record<string, string> = {
   txt: 'TXT',
 }
 
-export function BidDocuments({ documents, bidName }: { documents: DocumentFile[]; bidName: string }) {
+/** One honest line from the newest upload receipt: triggered, started, or not started. */
+function receiptLine(r: IntakeReceipt): { text: string; tone: string } {
+  const when = isoToLocalDate(r.startedAt)
+  if (r.ok === true) return { text: `Agent ${r.agent} started on the last upload (${when}).`, tone: 'text-emerald-400' }
+  if (r.ok === false) return { text: `Agent ${r.agent} not started on the last upload (${when}): ${r.error ?? 'trigger failed'}.`, tone: 'text-red-400' }
+  return { text: `Agent ${r.agent} triggered on the last upload (${when}) — no result recorded yet.`, tone: 'text-muted-foreground' }
+}
+
+export function BidDocuments({ documents, bidName, receipt }: {
+  documents: DocumentFile[]; bidName: string; receipt?: IntakeReceipt | null
+}) {
+  const status = receipt ? receiptLine(receipt) : null
   return (
     <Card>
       <CardHeader>
@@ -52,6 +65,7 @@ export function BidDocuments({ documents, bidName }: { documents: DocumentFile[]
           ))}
         </div>
         <div className="mt-4 border-t border-border pt-4">
+          {status && <p className={`mb-3 text-xs ${status.tone}`}>{status.text}</p>}
           <BidUpload bidName={bidName} />
         </div>
       </CardContent>

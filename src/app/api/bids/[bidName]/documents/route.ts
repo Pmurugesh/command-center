@@ -3,7 +3,10 @@ import path from 'path'
 import fs from 'fs/promises'
 import { writeBidStatus } from '@/lib/files'
 import { PATHS } from '@/lib/paths'
-import { buildAgentMessage, filesFromForm, saveFiles, triggerAgent } from '@/lib/intake'
+import {
+  INTAKE_AGENT, buildAgentMessage, filesFromForm, resolveAgent, saveFiles, triggerAgent,
+  writeIntakeReceipt,
+} from '@/lib/intake'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,15 +33,15 @@ export async function POST(request: Request, { params }: { params: { bidName: st
     await writeBidStatus(bidName, {})
 
     const note = form.get('note')
-    const agent = form.get('agent')
-    triggerAgent(
-      buildAgentMessage(
-        `New documents added to existing bid "${bidName}" — review them against the current analysis.`,
-        saved,
-        typeof note === 'string' ? note : undefined
-      ),
-      typeof agent === 'string' ? agent : undefined
+    const rawAgent = form.get('agent')
+    const agent = resolveAgent(typeof rawAgent === 'string' ? rawAgent : undefined, INTAKE_AGENT.bids)
+    const message = buildAgentMessage(
+      `New documents added to existing bid "${bidName}" — review them against the current analysis.`,
+      saved,
+      typeof note === 'string' ? note : undefined
     )
+    const receipt = await writeIntakeReceipt(dest, { agent, message, startedAt: new Date().toISOString() })
+    triggerAgent(message, agent, INTAKE_AGENT.bids, receipt)
 
     return NextResponse.json({ saved: saved.map(p => path.basename(p)), dest })
   } catch (error) {

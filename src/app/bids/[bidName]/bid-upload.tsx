@@ -50,7 +50,7 @@ export function BidUpload({ bidName }: { bidName: string }) {
         placeholder="Note for the agent (optional)"
         className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
       />
-      <AgentSelect />
+      <AgentSelect defaultAgent="sales" />
       <div className="flex items-center gap-3">
         <button
           type="submit"

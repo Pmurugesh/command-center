@@ -412,7 +412,8 @@ export interface CrmContactUpdate {
 
 // ── Email intake review queue (M3.5 Scribe) ─────────────────────────────────
 
-export type IntakeReviewStatus = 'pending' | 'dismissed' | 'contact-created'
+/** `stale`: pending for 30+ days with no decision — the question expired, not the person. */
+export type IntakeReviewStatus = 'pending' | 'dismissed' | 'contact-created' | 'stale'
 
 export interface IntakeReviewItem {
   /**
