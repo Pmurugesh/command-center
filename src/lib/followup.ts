@@ -19,6 +19,7 @@ import { PATHS } from './paths'
 import { runCommandArgs } from './shell'
 import { getContact } from './crm'
 import type { CrmContact, CrmLogEntry } from '@/types'
+import { safeSlug } from './store'
 
 // ── types ────────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,9 @@ export interface OutreachDraft extends FollowupDraft {
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function draftPath(slug: string): string {
+  // Callers validate first; this is the last line of defence for a slug that
+  // reached here another way (an agent, a script).
+  if (!safeSlug(slug)) throw new Error(`Invalid draft slug: ${JSON.stringify(slug)}`)
   return path.join(PATHS.crmDrafts, `${slug}.md`)
 }
 
@@ -260,6 +264,7 @@ export function findInternalLeaks(
 // ── read / write ──────────────────────────────────────────────────────────────
 
 export async function readDraft(slug: string): Promise<FollowupDraft | null> {
+  if (!safeSlug(slug)) return null
   try {
     const raw = await fs.readFile(draftPath(slug), 'utf-8')
     const { data, content } = matter(raw)
@@ -286,6 +291,7 @@ export async function readDraft(slug: string): Promise<FollowupDraft | null> {
 }
 
 export async function writeDraft(d: FollowupDraft): Promise<FollowupDraft> {
+  if (!safeSlug(d.slug)) throw new Error(`Invalid draft slug: ${JSON.stringify(d.slug)}`)
   // Refuse to persist a body that would embarrass us. Every path that creates a
   // draft — dashboard, API, or an agent writing through this module — goes
   // through here, so this is where the invariant is cheapest to hold.

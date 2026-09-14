@@ -20,7 +20,7 @@ import matter from 'gray-matter'
 import { PATHS } from './paths'
 import { localToday } from './dates'
 import { runCommandArgs } from './shell'
-import { acquireLock as acquireStoreLock, atomicWrite, fileExists } from './store'
+import { acquireLock as acquireStoreLock, atomicWrite, fileExists, safeSlug } from './store'
 import {
   CRM_COLD_DAYS, CRM_TERMINAL_STAGES, NON_HUMAN_VIA,
   normalizeCrmStage, normalizeCrmStatus,
@@ -65,13 +65,6 @@ export function slugify(name: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 60)
-}
-
-/** Reject anything that could escape the contacts directory. */
-function safeSlug(slug: string): string | null {
-  if (!slug || slug.includes('/') || slug.includes('..') || slug.startsWith('.')) return null
-  if (!/^[a-z0-9-]+$/.test(slug)) return null
-  return slug
 }
 
 function contactPath(slug: string): string {

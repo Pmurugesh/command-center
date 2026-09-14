@@ -22,8 +22,9 @@ Works from any device signed into the Tailscale account
 ## How it runs on the mini (current state)
 
 - launchd LaunchAgent **`com.paladin.commandcenter`** (RunAtLoad + KeepAlive:
-  starts at boot, restarts on crash) running `npx next start -H 0.0.0.0` from
-  `/Users/paladin/repos/command-center`.
+  starts at boot, restarts on crash) running `npx next start -H 127.0.0.1` from
+  `/Users/paladin/repos/command-center`. Loopback only: Tailscale Serve is the
+  only way in, and it proxies to 127.0.0.1:3000 (bind narrowed 2026-09-14).
 - Logs: `~/.openclaw/logs/command-center.log` and `command-center-error.log`.
 - The mini never sleeps (`pmset sleep 0`). Optional hardening for power
   outages: `sudo pmset -a autorestart 1` (boots back up after power loss).

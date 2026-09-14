@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { readBidStatus, writeBidStatus } from '@/lib/files'
+import { safeSlug } from '@/lib/store'
 
 export const dynamic = 'force-dynamic'
 
@@ -7,6 +8,9 @@ export async function GET(
   _request: Request,
   { params }: { params: { bidName: string } }
 ) {
+  if (!safeSlug(params.bidName)) {
+    return NextResponse.json({ error: 'Invalid bid name' }, { status: 400 })
+  }
   try {
     const status = await readBidStatus(params.bidName)
     if (!status) {
@@ -23,6 +27,9 @@ export async function PUT(
   request: Request,
   { params }: { params: { bidName: string } }
 ) {
+  if (!safeSlug(params.bidName)) {
+    return NextResponse.json({ error: 'Invalid bid name' }, { status: 400 })
+  }
   try {
     const body = await request.json()
     const updated = await writeBidStatus(params.bidName, body)

@@ -62,6 +62,22 @@ export async function atomicWrite(target: string, content: string): Promise<void
   await fs.rename(tmp, target)
 }
 
+/**
+ * The one check every `[param]` route must apply before a request-supplied
+ * name touches the filesystem. Next.js decodes `%2F` inside a dynamic segment,
+ * so `..%2Fintelligence` arrives here as `../intelligence`; without this, the
+ * bid and draft routes read and wrote anywhere under the operations repo
+ * (audit 2026-09-14). Accepts the names that exist on disk today — bid dirs
+ * such as `FTB-RFI-2526-Suspense-Payments` and `_templates`, CRM slugs such as
+ * `robert-cdt-mmbi` — and nothing that could leave its directory.
+ */
+export function safeSlug(slug: unknown): string | null {
+  if (typeof slug !== 'string' || slug.length === 0 || slug.length > 120) return null
+  if (slug.includes('..') || slug.includes('/') || slug.includes('\\')) return null
+  if (!/^[A-Za-z0-9_][A-Za-z0-9._-]*$/.test(slug)) return null
+  return slug
+}
+
 export async function fileExists(p: string): Promise<boolean> {
   try { await fs.access(p); return true } catch { return false }
 }
