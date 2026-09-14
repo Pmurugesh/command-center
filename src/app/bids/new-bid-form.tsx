@@ -5,10 +5,27 @@ import { useRouter } from 'next/navigation'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Plus, Upload, X } from 'lucide-react'
 import { AgentSelect } from '@/components/shared/agent-select'
+import { useDisclosure } from '@/components/shared/disclosure'
 
+/** Opens NewBidForm. Goes in PageHeader's actions, inside the same <Disclosure>. */
+export function NewBidButton() {
+  const [open, setOpen] = useDisclosure()
+  if (open) return null
+  return (
+    <button
+      onClick={() => setOpen(true)}
+      className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent/50 transition-colors"
+    >
+      <Plus className="h-3.5 w-3.5" />
+      New bid from RFP docs
+    </button>
+  )
+}
+
+/** Renders below the page header, never in its actions slot (see Disclosure). */
 export function NewBidForm() {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useDisclosure()
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -36,24 +53,13 @@ export function NewBidForm() {
   }
 
   if (!open) {
-    return (
-      <div>
-        <button
-          onClick={() => setOpen(true)}
-          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent/50 transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New bid from RFP docs
-        </button>
-        {result && (
-          <p className={`text-xs mt-2 ${result.ok ? 'text-emerald-400' : 'text-red-400'}`}>{result.text}</p>
-        )}
-      </div>
+    return result && (
+      <p className={`text-xs ${result.ok ? 'text-emerald-400' : 'text-red-400'}`}>{result.text}</p>
     )
   }
 
   return (
-    <Card>
+    <Card className="max-w-xl">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">

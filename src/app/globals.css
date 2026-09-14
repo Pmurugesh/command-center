@@ -74,6 +74,10 @@
   overflow-x: auto;
   white-space: nowrap;
 }
+/* An unbroken URL or path breaks rather than widening the page. */
+.markdown-content {
+  overflow-wrap: break-word;
+}
 
 /* Markdown content styling */
 .markdown-content h1 { @apply text-xl font-bold mb-3 mt-5; }

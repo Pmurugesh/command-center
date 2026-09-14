@@ -1,7 +1,8 @@
 import { listBids } from '@/lib/files'
 import { PageHeader } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/empty-state'
-import { NewBidForm } from './new-bid-form'
+import { Disclosure } from '@/components/shared/disclosure'
+import { NewBidButton, NewBidForm } from './new-bid-form'
 import { BidsTable } from './bids-table'
 import { BID_STATUSES } from '@/lib/config'
 import Link from 'next/link'
@@ -71,37 +72,40 @@ export default async function BidsPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-3">
-      <PageHeader
-        title="Bid Pipeline"
-        description={`${allBids.length} bids · ${withDeadline} dated`}
-        actions={
-          <div className="flex items-center gap-3">
-            {/* Filters used to be a separate full-width band under the header;
-                they carry <400px of content, so they ride in the header. */}
-            {allBids.length > 0 && (
-              <div className="flex items-center gap-1">
-                {tabs.map(tab => {
-                  const active = filter === tab.key
-                  return (
-                    <Link
-                      key={tab.key}
-                      href={tab.key === 'all' ? '/bids' : `/bids?filter=${tab.key}`}
-                      className={cn(
-                        'rounded-md px-2 py-1 text-xs font-medium transition-colors',
-                        active ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-                      )}
-                    >
-                      {tab.label}
-                      <span className="ml-1.5 font-mono tabular-nums text-muted-foreground">{counts[tab.key]}</span>
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
-            <NewBidForm />
-          </div>
-        }
-      />
+      <Disclosure>
+        <PageHeader
+          title="Bid Pipeline"
+          description={`${allBids.length} bids · ${withDeadline} dated`}
+          actions={
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Filters used to be a separate full-width band under the header;
+                  they carry <400px of content, so they ride in the header. */}
+              {allBids.length > 0 && (
+                <div className="flex items-center gap-1">
+                  {tabs.map(tab => {
+                    const active = filter === tab.key
+                    return (
+                      <Link
+                        key={tab.key}
+                        href={tab.key === 'all' ? '/bids' : `/bids?filter=${tab.key}`}
+                        className={cn(
+                          'rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                          active ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                        )}
+                      >
+                        {tab.label}
+                        <span className="ml-1.5 font-mono tabular-nums text-muted-foreground">{counts[tab.key]}</span>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
+              <NewBidButton />
+            </div>
+          }
+        />
+        <NewBidForm />
+      </Disclosure>
 
       {allBids.length === 0 ? (
         <EmptyState
