@@ -19,6 +19,7 @@ INSTALLERS=(
   scripts/mini/install-scribe-gate.sh     # no agent may pay to discover it has nothing to do
   scripts/mini/install-heartbeat.sh       # nothing else notices when a pipeline stops
   scripts/mini/install-roadmap-watch.sh   # the board follows the repos, not the clock
+  scripts/mini/install-dashboard-bind.sh   # port 3000 is loopback-only; Serve is the only way in
 )
 
 # Installers that need the gateway token and skip cleanly without it. Kept apart

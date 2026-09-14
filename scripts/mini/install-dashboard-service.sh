@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 # Build & (re)deploy the Command Center dashboard on the Mac mini.
+#
+# Binds to 127.0.0.1 only: Tailscale Serve proxies the tailnet URL to
+# 127.0.0.1:3000, and the API has no auth of its own, so a 0.0.0.0 bind
+# exposed every mutating route to the mini's LAN for nothing (audit
+# 2026-09-14). install-dashboard-bind.sh corrects an already-installed plist
+# without a rebuild.
 # Idempotent: manages the EXISTING launchd service `com.paladin.commandcenter`
 # (rewrites its plist, rebuilds, restarts). Safe to re-run for every deploy.
 #
@@ -43,7 +49,7 @@ cat > "$PLIST" <<EOF
     <string>next</string>
     <string>start</string>
     <string>-H</string>
-    <string>0.0.0.0</string>
+    <string>127.0.0.1</string>
   </array>
   <key>WorkingDirectory</key><string>$REPO_DIR</string>
   <key>RunAtLoad</key><true/>
@@ -79,4 +85,4 @@ sleep 5
 curl -s -o /dev/null -w "Dashboard responded with HTTP %{http_code}\n" http://localhost:3000/ \
   || echo "Not up yet — check $LOG_DIR/command-center-error.log"
 echo
-echo "Tailnet URL: http://paladins-mac-mini:3000"
+echo "Tailnet URL: https://paladins-mac-mini.tail722dc1.ts.net (Serve → 127.0.0.1:3000; port 3000 is loopback-only)"

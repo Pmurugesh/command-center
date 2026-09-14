@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getBidDetail } from '@/lib/files'
+import { safeSlug } from '@/lib/store'
 
 export const dynamic = 'force-dynamic'
 
@@ -7,6 +8,9 @@ export async function GET(
   _request: Request,
   { params }: { params: { bidName: string } }
 ) {
+  if (!safeSlug(params.bidName)) {
+    return NextResponse.json({ error: 'Invalid bid name' }, { status: 400 })
+  }
   try {
     const detail = await getBidDetail(params.bidName)
     if (!detail) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { readDraft, writeDraft } from '@/lib/followup'
 import { appendLog } from '@/lib/crm'
+import { safeSlug } from '@/lib/store'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,6 +10,9 @@ export async function PUT(
   request: Request,
   { params }: { params: { slug: string } }
 ) {
+  if (!safeSlug(params.slug)) {
+    return NextResponse.json({ error: 'Invalid draft slug' }, { status: 400 })
+  }
   try {
     const body = await request.json()
     if (typeof body.subject !== 'string' || typeof body.body !== 'string') {
@@ -42,6 +46,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: { slug: string } }
 ) {
+  if (!safeSlug(params.slug)) {
+    return NextResponse.json({ error: 'Invalid draft slug' }, { status: 400 })
+  }
   try {
     const body = await request.json()
 

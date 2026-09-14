@@ -5,6 +5,7 @@ import { PATHS } from './paths'
 import { BID_TAB_ORDER, normalizeBidStatus } from './config'
 import { countFlags, extractPriority, extractEmails, extractContacts, parsePartnerships } from './markdown'
 import { lastBidSyncSuccess } from './bid-sync'
+import { safeSlug } from './store'
 import type {
   Bid, BidDetail, BidFile, BidStatusData, ScanReport, IntelAlert, LibraryFile,
   DocumentFile, DataSourceInfo, ScriptInfo, Agency, AgencyPriority, Partnership,
@@ -99,6 +100,7 @@ export async function listBids(): Promise<Bid[]> {
 }
 
 export async function getBidDetail(bidName: string): Promise<BidDetail | null> {
+  if (!safeSlug(bidName)) return null
   const bidPath = path.join(PATHS.bids, bidName)
   if (!(await exists(bidPath))) return null
 
@@ -164,6 +166,7 @@ export async function getBidDetail(bidName: string): Promise<BidDetail | null> {
 }
 
 export async function readBidStatus(bidName: string): Promise<BidStatusData | null> {
+  if (!safeSlug(bidName)) return null
   const statusPath = path.join(PATHS.bids, bidName, '.status.json')
   if (!(await exists(statusPath))) return null
   try {
@@ -174,6 +177,7 @@ export async function readBidStatus(bidName: string): Promise<BidStatusData | nu
 }
 
 export async function writeBidStatus(bidName: string, data: Partial<BidStatusData>): Promise<BidStatusData> {
+  if (!safeSlug(bidName)) throw new Error(`Invalid bid name: ${JSON.stringify(bidName)}`)
   const statusPath = path.join(PATHS.bids, bidName, '.status.json')
   let existing: BidStatusData = { status: 'Discovered', entity: 'Infinite Solutions', updatedAt: '' }
   if (await exists(statusPath)) {

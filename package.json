@@ -7,7 +7,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/roadmap-test.ts && node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/crm-test.ts && node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/security-test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "next": "^14.2.0",

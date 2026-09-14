@@ -51,7 +51,7 @@ jobs:
       # The 95 unit tests. `--experimental-strip-types` runs the TypeScript
       # directly; scripts/run-ts.mjs resolves the `.ts` imports shared with src/.
       - name: Tests
-        run: node --experimental-strip-types --no-warnings scripts/run-ts.mjs scripts/roadmap-test.ts
+        run: pnpm test
 
       # The mini's launchd job runs scripts/mini/deploy-on-merge.sh FROM THE REPO
       # (install-deploy-on-merge.sh:15). So a syntax error in that file gets
