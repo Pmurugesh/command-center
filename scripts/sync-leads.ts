@@ -113,7 +113,7 @@ async function main() {
   const outcome = await syncLeads(events, 'lead-sync')
   if (ON_CHANGE && outcome.created === 0 && outcome.updated === 0) return   // nothing to announce
   flush()
-  console.log(`\ncreated ${outcome.created}, updated ${outcome.updated}, unchanged ${outcome.unchanged}`)
+  console.log(`\ncreated ${outcome.created}, updated ${outcome.updated}, unchanged ${outcome.unchanged}, already closed ${outcome.expired}`)
   for (const r of outcome.reasons.slice(0, 20)) console.log(`  ${r.slug}: ${r.why}`)
 }
 
