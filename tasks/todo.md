@@ -2671,3 +2671,29 @@ New post open 129.
 - tsc and lint clean; SSR 200 on all three pages. `useDisclosure must be used inside <Disclosure>` in
   the log comes only from the seconds between the two edits (its stack has NewPostForm still inside
   PageHeader); the console count did not move across fresh loads and open/close afterwards.
+
+## System audit — 2026-09-14 (read-only, no code changed)
+
+Full report: `docs/audit-2026-09-14.md` (five sub-audits: dashboard code, operations data,
+OpenClaw fleet on the mini, scripts/ops layer, agent context). Headline: the machine has
+out-built the business — Today says "all green" while the heartbeat file lists 5 late
+pipelines; 10 of 108 contacts are at a real stage; Phase 1 misses on 09-22 with no surface
+saying so; ~half of ~$160/mo model spend is main's 30-min Opus heartbeat (908 straight
+HEARTBEAT_OKs) and opus-4-7 cache re-writes; ~105 Telegram cron messages a week, failures
+not notified.
+
+Urgent (this week), in order:
+- [ ] Path traversal on `/api/bids/[bidName]` (GET+PUT) and `/api/crm/drafts/[slug]` (PUT) — apply `safeSlug`; confirmed live
+- [ ] `Sec-Fetch-Site` middleware for the multipart routes; stop labelling upload notes "from Pavan"; bind `next start` to 127.0.0.1
+- [ ] `rm -P` the five `auth-profiles.json.sqlite-import.*.bak` files on the mini (plaintext API key); rotate
+- [ ] Main `HEARTBEAT.md` → comments-only; `cacheRetention: long` on the opus-4-7 entry
+- [ ] Cron delivery: announce on change only; enable failure notifications
+- [ ] Nightly pull-side backup of `~/.openclaw` (minus sessions), `agents/*/memory`, `.credentials`, ledgers; export the cron store to git
+- [ ] Commit `gtm/pricing/`, `price:` on `products/prr.md`, resolve the 21-day [DECISION]
+- [ ] Fix the `prrai`/`aihire` tagging block in the four specialist CONTEXT.md; scribe entity model + `novaerasol.com`
+
+Then (two weeks): one health verdict (merge heartbeat into Today), pipeline counts exclude
+`identified`, bids need deadlines, rewrite the four stock `AGENTS.md`, NOW.md / RED-LINES /
+DECISIONS / GLOSSARY / crm README, deploy-in-scratch-dir with rollback, locks on every
+`_status.md` writer. See the report §6 for the full ordered list and §7 for the three
+decisions only Pavan can make.
