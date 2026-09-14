@@ -19,12 +19,11 @@
  *     LEADS, not commitments — giving them all an action would invent a 94-item
  *     to-do list out of thin air. They carry the agency's recommended next step
  *     as notes and surface as "going cold", which is their true state.
- *   - A priority action that requires a product one-pager seeds as `blocked`,
- *     because we verified no one-pagers exist in either repo. The block is
- *     recorded in the log with its basis rather than asserted silently. This is
- *     scoped to the 8 owned actions; the agency-level "recommended next step" is
- *     a suggestion for the agency, not a per-contact commitment, and inheriting
- *     it would block ~60 contacts on an artifact nobody promised them.
+ *   - Nothing seeds as `blocked`. An earlier version blocked actions that
+ *     mentioned a one-pager because none existed; Pavan overruled that on
+ *     2026-09-14: nobody promised those contacts a one-pager, so its absence is
+ *     not a blocker. The action is to reach back out with what we have.
+ *     `blocked` is reserved for a commitment that genuinely cannot proceed.
  *
  * Run:  node --experimental-strip-types --no-warnings scripts/seed-crm.ts [--dry]
  */
@@ -38,10 +37,6 @@ const DRY = process.argv.includes('--dry')
 const CIO_ACADEMY_DATE = '2026-05-25'   // followup plan generation date
 const OUTREACH_DATE = '2026-05-28'      // priority-outreach.md last edit
 
-// Products whose collateral does not exist (verified 2026-08-21 across both
-// repos: zero one-pagers, datasheets, or case studies). An action that requires
-// one cannot proceed, so it seeds blocked.
-const MISSING_COLLATERAL = /one-pager|onepager|one pager/i
 
 // Operations-side product slugs. NOTE: these differ from the platform's module
 // slugs (prr / recruitment / ad-hoc-reporting) — see the drift finding in
@@ -226,34 +221,29 @@ async function main() {
   const existingBefore = await listContacts()
   const existingNames = new Set(existingBefore.map(c => slugify(c.name)))
 
-  let created = 0, skipped = 0, blocked = 0
+  let created = 0, skipped = 0
   for (const s of seeds) {
     if (existingNames.has(slugify(s.name)) || await getContact(slugify(s.name))) { skipped++; continue }
 
-    const isBlocked = s.source === 'priority-outreach'
-      && Boolean(s.nextAction && MISSING_COLLATERAL.test(s.nextAction))
-    const logText = isBlocked
-      ? `Seeded from ${s.origin}. Action requires a product one-pager; none exists in either repo (verified 2026-08-21), so this is blocked, not merely late.`
-      : `Seeded from ${s.origin}.`
+    const logText = `Seeded from ${s.origin}.`
 
     if (DRY) {
-      console.log(`  + ${s.name} (${s.agencyName ?? '?'})${isBlocked ? '  [BLOCKED]' : ''}${s.nextActionDue ? `  due ${s.nextActionDue}` : '  [lead]'}`)
-      created++; if (isBlocked) blocked++
+      console.log(`  + ${s.name} (${s.agencyName ?? '?'})${s.nextActionDue ? `  due ${s.nextActionDue}` : '  [lead]'}`)
+      created++
       continue
     }
 
     await createContact({
       ...s,
       stage: 'identified',
-      status: isBlocked ? 'blocked' : 'active',
-      blockedOn: isBlocked ? 'product one-pager does not exist' : undefined,
+      status: 'active',
       lastTouched: s.source === 'priority-outreach' ? OUTREACH_DATE : CIO_ACADEMY_DATE,
       created: CIO_ACADEMY_DATE,
       notes: s.suggestion ? `Suggested play (from the agency profile): ${s.suggestion}` : '',
       log: [{ date: CIO_ACADEMY_DATE, text: logText, via: 'seed' }],
     }, 'seed', false)   // batch: one commit at the end, not 94
 
-    created++; if (isBlocked) blocked++
+    created++
   }
 
   if (!DRY && created > 0) {
@@ -261,7 +251,7 @@ async function main() {
       `seed ${created} contacts from priority-outreach + CIO Academy agency profiles`,
       'seed')
   }
-  console.log(`\n${DRY ? '[dry run] would create' : 'created'}: ${created}  (blocked: ${blocked})   skipped existing: ${skipped}`)
+  console.log(`\n${DRY ? '[dry run] would create' : 'created'}: ${created}   skipped existing: ${skipped}`)
 }
 
 main().catch(e => { console.error(e); process.exit(1) })

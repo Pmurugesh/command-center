@@ -353,3 +353,13 @@ reads), refusing it is not rigour, it is a board that lies by omission. The entr
   review queue fetches after mount, and a 1.5s timer sometimes measured before the rows arrived.
   **A 0 from a sweep is only as good as its wait**: on a page that fetches client-side, wait for the
   content (a row count), not a timer.
+- **[2026-09-14]** `blocked` means a commitment that cannot be executed, not an artifact we wish
+  we had. The seeder blocked two contacts on "product one-pager does not exist" because their
+  May action text said "send one-pager". Pavan: nobody promised those contacts a one-pager, so
+  its absence is not a blocker; the action is to reach back out with what we have. Two rules:
+  (1) never derive `status: blocked` from the wording of an action, only from a real
+  dependency the contact was told about; (2) a missing artifact is a to-do for us (roadmap
+  milestone, Leverage panel), never a status on the customer. Corollary for proofs: a
+  milestone's proof must not read a contact's status, because the contact can change for
+  reasons that have nothing to do with the milestone (dropped from `web-one-pagers`).
+

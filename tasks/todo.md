@@ -407,6 +407,7 @@ needs a schema description, not a command parser) and the in-dashboard draft-rev
       one-pager) unblocks 2 contacts." Turns a list of blocked people into a ranked list of
       things to MAKE. This is the single most actionable view in the CRM.
       *Built. Currently renders: "2 — product one-pager does not exist — Unblocks: Linh Thao Huynh, Manohar Sridharan."*
+      *2026-09-14 (Pavan): those two were never promised a one-pager, so they are not blocked. Both set back to `active`, `next_action` = reach back out by 2026-09-19, one-pager attached if ready. The panel now renders empty, which is correct. The seeder rule that produced the block is removed. First one-pager drafted: `operations/collateral/one-pagers/candor.md` + `candor.pdf` (sendable), 3 [DECISION] lines for Pavan in the file.*
 - [x] **Pipeline shape.** Stage funnel + owner load + product concentration. Current truth:
       94/94 at `identified`, owners Ganapathy 36 / Rani 35 / Isaiah 10 / Pavan 7, products
       prrai 84 / aihire 6 / procurement 4. A flat bar at `identified` IS the insight.
