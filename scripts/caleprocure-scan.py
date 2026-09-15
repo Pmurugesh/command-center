@@ -13,6 +13,14 @@ repo, in the exact shape command-center's lib/procurements.ts parses (## 🔴/�
 sections, "### <id> — <title>" blocks, bold field bullets, "**Score:** n/10").
 The mini's operations janitor commits it; the dashboard reads it on next load.
 
+Sidecar: YYYY-MM-DD-caleprocure.json beside it — EVERY open event with both
+lens verdicts (see `sidecar_event`), written every run regardless of
+--on-change. It exists because the consulting lens only runs here: the
+qual_table clone lives on the mini, so `scripts/sync-leads.ts` (which scores
+the product lens itself) reads this file to create Infinite Solutions leads.
+The EDD Salesforce M&O RFP (7100-0000039456) scored 75 consulting / 0 product
+and never became a lead until this file existed.
+
 Flags:
   --on-change    the cron announces whatever this prints, every run. With this
                  flag the dated file is still written, but stdout carries the
@@ -33,6 +41,7 @@ Environment:
 Exit codes: 0 ok · 1 transport/parse failure · 2 gate off · 3 the site asked
 us to stop (should_block) — do NOT re-enable without a human look.
 """
+import json
 import os
 import re
 import sys
@@ -131,6 +140,31 @@ def block_for(row, verdicts, bucket) -> str:
     return "\n".join(lines)
 
 
+def sidecar_event(row, verdicts, rules_version) -> dict:
+    """One open event as `scripts/sync-leads.ts` ingests it.
+
+    `end_date` is the PACIFIC calendar date, not the UTC one: a 5:00 PM PT close
+    is the next day in UTC, and the lead store keys expiry on date strings. The
+    full instant is kept in `end_at` for anything that wants it. Only duck-typed
+    attribute reads, so a fake row serialises the same way as a ListRow."""
+    end = getattr(row, "end_date", None)
+    return {
+        "event_id": row.event_id,
+        "business_unit": getattr(row, "business_unit", None) or row.department_code,
+        "name": row.event_name,
+        "department": getattr(row, "department_name", None),
+        "end_date": end.astimezone(PT).strftime("%Y-%m-%d") if end else None,
+        "end_at": end.isoformat() if end else None,
+        "end_date_raw": getattr(row, "end_date_raw", None),
+        "url": getattr(row, "url", None) or getattr(row, "event_url", None),
+        "rules_version": rules_version,
+        "lenses": {
+            key: {"score": v.score, "bucket": v.bucket, "reasons": list(v.reasons or [])}
+            for key, v in verdicts.items()
+        },
+    }
+
+
 def previous_ids(out_dir: Path, today_path: Path):
     """Event tokens in the newest dated report before today's; None when there
     is no earlier report, so a first run announces everything."""
@@ -153,8 +187,10 @@ def main() -> int:
     open_rows = [r for r in rows if not svc.is_closed(svc.to_record(r), now=now)]
 
     shortlisted = {"likely": [], "possible": []}
+    sidecar = []
     for row in open_rows:
         verdicts = {lens.key: eprocure_relevance.score_list_row(row, lens) for lens in LENSES}
+        sidecar.append(sidecar_event(row, verdicts, eprocure_relevance.RELEVANCE_VERSION))
         bucket = eprocure_relevance.best_bucket(v.bucket for v in verdicts.values())
         if bucket in shortlisted:
             best_score = max(v.score for v in verdicts.values())
@@ -222,6 +258,9 @@ def main() -> int:
     out_path = out_dir / f"{today_pt.strftime('%Y-%m-%d')}-caleprocure.md"
     seen_before = previous_ids(out_dir, out_path)
     out_path.write_text("\n".join(out), encoding="utf-8")
+    out_path.with_suffix(".json").write_text(
+        json.dumps(sidecar, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+    )
 
     if ON_CHANGE:
         listed = [(band, row) for band, items in shortlisted.items() for row, _v, _s in items]

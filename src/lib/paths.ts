@@ -11,6 +11,10 @@ export const PATHS = {
   scanReports: path.join(HOME, 'repos/operations/codebase-reports'),
   intelligence: path.join(HOME, 'repos/operations/intelligence/alerts'),
   intelligenceBase: path.join(HOME, 'repos/operations/intelligence'),
+  // scripts/caleprocure-scan.py output: dated markdown the /intel page and
+  // Opportunities read, plus a JSON sidecar of every open event with both lens
+  // verdicts that the lead store ingests for Infinite Solutions.
+  procurements: path.join(HOME, 'repos/operations/intelligence/procurements'),
   businessContext: path.join(HOME, '.openclaw/workspace/business'),
   scheduledTasks: path.join(HOME, '.claude/scheduled-tasks'),
   scripts: path.join(HOME, '.openclaw/workspace/scripts'),
