@@ -224,13 +224,13 @@ export function buildDraft(
   const subject = quoted
     ? (/^re:/i.test(quoted) ? quoted : `Re: ${quoted}`)
     : contact.agencyName
-      ? `Following up — Infinite Solutions / ${contact.agencyName}`
+      ? `Following up: Infinite Solutions / ${contact.agencyName}`
       : 'Following up'
 
   const body = [
     `Hi ${who},`,
     '',
-    'Wanted to pick this back up — would a short call make sense?',
+    'Wanted to pick this back up. Would a short call make sense?',
     '',
     `I have time ${nextAvailabilityWindow(now)} if any of those work, and I am happy to fit around your calendar.`,
     '',
