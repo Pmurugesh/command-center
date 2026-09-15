@@ -53,6 +53,9 @@ function Row({ item }: { item: ClockItem }) {
           {item.kind !== 'meeting' && (
             <Badge variant="outline" className="shrink-0 text-[10px]">{KIND_CHIP[item.kind]}</Badge>
           )}
+          {item.entity && (
+            <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">{item.entity}</Badge>
+          )}
         </div>
         {item.subtitle && <p className="mt-0.5 truncate text-xs text-muted-foreground">{item.subtitle}</p>}
       </div>

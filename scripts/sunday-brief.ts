@@ -112,7 +112,8 @@ async function leadsClosing(today: string, horizon: string): Promise<Section> {
     .sort((a, b) => a.endDate!.localeCompare(b.endDate!))
   return {
     key: 'leads', title: `Leads closing inside ${HORIZON_DAYS}d`,
-    items: leads.map(l => `${clause(l.eventName, 70)}, closes ${l.endDate} (${-daysAgo(l.endDate!, today)}d), score ${l.score}, crm/leads/${l.slug}.md`),
+    // Both lenses in one list, so the line says which company it is for.
+    items: leads.map(l => `${l.entity}: ${clause(l.eventName, 70)}, closes ${l.endDate} (${-daysAgo(l.endDate!, today)}d), score ${l.score}, crm/leads/${l.slug}.md`),
   }
 }
 

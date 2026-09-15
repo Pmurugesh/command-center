@@ -3,3 +3,6 @@ node_modules/
 .env
 .env.local
 *.tsbuildinfo
+
+# python bytecode from scripts/caleprocure-scan-test.py
+__pycache__/
