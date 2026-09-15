@@ -7,8 +7,12 @@
  *
  * Phase A: queue + copy + edit + mark-sent.
  * Phase B: auto-trigger scan (cron), Voice AI enrichment, aging nudges.
+ * Wave 3 (decision 1): a draft marked ready gets a Send button when the mini
+ * holds the mailbox credentials; the dashboard sends it on your click and
+ * logs it. "Mark sent" stays for mail sent from your own client.
  */
 import { listDrafts } from '@/lib/followup'
+import { isSendConfigured } from '@/lib/send-mail'
 import { PageHeader } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/empty-state'
 import { OutreachBoard } from './outreach-board'
@@ -17,7 +21,7 @@ import { Send } from 'lucide-react'
 export const dynamic = 'force-dynamic'
 
 export default async function OutreachPage() {
-  const drafts = await listDrafts()
+  const [drafts, sendConfigured] = await Promise.all([listDrafts(), isSendConfigured()])
 
   const open = drafts.filter(d => d.status === 'draft')
   const high = open.filter(d => d.priority === 'high')
@@ -47,7 +51,7 @@ export default async function OutreachPage() {
           description="Click 'Draft' on an overdue contact in Today's Moves to create one. Auto-triggers (post-meeting, bid-submitted) arrive in Phase B."
         />
       ) : (
-        <OutreachBoard drafts={drafts} />
+        <OutreachBoard drafts={drafts} sendConfigured={sendConfigured} />
       )}
     </div>
   )

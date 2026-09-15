@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Copy, Check, PenLine, CheckCircle2, Loader2, X, Lock } from 'lucide-react'
+import { Copy, Check, PenLine, CheckCircle2, Loader2, X, Lock, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { OutreachDraft } from '@/lib/followup'
@@ -52,11 +52,13 @@ function AgingChip({ days }: { days?: number }) {
 
 export function DraftRow({
   draft,
+  sendConfigured,
   onMarkSent,
   onEdited,
 }: {
   draft: OutreachDraft
-  onMarkSent: (slug: string, sentAt: string) => void
+  sendConfigured: boolean
+  onMarkSent: (slug: string, sentAt: string, sent?: Pick<OutreachDraft, 'sentVia' | 'messageId' | 'sentBy'>) => void
   onEdited: (slug: string, subject: string, body: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -65,6 +67,9 @@ export function DraftRow({
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
   const [marking, setMarking] = useState(false)
+  // Send is two clicks: the first shows who it goes to, the second is the yes.
+  const [confirming, setConfirming] = useState(false)
+  const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const isSent = draft.status === 'sent'
@@ -119,6 +124,30 @@ export function DraftRow({
     }
   }
 
+  async function send() {
+    setSending(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/crm/drafts/${draft.slug}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: draft.slug }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `send failed (${res.status})`)
+      onMarkSent(draft.slug, data.sentAt ?? new Date().toISOString(), {
+        sentVia: data.sentVia, messageId: data.messageId, sentBy: data.sentBy,
+      })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'send failed')
+    } finally {
+      setSending(false)
+      setConfirming(false)
+    }
+  }
+
+  const canSend = sendConfigured && draft.ready === true && !isSent
+
   return (
     <li className="px-4 py-3">
       <div className="flex items-start gap-3">
@@ -150,6 +179,11 @@ export function DraftRow({
             )}
             {draft.edited && (
               <span className="text-[10px] italic text-muted-foreground">edited</span>
+            )}
+            {draft.ready && !isSent && (
+              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-400">
+                ready
+              </span>
             )}
           </div>
 
@@ -187,6 +221,11 @@ export function DraftRow({
               {new Date(draft.sentAt).toLocaleDateString('en-US', {
                 month: 'short', day: 'numeric', year: 'numeric',
               })}
+              {draft.sentVia === 'send-route' && (
+                <span className="text-muted-foreground">
+                  {' · '}by the dashboard{draft.sentBy === 'pavan-telegram' ? ' (yes via Telegram)' : ''}
+                </span>
+              )}
             </p>
           )}
 
@@ -224,6 +263,27 @@ export function DraftRow({
                   ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   : <><CheckCircle2 className="h-3.5 w-3.5" /><span className="ml-1">Mark Sent</span></>}
               </Button>
+
+              {/* Wave 3: the dashboard sends a ready draft on your explicit yes.
+                  The server re-checks everything (ready, recipient, leaks,
+                  em-dashes) and refuses with a reason if any of it changed. */}
+              {canSend && !confirming && (
+                <Button size="touch" variant="outline" onClick={() => setConfirming(true)} disabled={sending}>
+                  <Send className="h-3.5 w-3.5" /><span className="ml-1">Send</span>
+                </Button>
+              )}
+              {canSend && confirming && (
+                <>
+                  <Button size="touch" onClick={send} disabled={sending}>
+                    {sending
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <><Send className="h-3.5 w-3.5" /><span className="ml-1">Yes, send to {draft.to}</span></>}
+                  </Button>
+                  <Button size="touch" variant="ghost" onClick={() => setConfirming(false)} disabled={sending}>
+                    Not now
+                  </Button>
+                </>
+              )}
             </div>
           )}
 

@@ -17,18 +17,31 @@ const execFileAsync = promisify(execFile)
 export interface CommandResult {
   ok: boolean
   stdout: string
+  /** What the command said on stderr — on failure, the reason; on success,
+   *  usually empty. The send route surfaces this line to the user, so a
+   *  failed SMTP call names its cause instead of reading as a blank. */
+  stderr: string
+}
+
+/** The failure's stderr, else its message (a timeout kills the child and leaves stderr empty). */
+function stderrOf(error: unknown): string {
+  const e = error as { stderr?: unknown; killed?: boolean; message?: string }
+  const text = typeof e?.stderr === 'string' ? e.stderr.trim() : ''
+  if (text) return text
+  if (e?.killed) return 'timed out'
+  return e?.message ?? String(error)
 }
 
 export async function runCommandResult(command: string, timeoutMs = 10000): Promise<CommandResult> {
   try {
-    const { stdout } = await execAsync(command, {
+    const { stdout, stderr } = await execAsync(command, {
       timeout: timeoutMs,
       env: { ...process.env, PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin` },
     })
-    return { ok: true, stdout: stdout.trim() }
+    return { ok: true, stdout: stdout.trim(), stderr: stderr.trim() }
   } catch (error) {
     console.error(`Command failed: ${command}`, error)
-    return { ok: false, stdout: '' }
+    return { ok: false, stdout: '', stderr: stderrOf(error) }
   }
 }
 
@@ -41,14 +54,14 @@ export async function runCommandArgsResult(
   file: string, args: string[], timeoutMs = 10000,
 ): Promise<CommandResult> {
   try {
-    const { stdout } = await execFileAsync(file, args, {
+    const { stdout, stderr } = await execFileAsync(file, args, {
       timeout: timeoutMs,
       env: { ...process.env, PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin` },
     })
-    return { ok: true, stdout: stdout.trim() }
+    return { ok: true, stdout: stdout.trim(), stderr: stderr.trim() }
   } catch (error) {
     console.error(`Command failed: ${file} ${args.join(' ')}`, error)
-    return { ok: false, stdout: '' }
+    return { ok: false, stdout: '', stderr: stderrOf(error) }
   }
 }
 
