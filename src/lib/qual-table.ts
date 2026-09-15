@@ -25,8 +25,25 @@ export interface QualTableConfig {
  *  0.5 s; the first /bids/summary read after a quiet spell 16.7 s, then 2.0 s and
  *  1.1 s warm; discovery 2.2 s. Render is always-on since 2026-09-07 but the
  *  first request still pays a warm-up, so 20 s failed the installer's dry run.
- *  60 s covers the cold case with room; past that it is a real failure. */
+ *  60 s covers the cold case with room; past that it is a real failure.
+ *
+ *  Measured again 2026-09-15 from the mini: the first request after a quiet
+ *  spell took 42.5 s on `/`, then 0.2 s. bid-sync's whole run sat at 57-58 s and
+ *  two of ten runs on 2026-09-14 tipped over 60 s. So `signIn` first wakes the
+ *  service with one `/health` GET on its own generous clock; the 60 s below then
+ *  applies to warm requests only. */
 export const QUAL_TABLE_TIMEOUT_MS = 60_000
+export const QUAL_TABLE_WARMUP_MS = 90_000
+
+/** Wake the Render service so the real requests run warm. Never throws: a
+ *  failed warm-up just means the next call pays the cold start itself. */
+export async function warmUp(c: QualTableConfig, timeoutMs = QUAL_TABLE_WARMUP_MS): Promise<void> {
+  try {
+    await fetch(`${c.apiUrl}/health`, { signal: AbortSignal.timeout(timeoutMs) })
+  } catch {
+    /* the sign-in and fetch below report their own failures */
+  }
+}
 
 export const QUAL_TABLE_CONFIG_HELP = [
   'Not configured. Set on the mini (see ~/.openclaw/workspace/.credentials/qual-table.env):',
@@ -58,6 +75,7 @@ export function getQualTableConfig(): QualTableConfig | null {
  * stored token would break a scheduled sync by the next day.
  */
 export async function signIn(c: QualTableConfig, timeoutMs = QUAL_TABLE_TIMEOUT_MS): Promise<string> {
+  await warmUp(c)
   const res = await fetch(`${c.supabaseUrl}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: c.supabaseAnonKey },
