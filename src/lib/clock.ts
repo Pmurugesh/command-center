@@ -8,7 +8,7 @@
  */
 import type { Meeting } from './calendar'
 import type { Opportunity } from './procurements'
-import type { Lead } from './leads'
+import { leadEventKey, type Lead } from './leads'
 import type { RoadmapMilestone } from './roadmap'
 import type { Bid } from '@/types'
 
@@ -24,6 +24,7 @@ export interface ClockItem {
   href?: string
   isDemo?: boolean // meetings only
   score?: number   // opportunities only
+  entity?: string  // leads: which of Pavan's companies the lens scored it for
 }
 
 export const CLOCK_WINDOW_DAYS = 14
@@ -86,7 +87,8 @@ export function buildClock(
   // Leads and opportunities can describe the same solicitation; the
   // opportunity wins — it carries score, entity, and a recommended action.
   // Opportunity eventIds are "<businessUnit>-<eventId>", which is exactly the
-  // lead's slug (verified against the live 0531-0000039878 pair).
+  // lead's event key (its slug for the product lens, the slug minus `-is` for
+  // the consulting lens; verified against the live 0531-0000039878 pair).
   const oppEventIds = new Set<string>()
 
   for (const o of inputs.opportunities) {
@@ -106,7 +108,7 @@ export function buildClock(
 
   for (const l of inputs.leads) {
     if (l.triage === 'skip' || l.bucket === 'unlikely') continue
-    if (!l.endDate || oppEventIds.has(l.slug) || oppEventIds.has(l.eventId)) continue
+    if (!l.endDate || oppEventIds.has(leadEventKey(l)) || oppEventIds.has(l.eventId)) continue
     const at = endOfBusiness(l.endDate)
     if (!inWindow(at)) continue
     items.push({
@@ -118,6 +120,7 @@ export function buildClock(
       subtitle: l.department,
       href: '/intel',
       score: undefined,
+      entity: l.entity,
     })
   }
 

@@ -22,10 +22,18 @@
  * `provisional` until then — see operations/gtm/lead-search-handoff.md for the
  * terms that would widen their enrichment and fix this at the source.
  *
+ * INFINITE SOLUTIONS LENS. The consulting rules are not in gtm/lead-rules.md;
+ * they live in qual_table_automations (eprocure_relevance, CONSULTING lens) and
+ * only run on the mini, inside scripts/caleprocure-scan.py. That scan writes
+ * intelligence/procurements/<date>-caleprocure.json with both verdicts for
+ * every open event, and the second half of this script ingests its shortlist
+ * band (score >= 40) as `-is` leads. Nothing here scores the consulting lens;
+ * without a sidecar that half simply reports there is none yet.
+ *
  * Run: node --experimental-strip-types --no-warnings scripts/run-ts.mjs \
  *        scripts/sync-leads.ts [--dry]
  */
-import { syncLeads } from '../src/lib/leads.ts'
+import { syncLeads, syncConsultingLeads, readLatestSidecar, IS_SHORTLIST_SCORE } from '../src/lib/leads.ts'
 import { scoreEvents } from '../src/lib/lead-scoring.ts'
 import { getQualTableConfig, signIn, fetchJson, QUAL_TABLE_CONFIG_HELP } from '../src/lib/qual-table.ts'
 import type { QualTableConfig } from '../src/lib/qual-table.ts'
@@ -96,10 +104,16 @@ async function main() {
   const enriched = events.filter(e => e.description || e.unspscCodes?.length).length
   say(`${enriched}/${events.length} carry description or commodity codes (the rest score provisionally)`)
 
+  const sidecar = await readLatestSidecar()
+  const consulting = (sidecar?.events ?? []).filter(e => (e.lenses?.consulting?.score ?? 0) >= IS_SHORTLIST_SCORE)
+  say(sidecar
+    ? `${sidecar.file}: ${sidecar.events.length} open events, ${consulting.length} on the Infinite Solutions shortlist`
+    : 'no caleprocure sidecar yet (scripts/caleprocure-scan.py writes it on the mini) — consulting lens skipped')
+
   if (DRY) {
     const scored = await scoreEvents(events)
     const shown = scored.filter(s => s.verdict.bucket !== 'unlikely').slice(0, 25)
-    console.log(`\n[dry run] ${shown.length} would surface:\n`)
+    console.log(`\n[dry run] ${shown.length} would surface for InfiniteAI:\n`)
     for (const s of shown) {
       const v = s.verdict
       const icon = v.bucket === 'likely' ? '🟢' : '🟡'
@@ -107,14 +121,25 @@ async function main() {
       console.log(`${icon} ${String(v.score).padStart(3)} [${tier.padEnd(5)}] ${s.eventName.slice(0, 60)}`)
       console.log(`            ${v.products.join(', ') || 'no product match'}${v.provisional ? '  (provisional)' : ''}`)
     }
+    console.log(`\n[dry run] ${consulting.length} would surface for Infinite Solutions:\n`)
+    for (const e of consulting.slice(0, 25)) {
+      const c = e.lenses.consulting!
+      console.log(`🟢 ${String(c.score).padStart(3)} [IS   ] ${e.name.slice(0, 60)}`)
+      console.log(`            ${c.reasons.slice(0, 3).join('; ') || 'no individual rule fired'}`)
+    }
     return
   }
 
   const outcome = await syncLeads(events, 'lead-sync')
-  if (ON_CHANGE && outcome.created === 0 && outcome.updated === 0) return   // nothing to announce
+  const isOutcome = sidecar ? await syncConsultingLeads(sidecar.events, 'lead-sync') : null
+  const changed = (o: typeof outcome | null) => Boolean(o && (o.created || o.updated))
+  if (ON_CHANGE && !changed(outcome) && !changed(isOutcome)) return   // nothing to announce
   flush()
-  console.log(`\ncreated ${outcome.created}, updated ${outcome.updated}, unchanged ${outcome.unchanged}, already closed ${outcome.expired}`)
-  for (const r of outcome.reasons.slice(0, 20)) console.log(`  ${r.slug}: ${r.why}`)
+  for (const [label, o] of [['InfiniteAI', outcome], ['Infinite Solutions', isOutcome]] as const) {
+    if (!o) continue
+    console.log(`\n${label}: created ${o.created}, updated ${o.updated}, unchanged ${o.unchanged}, already closed ${o.expired}`)
+    for (const r of o.reasons.slice(0, 20)) console.log(`  ${r.slug}: ${r.why}`)
+  }
 }
 
 main().catch(e => { console.error(String(e)); process.exit(1) })

@@ -105,7 +105,7 @@ export function parseOpportunities(content: string, sourceFile: string, sourceDa
  * expired deadlines drop out, soonest deadline first (undated sink to the end).
  */
 export async function getOpenOpportunities(maxAgeDays = 21): Promise<Opportunity[]> {
-  const dir = path.join(PATHS.intelligenceBase, 'procurements')
+  const dir = PATHS.procurements
   let files: string[]
   try {
     files = await fs.readdir(dir)
