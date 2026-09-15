@@ -8,9 +8,11 @@ import type { OutreachDraft } from '@/lib/followup'
 
 interface Props {
   drafts: OutreachDraft[]
+  /** The mini holds the mailbox credentials, so ready drafts can be sent from here. */
+  sendConfigured: boolean
 }
 
-export function OutreachBoard({ drafts: initial }: Props) {
+export function OutreachBoard({ drafts: initial, sendConfigured }: Props) {
   const [drafts, setDrafts] = useState<OutreachDraft[]>(initial)
   const [tab, setTab] = useState<'draft' | 'sent'>('draft')
 
@@ -18,9 +20,9 @@ export function OutreachBoard({ drafts: initial }: Props) {
   const sent = drafts.filter(d => d.status === 'sent')
   const visible = tab === 'draft' ? open : sent
 
-  function onMarkSent(slug: string, sentAt: string) {
+  function onMarkSent(slug: string, sentAt: string, sent: Pick<OutreachDraft, 'sentVia' | 'messageId' | 'sentBy'> = {}) {
     setDrafts(prev =>
-      prev.map(d => d.slug === slug ? { ...d, status: 'sent' as const, sentAt } : d)
+      prev.map(d => d.slug === slug ? { ...d, ...sent, status: 'sent' as const, sentAt } : d)
     )
     // Stay on draft tab so the queue naturally shrinks in front of the user.
   }
@@ -65,6 +67,7 @@ export function OutreachBoard({ drafts: initial }: Props) {
                 <DraftRow
                   key={d.slug}
                   draft={d}
+                  sendConfigured={sendConfigured}
                   onMarkSent={onMarkSent}
                   onEdited={onEdited}
                 />

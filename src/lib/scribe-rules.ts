@@ -72,13 +72,14 @@ export function senderFirstName(name?: string, email?: string): string {
 /**
  * The subject a log line says we sent, or undefined when the line is not an
  * outbound. Two writers produce outbound lines: Scribe (`email … to X: "subj"`,
- * via email-out) and the drafts mark-sent route (`Sent follow-up email: subj`,
- * via outreach).
+ * via email-out) and the drafts routes (`Sent follow-up email: subj`) — via
+ * `outreach` when Pavan marked a draft sent from his own client, via
+ * `dashboard` or `pavan-telegram` when the send route sent it on his yes. The
+ * text is the tell; nothing else writes that line.
  */
 export function outboundSubjectOf(entry: Pick<CrmLogEntry, 'text' | 'via'>): string | undefined {
   if (isVia(entry.via, 'email-out')) return entry.text.match(/"([^"]+)"/)?.[1]
-  if (entry.via === 'outreach') return entry.text.match(/^Sent follow-up email:\s*(.+)$/)?.[1]?.trim()
-  return undefined
+  return entry.text.match(/^Sent follow-up email:\s*(.+)$/)?.[1]?.trim()
 }
 
 export interface ReplyMatch {

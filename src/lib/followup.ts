@@ -10,6 +10,11 @@
  *   - listDrafts(): reads crm/drafts/ and returns a priority-sorted queue
  *   - Write-on-first-generate: the first GET of a draft persists it so it
  *     immediately appears in the /outreach queue
+ *
+ * Wave 3 (decision 1, 2026-09-14) adds markDraftSent(): the one place a draft
+ * flips to sent and the CRM learns about it, shared by "Mark sent" (Pavan
+ * sent it from his own client) and the send route (the dashboard sent it on
+ * his explicit yes). The sending itself lives in send-mail.ts.
  */
 
 import fs from 'fs/promises'
@@ -17,8 +22,9 @@ import path from 'path'
 import matter from 'gray-matter'
 import { PATHS } from './paths'
 import { runCommandArgs } from './shell'
-import { getContact } from './crm'
-import { isVia } from './scribe-rules'
+import { addDays, appendLog, getContact, updateContact } from './crm'
+import { localToday } from './dates'
+import { FOLLOWUP_WINDOW_DAYS, SENT_NEXT_ACTION, isVia } from './scribe-rules'
 import type { CrmContact, CrmLogEntry } from '@/types'
 import { safeSlug } from './store'
 
@@ -57,7 +63,18 @@ export interface FollowupDraft {
   checks?: string
   /** Why this contact, now — the trigger in words, for the sender. Internal. */
   whyNow?: string
+  /** How it left: `send-route` when the dashboard sent it (wave 3). Absent when
+   *  Pavan sent from his own client and pressed "Mark sent". */
+  sentVia?: 'send-route'
+  /** The Message-ID send-mail.py stamped on it — the thread key for replies. */
+  messageId?: string
+  /** Where the yes came from: `dashboard` (the Send button) or `pavan-telegram`. */
+  sentBy?: SentBy
 }
+
+/** The two channels Pavan's per-draft yes can arrive on. */
+export const SENT_BY = ['dashboard', 'pavan-telegram'] as const
+export type SentBy = typeof SENT_BY[number]
 
 /** Fields PATCH /api/crm/drafts/[slug] may set without an `action`. */
 export interface DraftMetaPatch {
@@ -207,13 +224,13 @@ export function buildDraft(
   const subject = quoted
     ? (/^re:/i.test(quoted) ? quoted : `Re: ${quoted}`)
     : contact.agencyName
-      ? `Following up — Infinite Solutions / ${contact.agencyName}`
+      ? `Following up: Infinite Solutions / ${contact.agencyName}`
       : 'Following up'
 
   const body = [
     `Hi ${who},`,
     '',
-    'Wanted to pick this back up — would a short call make sense?',
+    'Wanted to pick this back up. Would a short call make sense?',
     '',
     `I have time ${nextAvailabilityWindow(now)} if any of those work, and I am happy to fit around your calendar.`,
     '',
@@ -334,6 +351,9 @@ export async function readDraft(slug: string): Promise<FollowupDraft | null> {
       ready: data.ready === true ? true : undefined,
       checks: typeof data.checks === 'string' ? data.checks : undefined,
       whyNow: typeof data.why_now === 'string' ? data.why_now : undefined,
+      sentVia: data.sent_via === 'send-route' ? 'send-route' : undefined,
+      messageId: typeof data.message_id === 'string' ? data.message_id : undefined,
+      sentBy: (SENT_BY as readonly string[]).includes(data.sent_by) ? data.sent_by as SentBy : undefined,
     }
   } catch {
     return null
@@ -375,6 +395,9 @@ export async function writeDraft(d: FollowupDraft): Promise<FollowupDraft> {
   if (next.ready !== undefined) meta.ready = next.ready
   if (next.checks) meta.checks = next.checks
   if (next.whyNow) meta.why_now = next.whyNow
+  if (next.sentVia) meta.sent_via = next.sentVia
+  if (next.messageId) meta.message_id = next.messageId
+  if (next.sentBy) meta.sent_by = next.sentBy
 
   const fileContent = matter.stringify(`\n${next.body.trim()}\n`, meta)
   await fs.writeFile(draftPath(next.slug), fileContent, 'utf-8')
@@ -391,6 +414,43 @@ export async function writeDraft(d: FollowupDraft): Promise<FollowupDraft> {
     ], 15_000)
   } catch { /* nothing staged or git unavailable — janitor sweeps */ }
   return next
+}
+
+/**
+ * Flip a draft to sent and tell the CRM. Shared by the PATCH mark-sent action
+ * (Pavan sent it from his own client; `via` stays `outreach`) and the send
+ * route (the dashboard sent it; `via` is where his yes came from, and the
+ * Message-ID and channel are kept on the draft).
+ *
+ * The CRM half logs the touch and opens the follow-up window: next action
+ * "await reply", due in FOLLOWUP_WINDOW_DAYS. Robert Payne's Sep 1 send left
+ * next_action_due at 2026-07-29, so the board kept him overdue. It is best
+ * effort: a draft can exist for a slug with no contact file, and the draft is
+ * sent either way.
+ */
+export async function markDraftSent(
+  existing: FollowupDraft,
+  sent: Pick<FollowupDraft, 'sentVia' | 'messageId' | 'sentBy'> = {},
+  via: string = 'outreach',
+): Promise<FollowupDraft> {
+  const updated = await writeDraft({
+    ...existing,
+    ...sent,
+    status: 'sent',
+    sentAt: new Date().toISOString(),
+  })
+  try {
+    const day = localToday()
+    await appendLog(existing.slug, `Sent follow-up email: ${existing.subject}`, { via, date: day })
+    await updateContact(
+      existing.slug,
+      { nextAction: SENT_NEXT_ACTION, nextActionDue: addDays(day, FOLLOWUP_WINDOW_DAYS) },
+      via,
+    )
+  } catch {
+    /* Non-fatal: the draft is marked sent regardless. */
+  }
+  return updated
 }
 
 /**

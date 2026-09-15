@@ -24,6 +24,11 @@ export const PATHS = {
   // Google Calendar secret iCal URLs — lives with the other credentials,
   // outside every git repo (it's a bearer-style secret URL).
   calendarConfig: path.join(HOME, '.openclaw/workspace/.credentials/calendar.json'),
+  // The intake mailbox's credentials (IMAP_HOST/USER/PASSWORD), sourced by
+  // the email-sync wrapper and read by scripts/send-mail.py, which sends from
+  // the same mailbox (wave 3, decision 1). Never in a repo; its absence means
+  // the dashboard cannot send and says so.
+  mailConfig: path.join(HOME, '.config/command-center/mail.env'),
   // CRM store (Phase 5 / M1). operationsRoot is the git repo root — crm.ts
   // commits relative to it, so every write lands in the same history as the
   // bids and intel it references.
